@@ -51,7 +51,10 @@ def decode_state(data):
     for _ in range(time_num):
         schedule.append(tuple(data[pos:pos+8])); pos += 8
     mode = 'auto' if data[pos] else 'manual';  pos += 1
-    name = data[pos:pos+11].rstrip(b'\x00').decode('ascii', errors='replace')
+    try:
+        name = data[pos:pos+11].rstrip(b'\x00').decode('ascii')
+    except Exception:
+        name = '?'
     return {'name': name, 'mode': mode, 'manual': manual, 'schedule': schedule}
 
 
