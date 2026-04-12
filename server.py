@@ -214,6 +214,7 @@ def _do_event():
         with lock:
             with _lamp() as lamp:
                 lamp.set_mode_auto()
+                lamp.sync_time()   # force immediate schedule re-evaluation
     except Exception:
         pass
 
