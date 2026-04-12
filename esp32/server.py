@@ -216,10 +216,10 @@ def _lightning_flash_channels():
         return [40, 60, 60, 100, 100, 0]
 
 
-_lightning_lock            = asyncio.Lock()
-_lightning_active          = False
-_lightning_task            = None
-_schedule_stopped_lightning = False   # True when the scheduler (not the user) stopped lightning
+_lightning_lock   = asyncio.Lock()
+_lightning_active = False
+_lightning_task   = None
+_manually_enabled = False   # tracks the user's intent, independent of schedule
 
 
 async def _do_event():
@@ -277,9 +277,8 @@ async def _lightning_worker():
 
 
 async def _ensure_lightning_started():
-    global _lightning_active, _lightning_task, _last_schedule, _last_manual, _schedule_stopped_lightning
+    global _lightning_active, _lightning_task, _last_schedule, _last_manual
     async with _lightning_lock:
-        _schedule_stopped_lightning = False
         if _lightning_active and _lightning_task:
             return
         # Snapshot lamp state so ambient restore is correct
@@ -299,13 +298,16 @@ async def _ensure_lightning_started():
 
 @app.route('/api/lightning/start', methods=['POST'])
 async def api_lightning_start(request):
+    global _manually_enabled
+    _manually_enabled = True
     await _ensure_lightning_started()
     return {'ok': True}
 
 
 @app.route('/api/lightning/stop', methods=['POST'])
 async def api_lightning_stop(request):
-    global _lightning_active
+    global _lightning_active, _manually_enabled
+    _manually_enabled = False
     _lightning_active = False
     return {'ok': True}
 
@@ -354,7 +356,7 @@ def _in_lightning_window():
 
 
 async def _lightning_scheduler():
-    global _lightning_active, _schedule_stopped_lightning
+    global _lightning_active
     _load_lightning_schedule()
     while True:
         await asyncio.sleep(30)
@@ -363,8 +365,6 @@ async def _lightning_scheduler():
         if _in_lightning_window():
             await _ensure_lightning_started()
         else:
-            if _lightning_active:
-                _schedule_stopped_lightning = True
             _lightning_active = False
 
 
@@ -375,16 +375,19 @@ async def api_lightning_schedule_get(request):
 
 @app.route('/api/lightning/schedule', methods=['POST'])
 async def api_lightning_schedule_post(request):
-    global _schedule_stopped_lightning
+    global _lightning_active
     d = request.json or {}
     was_enabled = _ls.get('enabled', False)
     if 'enabled' in d: _ls['enabled'] = bool(d['enabled'])
     if 'start'   in d: _ls['start']   = str(d['start'])
     if 'end'     in d: _ls['end']     = str(d['end'])
     _save_lightning_schedule()
-    # Schedule just disabled: if the scheduler was the one that stopped lightning, restart it
-    if was_enabled and not _ls['enabled'] and _schedule_stopped_lightning:
-        await _ensure_lightning_started()
+    # Schedule just disabled: restore manual lightning state
+    if was_enabled and not _ls['enabled']:
+        if _manually_enabled:
+            await _ensure_lightning_started()
+        else:
+            _lightning_active = False
     return _ls
 
 
