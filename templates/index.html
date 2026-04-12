@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K7 LED Controller</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-dragdata@2.2.5/dist/chartjs-plugin-dragdata.min.js"></script>
+<style>
+:root {
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --surface2: #1f2937;
+  --border:   rgba(255,255,255,0.1);
+  --text:     #c9d1d9;
+  --muted:    #6e7681;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; margin: 0; }
+
+/* ── top bar ── */
+.topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.topbar h1 { font-size: 1.1rem; font-weight: 600; margin: 0; letter-spacing: 0.02em; white-space: nowrap; }
+.topbar input[type=text], .topbar select { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 5px 10px; font-size: 0.85rem; }
+.topbar input[type=text] { width: 140px; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.ok      { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+.status-dot.error   { background: #f85149; box-shadow: 0 0 6px #f85149; }
+.status-dot.busy    { background: #d29922; box-shadow: 0 0 6px #d29922; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+#statusMsg { font-size: 0.8rem; color: var(--muted); }
+
+/* ── mode toggle ── */
+.mode-bar { display: flex; align-items: center; gap: 16px; padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.mode-label { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mode-label.active { color: var(--text); }
+.toggle-switch { position: relative; width: 52px; height: 28px; cursor: pointer; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track { position: absolute; inset: 0; border-radius: 14px; background: #4169e1; transition: background 0.2s; }
+.toggle-track.manual { background: #e1a141; }
+.toggle-thumb { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+.toggle-switch input:checked ~ .toggle-thumb { transform: translateX(24px); }
+
+/* ── panels ── */
+.panel { padding: 20px; }
+
+/* ── manual sliders ── */
+.ch-slider-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.ch-slider-row:last-child { border-bottom: none; }
+.ch-label { width: 110px; font-size: 0.9rem; font-weight: 500; flex-shrink: 0; }
+.ch-slider { flex: 1; height: 6px; -webkit-appearance: none; appearance: none; border-radius: 3px; outline: none; cursor: pointer; background: var(--surface2); }
+.ch-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(255,255,255,0.3); }
+.ch-value { width: 44px; text-align: right; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+
+/* ── day shift control ── */
+.shift-inner { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.shift-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 2px 8px; font-size: 0.8rem; cursor: pointer; line-height: 1.6; }
+.shift-btn:hover { background: #2d3748; }
+.shift-val { min-width: 38px; text-align: center; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+/* ── controls bar (master + channel toggles, single row) ── */
+.controls-bar { display: flex; align-items: center; gap: 16px; padding: 8px 20px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.master-inner { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 220px; }
+.master-label { font-size:0.82rem; font-weight:600; color:var(--muted); white-space: nowrap; flex-shrink: 0; }
+.master-slider { flex:1; height:6px; -webkit-appearance:none; appearance:none; border-radius:3px; outline:none; cursor:pointer; background:var(--surface2); accent-color:#c9d1d9; }
+.master-slider::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:#c9d1d9; cursor:pointer; border:2px solid rgba(255,255,255,0.3); }
+.master-value { width:40px; text-align:right; font-size:0.85rem; font-variant-numeric:tabular-nums; flex-shrink: 0; }
+.ch-toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+.ch-toggle { padding: 3px 12px; border-radius: 99px; border: 1px solid; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s, background 0.15s; user-select: none; }
+.ch-toggle.off { opacity: 0.3; background: transparent !important; }
+
+/* ── schedule chart ── */
+.chart-wrap { padding: 6px 20px 4px; height: calc(100vh - 285px); min-height: 300px; }
+#schedChart { width: 100%; height: 100%; }
+
+/* ── colour preview strip ── */
+.color-strip { display: flex; height: 16px; margin: 0 20px 10px; border-radius: 5px; overflow: hidden; gap: 1px; }
+.color-strip > div { flex: 1; }
+
+/* ── action bar ── */
+.action-bar { display: flex; gap: 10px; padding: 12px 20px; background: var(--surface); border-top: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
+.btn-primary-custom { background: #238636; border: 1px solid #2ea043; color: #fff; border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s; }
+.btn-primary-custom:hover { background: #2ea043; }
+.btn-secondary-custom { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s; }
+.btn-secondary-custom:hover { background: #2d3748; }
+.btn-danger-custom { background: transparent; border: 1px solid #f85149; color: #f85149; border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s; }
+.btn-danger-custom:hover { background: rgba(248,81,73,0.1); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+.preset-sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+#presetSel { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: 0.85rem; max-width: 210px; cursor: pointer; }
+#presetDesc { font-size: 0.78rem; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────────── -->
+<div class="topbar">
+  <h1>🪸 K7 LED Controller</h1>
+  <div class="status-dot busy" id="dot"></div>
+  <span id="statusMsg">Connecting…</span>
+  <div style="flex:1"></div>
+  <select id="deviceSel" onchange="onDeviceChange()" title="Device type">
+    <option value="k7mini">K7 Mini</option>
+    <option value="k7pro">K7 Pro</option>
+  </select>
+  <input type="text" id="hostInput" value="192.168.4.1" placeholder="IP address"
+         title="Device IP address" onchange="onHostChange()">
+  <button class="btn-secondary-custom" onclick="readFromDevice()" id="readBtn">↻ Read</button>
+</div>
+
+<!-- ── Mode bar ─────────────────────────────────────────────────── -->
+<div class="mode-bar">
+  <span class="mode-label" id="lblManual">Manual</span>
+  <label class="toggle-switch" title="Switch between Manual and Auto mode">
+    <input type="checkbox" id="modeToggle" onchange="onModeToggle()">
+    <div class="toggle-track" id="toggleTrack"></div>
+    <div class="toggle-thumb"></div>
+  </label>
+  <span class="mode-label active" id="lblAuto">Auto (Schedule)</span>
+</div>
+
+<!-- ── Manual panel ─────────────────────────────────────────────── -->
+<div id="manualPanel" class="panel" style="max-width:600px; display:none">
+  <div id="sliderRows"></div>
+  <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
+    <button class="btn-primary-custom" onclick="saveManual()">Apply to Device</button>
+    <span style="font-size:0.8rem; color:var(--muted)">Preview updates live as you move sliders</span>
+  </div>
+</div>
+
+<!-- ── Auto panel ───────────────────────────────────────────────── -->
+<div id="autoPanel" style="padding-bottom:0">
+  <div class="controls-bar">
+    <div class="master-inner">
+      <span class="master-label">Master</span>
+      <input type="range" id="masterSlider" class="master-slider" min="0" max="100" value="100" oninput="onMasterChange()">
+      <span class="master-value" id="masterVal">100%</span>
+    </div>
+    <div class="shift-inner">
+      <span class="master-label">Shift</span>
+      <button class="shift-btn" onclick="changeShift(-1)">◀</button>
+      <span class="shift-val" id="shiftVal">+0h</span>
+      <button class="shift-btn" onclick="changeShift(+1)">▶</button>
+    </div>
+    <div class="ch-toggles" id="chToggles"></div>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="schedChart"></canvas>
+  </div>
+  <div class="color-strip" id="colorStrip"></div>
+</div>
+
+<!-- ── Action bar (schedule) ────────────────────────────────────── -->
+<div class="action-bar" id="schedActions" style="display:none">
+  <button class="btn-primary-custom" onclick="pushSchedule()" id="pushBtn">⬆ Push to Device</button>
+  <button class="btn-secondary-custom" onclick="readFromDevice()">↻ Read from Device</button>
+  <button class="btn-danger-custom"    onclick="clearSchedule()">✕ Clear</button>
+  <div class="preset-sep"></div>
+  <select id="presetSel" onchange="onPresetChange()" title="Load a preset schedule">
+    <option value="">— Load Preset —</option>
+  </select>
+  <span id="presetDesc"></span>
+</div>
+
+<script>
+// ── Channel metadata ─────────────────────────────────────────────────────────
+const CH = {
+  uv:         { label:'UV',         rgb:[138,43,226],  css:'#8b2be2' },
+  royal_blue: { label:'Royal Blue', rgb:[65,105,225],  css:'#4169e1' },
+  blue:       { label:'Blue',       rgb:[30,144,255],  css:'#1e90ff' },
+  white:      { label:'White',      rgb:[210,210,210], css:'#d2d2d2' },
+  warm_white: { label:'Warm White', rgb:[255,200,80],  css:'#ffc850' },
+  red:        { label:'Red',        rgb:[220,50,50],   css:'#dc3232' },
+};
+// Physical light emission colours for additive colour strip blending
+const LIGHT_RGB = {
+  uv:         [180, 0,   255],
+  royal_blue: [0,   30,  255],
+  blue:       [0,   100, 255],
+  white:      [255, 255, 220],
+  warm_white: [255, 200, 100],
+  red:        [255, 0,   0  ],
+};
+const ALL_CH = ['uv','royal_blue','blue','white','warm_white','red'];
+const DEVICES = {
+  k7mini: { label:'K7 Mini', channels:['white','royal_blue','blue'] },
+  k7pro:  { label:'K7 Pro',  channels:['uv','royal_blue','blue','white','warm_white','red'] },
+};
+
+// ── App state ─────────────────────────────────────────────────────────────────
+let cfg      = { host:'192.168.4.1', port:8266, device:'k7mini' };
+let mode     = 'auto';   // 'auto' | 'manual'
+// schedule: 24 entries, each [h, 0, c0, c1, c2, c3, c4, c5]
+let schedule     = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
+let scheduleBase = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
+let masterBrightness = 100;
+let dayShift = 0;   // hours to rotate schedule (-12..+12, stored as 0..23)
+let manual   = [0,0,0,0,0,0];
+let chart    = null;
+let previewTimer = null;
+let presets  = {};   // key → {name, desc, manual, schedule}
+const hiddenChannels = new Set();  // channel keys currently hidden in chart
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+function setStatus(state, msg) {
+  const dot = document.getElementById('dot');
+  dot.className = `status-dot ${state}`;
+  document.getElementById('statusMsg').textContent = msg;
+}
+function setBusy(msg='Working…') { setStatus('busy', msg); }
+function setOk(msg)   { setStatus('ok',    msg); }
+function setErr(msg)  { setStatus('error', msg); }
+
+async function api(method, url, body) {
+  const opts = { method, headers:{'Content-Type':'application/json'} };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  const d = await r.json();
+  if (!r.ok || d.error) throw new Error(d.error || r.statusText);
+  return d;
+}
+
+// ── Config sync ───────────────────────────────────────────────────────────────
+function onHostChange() {
+  cfg.host = document.getElementById('hostInput').value.trim();
+  api('POST','/api/config', cfg).catch(()=>{});
+}
+function onDeviceChange() {
+  cfg.device = document.getElementById('deviceSel').value;
+  api('POST','/api/config', cfg).catch(()=>{});
+  hiddenChannels.clear();
+  renderSliders();
+  renderChannelToggles();
+  updateChart();
+  updateColorStrip();
+  loadPresets();
+}
+
+// ── Mode toggle ───────────────────────────────────────────────────────────────
+function onModeToggle() {
+  const isAuto = document.getElementById('modeToggle').checked;
+  mode = isAuto ? 'auto' : 'manual';
+  applyModeUI();
+}
+
+function applyModeUI() {
+  const isAuto = (mode === 'auto');
+  document.getElementById('autoPanel').style.display   = isAuto ? ''       : 'none';
+  document.getElementById('schedActions').style.display = isAuto ? 'flex'   : 'none';
+  document.getElementById('manualPanel').style.display = isAuto ? 'none'   : '';
+  document.getElementById('lblAuto').classList.toggle('active', isAuto);
+  document.getElementById('lblManual').classList.toggle('active', !isAuto);
+  document.getElementById('toggleTrack').className = `toggle-track${isAuto ? '' : ' manual'}`;
+  document.getElementById('modeToggle').checked = isAuto;
+}
+
+// ── Read from device ──────────────────────────────────────────────────────────
+async function readFromDevice() {
+  setBusy('Reading…');
+  document.getElementById('readBtn').disabled = true;
+  try {
+    const s = await api('GET','/api/state');
+    mode = s.mode;
+    applyModeUI();
+    if (s.schedule && s.schedule.length === 24) {
+      schedule     = s.schedule;
+      scheduleBase = s.schedule.map(row => [...row]);
+      resetMaster();
+    }
+    if (s.manual) manual = s.manual;
+    updateChart();
+    updateColorStrip();
+    renderSliders();
+    setOk(`${s.name}  ·  ${s.mode.toUpperCase()}`);
+  } catch(e) {
+    setErr(e.message);
+  } finally {
+    document.getElementById('readBtn').disabled = false;
+  }
+}
+
+// ── Push schedule ─────────────────────────────────────────────────────────────
+async function pushSchedule() {
+  setBusy('Pushing…');
+  document.getElementById('pushBtn').disabled = true;
+  try {
+    const chs = DEVICES[cfg.device].channels;
+    // Zero out hidden channels so device matches the graph
+    const pushSched = schedule.map(row => {
+      const r = [...row];
+      chs.forEach((ch, ci) => { if (hiddenChannels.has(ch)) r[2 + ci] = 0; });
+      return r;
+    });
+    await api('POST','/api/push', { manual, schedule: pushSched, mode });
+    setOk('Pushed successfully');
+  } catch(e) {
+    setErr(e.message);
+  } finally {
+    document.getElementById('pushBtn').disabled = false;
+  }
+}
+
+// ── Manual: save ─────────────────────────────────────────────────────────────
+async function saveManual() {
+  setBusy('Saving…');
+  try {
+    await api('POST','/api/push', { manual, schedule, mode:'manual' });
+    mode = 'manual';
+    applyModeUI();
+    setOk('Manual mode saved');
+  } catch(e) {
+    setErr(e.message);
+  }
+}
+
+// ── Manual: live preview ──────────────────────────────────────────────────────
+function triggerPreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(async () => {
+    try { await api('POST','/api/preview', { channels: manual }); } catch(_){}
+  }, 280);
+}
+
+// ── Clear schedule ────────────────────────────────────────────────────────────
+function clearSchedule() {
+  if (!confirm('Clear all schedule values?')) return;
+  schedule     = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
+  scheduleBase = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
+  resetMaster();
+  updateChart();
+  updateColorStrip();
+}
+
+// ── Colour preview strip ──────────────────────────────────────────────────────
+function getHourColor(h) {
+  let r = 0, g = 0, b = 0;
+  const chs = DEVICES[cfg.device].channels;
+  chs.forEach((ch, ci) => {
+    const pct = schedule[h][2 + ci] / 100;
+    const [lr, lg, lb] = LIGHT_RGB[ch];
+    r += lr * pct;
+    g += lg * pct;
+    b += lb * pct;
+  });
+  return `rgb(${Math.min(255,Math.round(r))},${Math.min(255,Math.round(g))},${Math.min(255,Math.round(b))})`;
+}
+
+function updateColorStrip() {
+  const strip = document.getElementById('colorStrip');
+  strip.innerHTML = '';
+  const currentHour = new Date().getHours();
+  for (let h = 0; h < 24; h++) {
+    const seg = document.createElement('div');
+    seg.style.background = getHourColor(h);
+    seg.title = `${String(h).padStart(2,'0')}:00`;
+    if (h === currentHour) {
+      seg.style.outline      = '2px solid rgba(255,255,255,0.7)';
+      seg.style.outlineOffset = '-2px';
+    }
+    strip.appendChild(seg);
+  }
+}
+
+// ── Channel toggle pills ──────────────────────────────────────────────────────
+function renderChannelToggles() {
+  const chs = DEVICES[cfg.device].channels;
+  const container = document.getElementById('chToggles');
+  container.innerHTML = '';
+  chs.forEach(ch => {
+    const pill = document.createElement('span');
+    const hidden = hiddenChannels.has(ch);
+    pill.className = `ch-toggle${hidden ? ' off' : ''}`;
+    pill.textContent = CH[ch].label;
+    pill.style.borderColor = CH[ch].css;
+    pill.style.color = CH[ch].css;
+    if (!hidden) {
+      pill.style.background = `rgba(${CH[ch].rgb.join(',')},0.18)`;
+    }
+    pill.onclick = () => {
+      if (hiddenChannels.has(ch)) hiddenChannels.delete(ch);
+      else hiddenChannels.add(ch);
+      renderChannelToggles();
+      updateChart();
+    };
+    container.appendChild(pill);
+  });
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
+const nowLinePlugin = {
+  id: 'nowLine',
+  afterDraw(chart) {
+    const now   = new Date();
+    const hours = now.getHours() + now.getMinutes() / 60;
+    const xs    = chart.scales.x;
+    const ys    = chart.scales.y;
+    // Interpolate pixel position between the two surrounding hour ticks
+    const h  = Math.floor(hours);
+    const x1 = xs.getPixelForValue(h);
+    const x2 = h < 23 ? xs.getPixelForValue(h + 1) : x1;
+    const x  = x1 + (hours - h) * (x2 - x1);
+    const label = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, ys.top);
+    ctx.lineTo(x, ys.bottom);
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font      = '600 11px system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x, ys.top - 5);
+    ctx.restore();
+  }
+};
+
+function initChart() {
+  const ctx = document.getElementById('schedChart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array.from({length:24}, (_,h) => `${String(h).padStart(2,'0')}:00`),
+      datasets: []
+    },
+    plugins: [nowLinePlugin],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: true },
+      plugins: {
+        legend: { position:'bottom', labels:{ color:'#c9d1d9', boxWidth:12, font:{size:12} } },
+        tooltip: {
+          backgroundColor: 'rgba(15,20,30,0.95)',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 1,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%` }
+        },
+        dragData: {
+          round: 0,
+          showTooltip: true,
+          dragX: false,
+          onDrag: function(e, datasetIndex, index, value) {
+            const ds = chart.data.datasets[datasetIndex];
+            if (!ds || !ds.channelKey) return value;
+            const ch = ds.channelKey;
+            const ci = DEVICES[cfg.device].channels.indexOf(ch);
+            const v  = Math.max(0, Math.min(100, Math.round(value)));
+            schedule[index][2 + ci] = v;
+            scheduleBase[index][2 + ci] = masterBrightness > 0
+              ? Math.min(100, Math.round(v * 100 / masterBrightness)) : v;
+            updateColorStrip();
+            return v;
+          },
+        },
+      },
+      scales: {
+        x: { ticks:{ color:'#6e7681', font:{size:11} }, grid:{ color:'rgba(255,255,255,0.05)' } },
+        y: {
+          min: 0, max: 100,
+          ticks:{ color:'#6e7681', font:{size:11}, callback: v => v+'%' },
+          grid:{ color:'rgba(255,255,255,0.05)' }
+        }
+      },
+      elements: {
+        point:{ radius: 4, hoverRadius: 6, hitRadius: 20 },
+        line:{ borderWidth: 2 }
+      },
+    }
+  });
+}
+
+function updateChart() {
+  const chs = DEVICES[cfg.device].channels;
+  chart.data.datasets = chs
+    .filter(ch => !hiddenChannels.has(ch))
+    .map(ch => {
+      const ci  = chs.indexOf(ch);   // physical position in this device's channel list
+      const [r,g,b] = CH[ch].rgb;
+      return {
+        label:           CH[ch].label,
+        channelKey:      ch,
+        data:            schedule.map(row => row[2 + ci]),
+        borderColor:     CH[ch].css,
+        backgroundColor: `rgba(${r},${g},${b},0.18)`,
+        fill:            true,
+        tension:         0.35,
+      };
+    });
+  chart.update('none');
+}
+
+// ── Manual sliders ────────────────────────────────────────────────────────────
+function renderSliders() {
+  const chs = DEVICES[cfg.device].channels;
+  const container = document.getElementById('sliderRows');
+  container.innerHTML = '';
+  chs.forEach((ch, ci) => {
+    const val = manual[ci] || 0;
+    const row = document.createElement('div');
+    row.className = 'ch-slider-row';
+    row.innerHTML = `
+      <span class="ch-label" style="color:${CH[ch].css}">${CH[ch].label}</span>
+      <input type="range" class="ch-slider" min="0" max="100" value="${val}"
+             data-ci="${ci}" data-ch="${ch}"
+             style="accent-color:${CH[ch].css}">
+      <span class="ch-value" id="val_${ch}">${val}%</span>`;
+    container.appendChild(row);
+    row.querySelector('input').addEventListener('input', onSliderChange);
+  });
+}
+
+function onSliderChange(e) {
+  const ci = parseInt(e.target.dataset.ci);
+  const ch = e.target.dataset.ch;
+  const v  = parseInt(e.target.value);
+  manual[ci] = v;
+  document.getElementById(`val_${ch}`).textContent = v + '%';
+  triggerPreview();
+}
+
+// ── Master brightness ─────────────────────────────────────────────────────────
+function applyMaster() {
+  const m = masterBrightness / 100;
+  for (let h = 0; h < 24; h++) {
+    const srcH = ((h - dayShift) % 24 + 24) % 24;
+    for (let ci = 0; ci < 6; ci++) {
+      schedule[h][2 + ci] = Math.min(100, Math.round(scheduleBase[srcH][2 + ci] * m));
+    }
+  }
+}
+
+function resetMaster() {
+  masterBrightness = 100;
+  dayShift = 0;
+  const sl = document.getElementById('masterSlider');
+  if (sl) sl.value = 100;
+  const mv = document.getElementById('masterVal');
+  if (mv) mv.textContent = '100%';
+  const sv = document.getElementById('shiftVal');
+  if (sv) sv.textContent = '+0h';
+  applyMaster();
+}
+
+function changeShift(delta) {
+  dayShift = ((dayShift + delta) % 24 + 24) % 24;
+  const display = dayShift === 0 ? '+0h'
+    : dayShift <= 12 ? `+${dayShift}h`
+    : `-${24 - dayShift}h`;
+  document.getElementById('shiftVal').textContent = display;
+  applyMaster();
+  updateChart();
+  updateColorStrip();
+}
+
+function onMasterChange() {
+  masterBrightness = parseInt(document.getElementById('masterSlider').value);
+  document.getElementById('masterVal').textContent = masterBrightness + '%';
+  applyMaster();
+  updateChart();
+  updateColorStrip();
+}
+
+// ── Presets ───────────────────────────────────────────────────────────────────
+async function loadPresets() {
+  try {
+    presets = await api('GET', '/api/presets');
+    const sel = document.getElementById('presetSel');
+    sel.innerHTML = '<option value="">— Load Preset —</option>';
+    for (const [key, p] of Object.entries(presets)) {
+      const opt = document.createElement('option');
+      opt.value       = key;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    }
+    document.getElementById('presetDesc').textContent = '';
+  } catch(_) {}
+}
+
+function onPresetChange() {
+  const key = document.getElementById('presetSel').value;
+  if (!key || !presets[key]) {
+    document.getElementById('presetDesc').textContent = '';
+    return;
+  }
+  const p = presets[key];
+  document.getElementById('presetDesc').textContent = p.desc;
+
+  scheduleBase = p.schedule.map(row => [...row]);
+  manual       = [...p.manual];
+  resetMaster();  // sets schedule = scheduleBase at 100%
+
+  updateChart();
+  updateColorStrip();
+  renderSliders();
+  setOk(`Preset loaded: ${p.name} — click Push to apply`);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  initChart();
+  try {
+    const c = await api('GET','/api/config');
+    cfg = c;
+    document.getElementById('hostInput').value = cfg.host;
+    document.getElementById('deviceSel').value = cfg.device;
+  } catch(_){}
+
+  renderSliders();
+  renderChannelToggles();
+  updateChart();
+  updateColorStrip();
+  applyModeUI();
+  loadPresets();
+  readFromDevice();
+  // Redraw the now-line and colour strip highlight every minute
+  setInterval(() => { if (chart) chart.update('none'); updateColorStrip(); }, 60000);
+}
+
+init();
+</script>
+</body>
+</html>
