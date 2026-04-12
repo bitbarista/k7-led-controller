@@ -19,8 +19,9 @@ lock = threading.Lock()   # one device request at a time
 
 cfg = {'host': '192.168.4.1', 'port': 8266, 'device': 'k7mini'}
 
-# Last schedule pushed to the lamp — used by the lightning thread for restore values
+# Last schedule/manual pushed to the lamp — used by lightning for restore
 _last_schedule = [[h, 0, 0, 0, 0, 0, 0, 0] for h in range(24)]
+_last_manual   = [0] * 6
 
 PROFILES_FILE = os.path.join(os.path.dirname(__file__), 'profiles.json')
 
@@ -78,7 +79,7 @@ def api_state():
 
 @app.route('/api/push', methods=['POST'])
 def api_push():
-    global _last_schedule
+    global _last_schedule, _last_manual
     d = request.json or {}
     with lock:
         try:
@@ -88,6 +89,7 @@ def api_push():
             with _lamp() as lamp:
                 lamp.push_schedule(manual, schedule, mode)
             _last_schedule = [list(e) for e in schedule]
+            _last_manual   = list(manual)
             return jsonify({'ok': True})
         except OSError as e:
             return jsonify({'error': f'Connection failed — {e}'}), 503
@@ -207,8 +209,9 @@ def _do_event():
                             time.sleep(0.04 + random.random() * 0.06) # 40–100 ms dark gap
                     if s < num_strikes - 1:
                         time.sleep(0.08 + random.random() * 0.17)    # 80–250 ms dark between strikes
-                lamp.set_mode_auto()
-                lamp.sync_time()
+                lamp.push_schedule(_last_manual,
+                                   [tuple(r) for r in _last_schedule],
+                                   mode='auto')
     except Exception:
         pass
 
@@ -223,10 +226,21 @@ def _lightning_worker():
 
 @app.route('/api/lightning/start', methods=['POST'])
 def api_lightning_start():
-    global _lightning_active, _lightning_thread
+    global _lightning_active, _lightning_thread, _last_schedule, _last_manual
     with _lightning_lock:
         if _lightning_active and _lightning_thread and _lightning_thread.is_alive():
             return jsonify({'ok': True})
+        # Read lamp state now so ambient restore values are correct even after server restart
+        try:
+            with lock:
+                with _lamp() as lamp:
+                    raw = lamp.read_all()
+            state = k7.decode_state(raw)
+            if state and state.get('schedule'):
+                _last_schedule = [list(row) for row in state['schedule']]
+                _last_manual   = list(state['manual'])
+        except Exception:
+            pass   # lamp not reachable — use whatever is cached
         _lightning_active = True
         _lightning_thread = threading.Thread(target=_lightning_worker, daemon=True)
         _lightning_thread.start()
