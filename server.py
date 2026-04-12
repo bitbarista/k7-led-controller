@@ -371,13 +371,14 @@ def api_lightning_schedule_post():
 
 # ── Smooth ramp ───────────────────────────────────────────────────────────────
 
-_ramp_active = False
-_ramp_thread = None
+_ramp_active    = False
+_ramp_thread    = None
+_ramp_last_tick = None   # epoch seconds of last preview_brightness sent
 
 
 def _ramp_worker():
     """Send a preview_brightness every minute, interpolated to the current minute."""
-    global _ramp_active
+    global _ramp_active, _ramp_last_tick
     while _ramp_active:
         t = time.localtime()
         h, m, s = t.tm_hour, t.tm_min, t.tm_sec
@@ -386,6 +387,7 @@ def _ramp_worker():
             with lock:
                 with _lamp() as lamp:
                     lamp.preview_brightness(channels)
+            _ramp_last_tick = time.time()
         except Exception:
             pass
         # Sleep to the next minute boundary in small steps so _ramp_active is checked promptly
@@ -438,7 +440,7 @@ def api_ramp_stop():
 @app.route('/api/ramp/status')
 def api_ramp_status():
     active = bool(_ramp_active and _ramp_thread and _ramp_thread.is_alive())
-    return jsonify({'active': active})
+    return jsonify({'active': active, 'last_tick': _ramp_last_tick})
 
 
 _prov_lock   = threading.Lock()

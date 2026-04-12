@@ -179,6 +179,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   <button class="btn-secondary-custom" onclick="readFromDevice()">↻ Read from Device</button>
   <button class="btn-danger-custom"    onclick="clearSchedule()">✕ Clear</button>
   <button class="btn-ramp" id="rampBtn" onclick="toggleRamp()" title="Enable smooth per-minute ramping — controller sends brightness directly to lamp every minute">≈ Smooth Ramp</button>
+  <span id="rampTick" style="font-size:0.78rem;color:var(--text-muted);margin-left:4px;display:none"></span>
   <div class="lightning-group">
     <button class="btn-lightning" id="lightningBtn" onclick="toggleLightning()" title="Simulate lightning flashes">⚡ Lightning</button>
     <label class="ls-label" title="Auto-start/stop lightning on a daily schedule">
@@ -676,22 +677,37 @@ function onMasterChange() {
 }
 
 // ── Smooth ramp ───────────────────────────────────────────────────────────────
-function setRampBtn(active) {
-  const btn = document.getElementById('rampBtn');
+function setRampBtn(active, lastTick) {
+  const btn  = document.getElementById('rampBtn');
+  const tick = document.getElementById('rampTick');
   btn.classList.toggle('active', active);
   btn.title = active
     ? 'Smooth ramp active — controller is sending per-minute brightness updates. Click to stop and return lamp to its built-in schedule.'
     : 'Enable smooth per-minute ramping — controller sends brightness directly to lamp every minute';
+  if (active && lastTick) {
+    const ago = Math.round((Date.now() / 1000) - lastTick);
+    tick.textContent = ago < 5 ? 'just now' : `${ago}s ago`;
+    tick.style.display = '';
+  } else {
+    tick.style.display = 'none';
+  }
+}
+
+async function pollRampStatus() {
+  try {
+    const s = await api('GET', '/api/ramp/status');
+    setRampBtn(s.active, s.last_tick);
+  } catch {}
 }
 
 async function toggleRamp() {
   const status = await api('GET', '/api/ramp/status');
   if (status.active) {
     await api('POST', '/api/ramp/stop');
-    setRampBtn(false);
+    setRampBtn(false, null);
   } else {
     await api('POST', '/api/ramp/start');
-    setRampBtn(true);
+    setRampBtn(true, null);
   }
 }
 
@@ -898,7 +914,8 @@ async function init() {
   // Sync server clock (no-op on PC Flask; sets ESP32 RTC so scheduler has correct time)
   api('POST', '/api/time', { timestamp: Date.now() }).catch(() => {});
   // Restore button states for server-side effects
-  api('GET', '/api/ramp/status').then(s => setRampBtn(s.active)).catch(()=>{});
+  pollRampStatus();
+  setInterval(pollRampStatus, 15000);
   api('GET', '/api/lightning/status').then(s => setLightningBtn(s.active)).catch(()=>{});
   loadLightningSchedule();
   // Redraw the now-line and colour strip highlight every minute
