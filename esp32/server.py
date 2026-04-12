@@ -384,7 +384,7 @@ async def _lightning_scheduler():
             continue
         if _in_lightning_window():
             await _ensure_lightning_started()
-        else:
+        elif not _manually_enabled:
             _lightning_active = False
 
 
