@@ -16,7 +16,7 @@ import socket
 import time
 import json
 import os
-import uasyncio as asyncio
+import asyncio
 from machine import RTC, reset
 
 CONFIG_FILE = 'config.json'

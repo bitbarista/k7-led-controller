@@ -14,7 +14,7 @@ Key differences from PC version:
   - /api/time  endpoint lets the browser sync the device RTC on page load
 """
 
-import uasyncio as asyncio
+import asyncio
 import random
 import json
 import time
