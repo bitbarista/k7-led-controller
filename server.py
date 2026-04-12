@@ -178,6 +178,7 @@ _lightning_lock   = threading.Lock()
 _lightning_active = False
 _lightning_thread = None
 _manually_enabled = False   # tracks the user's intent, independent of schedule
+_user_stopped     = False   # set when user presses Stop; prevents scheduler restarting
 
 # Lightning schedule ── persisted to LIGHTNING_SCHEDULE_FILE
 _ls = {'enabled': False, 'start': '20:00', 'end': '23:00'}
@@ -317,7 +318,8 @@ def _lightning_scheduler():
         if not _ls.get('enabled'):
             continue
         if _in_lightning_window():
-            _ensure_lightning_started()
+            if not _user_stopped:
+                _ensure_lightning_started()
         else:
             _lightning_active = False
 
@@ -327,16 +329,18 @@ threading.Thread(target=_lightning_scheduler, daemon=True).start()
 
 @app.route('/api/lightning/start', methods=['POST'])
 def api_lightning_start():
-    global _manually_enabled
+    global _manually_enabled, _user_stopped
     _manually_enabled = True
+    _user_stopped     = False
     _ensure_lightning_started()
     return jsonify({'ok': True})
 
 
 @app.route('/api/lightning/stop', methods=['POST'])
 def api_lightning_stop():
-    global _lightning_active, _manually_enabled
+    global _lightning_active, _manually_enabled, _user_stopped
     _manually_enabled = False
+    _user_stopped     = True
     _lightning_active = False
     return jsonify({'ok': True})
 
@@ -354,14 +358,18 @@ def api_lightning_schedule_get():
 
 @app.route('/api/lightning/schedule', methods=['POST'])
 def api_lightning_schedule_post():
+    global _lightning_active, _user_stopped
     d = request.json or {}
     was_enabled = _ls.get('enabled', False)
     if 'enabled' in d: _ls['enabled'] = bool(d['enabled'])
     if 'start'   in d: _ls['start']   = str(d['start'])
     if 'end'     in d: _ls['end']     = str(d['end'])
     _save_lightning_schedule()
+    # Schedule just enabled: clear user-stop so scheduler can fire
+    if not was_enabled and _ls['enabled']:
+        _user_stopped = False
     # Schedule just disabled: restore manual lightning state
-    if was_enabled and not _ls['enabled']:
+    elif was_enabled and not _ls['enabled']:
         if _manually_enabled:
             _ensure_lightning_started()
         else:
