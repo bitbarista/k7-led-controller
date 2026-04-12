@@ -89,7 +89,6 @@ class K7:
 
     def _recv(self, drain=False):
         buf = b''
-        saved = self._sock.gettimeout()
         try:
             while True:
                 chunk = self._sock.recv(4096)
@@ -98,11 +97,11 @@ class K7:
                 buf += chunk
                 if not drain:
                     break
-                self._sock.settimeout(0.5)
+                self._sock.settimeout(0.5)   # short timeout for subsequent drain reads
         except OSError:
             pass   # timeout or closed — normal end of data
         finally:
-            self._sock.settimeout(saved)
+            self._sock.settimeout(self.timeout)   # restore (gettimeout() unavailable in MicroPython)
         return buf
 
     def _send(self, pkt, drain=False):
