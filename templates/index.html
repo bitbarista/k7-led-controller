@@ -553,23 +553,38 @@ function renderChannelScales() {
   const bar = document.getElementById('chScaleBar');
   bar.innerHTML = '';
   chs.forEach(ch => {
-    const val = channelBrightness[ch] ?? 100;
+    const cap = channelBrightness[ch] ?? 100;
+    const effective = Math.min(100, Math.round(cap * masterBrightness / 100));
     const item = document.createElement('div');
     item.className = 'ch-scale-item';
     item.innerHTML = `
       <span class="ch-scale-label" style="color:${CH[ch].css}">${CH[ch].label}</span>
-      <input type="range" class="ch-slider" min="0" max="100" value="${val}"
+      <input type="range" class="ch-slider" min="0" max="100" value="${effective}"
              style="flex:1; accent-color:${CH[ch].css}" data-ch="${ch}">
-      <span class="ch-scale-val" id="chscale_${ch}">${val}%</span>`;
+      <span class="ch-scale-val" id="chscale_${ch}">${effective}%</span>`;
     item.querySelector('input').addEventListener('input', e => {
       const ch = e.target.dataset.ch;
-      channelBrightness[ch] = parseInt(e.target.value);
-      document.getElementById(`chscale_${ch}`).textContent = channelBrightness[ch] + '%';
+      const v = parseInt(e.target.value);
+      // Back-calculate cap so effective output = slider value
+      channelBrightness[ch] = masterBrightness > 0
+        ? Math.min(100, Math.round(v * 100 / masterBrightness))
+        : v;
+      document.getElementById(`chscale_${ch}`).textContent = v + '%';
       applyMaster();
       updateChart();
       updateColorStrip();
     });
     bar.appendChild(item);
+  });
+}
+
+function syncChannelSliders() {
+  DEVICES[cfg.device].channels.forEach(ch => {
+    const effective = Math.min(100, Math.round((channelBrightness[ch] ?? 100) * masterBrightness / 100));
+    const sl = document.querySelector(`[data-ch="${ch}"]`);
+    if (sl) sl.value = effective;
+    const lbl = document.getElementById(`chscale_${ch}`);
+    if (lbl) lbl.textContent = effective + '%';
   });
 }
 
@@ -631,6 +646,7 @@ function onMasterChange() {
   masterBrightness = parseInt(document.getElementById('masterSlider').value);
   document.getElementById('masterVal').textContent = masterBrightness + '%';
   applyMaster();
+  syncChannelSliders();
   updateChart();
   updateColorStrip();
 }
