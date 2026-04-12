@@ -75,6 +75,11 @@ async def index(request):
     return send_file('static/index.html', content_type='text/html')
 
 
+@app.route('/static/<path:path>')
+async def static_files(request, path):
+    return send_file('static/' + path)
+
+
 @app.route('/api/devices')
 async def api_devices(request):
     return k7.DEVICES
