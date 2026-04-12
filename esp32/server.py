@@ -19,6 +19,7 @@ import random
 import json
 import time
 import os
+import gc
 
 from microdot import Microdot, send_file
 
@@ -121,6 +122,7 @@ async def api_state(request):
             if not state:
                 return {'error': 'Could not decode device response'}, 500
             state['schedule'] = [list(e) for e in state['schedule']]
+            gc.collect()
             return state
         except OSError as e:
             return {'error': f'Connection failed — {e}'}, 503
@@ -158,14 +160,18 @@ async def api_presets(request):
             'name':     p['name'],
             'desc':     p['desc'],
             'manual':   p['manual'],
-            'schedule': [list(row) for row in p['schedule']],
+            # Build schedule from keyframes on demand — don't hold all schedules in RAM
+            'schedule': [list(row) for row in presets.build_schedule(p['keyframes'])],
         }
+    gc.collect()   # recover the intermediate schedule lists immediately
     return out
 
 
 @app.route('/api/profiles', methods=['GET'])
 async def api_profiles_get(request):
-    return _load_profiles()
+    data = _load_profiles()
+    gc.collect()
+    return data
 
 
 @app.route('/api/profiles', methods=['POST'])
