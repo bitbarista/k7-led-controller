@@ -3,6 +3,7 @@
 
 from flask import Flask, render_template, jsonify, request
 import threading
+import random
 import json
 import sys
 import os
@@ -17,6 +18,9 @@ app  = Flask(__name__)
 lock = threading.Lock()   # one device request at a time
 
 cfg = {'host': '192.168.4.1', 'port': 8266, 'device': 'k7mini'}
+
+# Last schedule pushed to the lamp — used by the lightning thread for restore values
+_last_schedule = [[h, 0, 0, 0, 0, 0, 0, 0] for h in range(24)]
 
 PROFILES_FILE = os.path.join(os.path.dirname(__file__), 'profiles.json')
 
@@ -74,6 +78,7 @@ def api_state():
 
 @app.route('/api/push', methods=['POST'])
 def api_push():
+    global _last_schedule
     d = request.json or {}
     with lock:
         try:
@@ -82,6 +87,7 @@ def api_push():
             mode     = d.get('mode', 'auto')
             with _lamp() as lamp:
                 lamp.push_schedule(manual, schedule, mode)
+            _last_schedule = [list(e) for e in schedule]
             return jsonify({'ok': True})
         except OSError as e:
             return jsonify({'error': f'Connection failed — {e}'}), 503
@@ -143,25 +149,77 @@ def api_preview():
             return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/lightning/flash', methods=['POST'])
-def api_lightning_flash():
-    """Flash the lamp briefly then restore. duration_ms clamped to 50–500 ms."""
-    d = request.json or {}
-    flash_ch   = d.get('flash',    [100] * 6)
-    restore_ch = d.get('restore',  [0]   * 6)
-    dur_ms     = max(50, min(500, int(d.get('duration', 120))))
-    with lock:
-        try:
-            with _lamp() as lamp:
-                lamp.preview_brightness(flash_ch)
-            time.sleep(dur_ms / 1000)
-            with _lamp() as lamp:
-                lamp.preview_brightness(restore_ch)
+def _lightning_flash_channels():
+    """White-dominant flash values for the configured device."""
+    if cfg['device'] == 'k7mini':
+        return [100, 60, 60, 0, 0, 0]   # white, royal_blue, blue
+    else:                                 # k7pro: uv, rb, blue, white, ww, red
+        return [40, 60, 60, 100, 100, 0]
+
+
+_lightning_lock   = threading.Lock()
+_lightning_active = False
+_lightning_thread = None
+
+
+def _lightning_worker():
+    global _lightning_active
+    while _lightning_active:
+        # Random interval between strikes: 15–90 s, checked every 0.25 s so it stops promptly
+        delay   = 15 + random.random() * 75
+        elapsed = 0.0
+        while elapsed < delay:
+            time.sleep(0.25)
+            elapsed += 0.25
+            if not _lightning_active:
+                return
+
+        pulses  = random.choices([1, 2, 3], weights=[65, 25, 10])[0]
+        flash   = _lightning_flash_channels()
+        h       = time.localtime().tm_hour
+        restore = list(_last_schedule[h][2:])
+
+        for i in range(pulses):
+            if not _lightning_active:
+                return
+            dur = 0.06 + random.random() * 0.12   # 60–180 ms flash
+            try:
+                with lock:
+                    with _lamp() as lamp:
+                        lamp.preview_brightness(flash)
+                time.sleep(dur)
+                with lock:
+                    with _lamp() as lamp:
+                        lamp.preview_brightness(restore)
+            except Exception:
+                pass   # lamp not reachable — skip pulse silently
+            if i < pulses - 1:
+                time.sleep(0.04 + random.random() * 0.08)   # 40–80 ms gap between pulses
+
+
+@app.route('/api/lightning/start', methods=['POST'])
+def api_lightning_start():
+    global _lightning_active, _lightning_thread
+    with _lightning_lock:
+        if _lightning_active and _lightning_thread and _lightning_thread.is_alive():
             return jsonify({'ok': True})
-        except OSError as e:
-            return jsonify({'error': f'Connection failed — {e}'}), 503
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+        _lightning_active = True
+        _lightning_thread = threading.Thread(target=_lightning_worker, daemon=True)
+        _lightning_thread.start()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/lightning/stop', methods=['POST'])
+def api_lightning_stop():
+    global _lightning_active
+    _lightning_active = False
+    return jsonify({'ok': True})
+
+
+@app.route('/api/lightning/status')
+def api_lightning_status():
+    active = bool(_lightning_active and _lightning_thread and _lightning_thread.is_alive())
+    return jsonify({'active': active})
 
 
 _prov_lock   = threading.Lock()

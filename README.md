@@ -15,6 +15,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 - Day-shift control to slide the entire schedule forward or back (e.g. peak at 18:00 instead of midday)
 - Save and reload your own named profiles (stored on the server, persists across sessions)
 - Manual mode with live preview
+- Lightning effect — random white-dominant flashes to simulate storm lighting
 - Supports K7 Mini (3 channels) and K7 Pro (6 channels)
 - Works on Windows, Linux, and macOS — no app required
 
@@ -85,6 +86,14 @@ To check or switch connection mode, click the R button on the lamp — two blue 
 ## Protocol
 
 The lamp communicates over TCP on port 8266 using a simple binary framing protocol (`AA A5 [CMD HI LO] [data] BB`). The full implementation is in `k7mini.py`.
+
+## Notes
+
+### Lightning effect
+
+The lightning effect is managed by the server process. Once enabled via the browser, it continues firing even if the browser is closed — the server sends flashes directly to the lamp on a random 15–90 second interval. It stops when you disable it in the browser, or when the server process is stopped.
+
+The schedule itself runs autonomously on the lamp and does not require the server to be running. Only the lightning effect requires the server.
 
 ## Licence
 
