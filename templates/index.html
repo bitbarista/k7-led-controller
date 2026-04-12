@@ -94,8 +94,9 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', syste
 .btn-danger-custom { background: transparent; border: 1px solid #f85149; color: #f85149; border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s; }
 .btn-danger-custom:hover { background: rgba(248,81,73,0.1); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-lightning { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
-.btn-lightning:hover { background: #2d3748; }
+.lightning-group { display:flex; align-items:center; gap:8px; border:1px solid rgba(227,173,14,0.25); border-radius:8px; padding:3px 10px 3px 3px; background:rgba(227,173,14,0.04); flex-shrink:0; }
+.btn-lightning { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+.btn-lightning:hover { background: rgba(255,255,255,0.06); }
 .btn-lightning.active { background: rgba(227,173,14,0.15); border-color: #e3ad0e; color: #e3ad0e; }
 .preset-sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
 .ls-label { display:flex; align-items:center; gap:5px; font-size:0.82rem; color:var(--muted); cursor:pointer; user-select:none; white-space:nowrap; }
@@ -174,15 +175,17 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   <button class="btn-primary-custom" onclick="pushSchedule()" id="pushBtn">⬆ Push to Device</button>
   <button class="btn-secondary-custom" onclick="readFromDevice()">↻ Read from Device</button>
   <button class="btn-danger-custom"    onclick="clearSchedule()">✕ Clear</button>
-  <button class="btn-lightning" id="lightningBtn" onclick="toggleLightning()" title="Simulate lightning flashes">⚡ Lightning</button>
-  <label class="ls-label" title="Auto-start/stop lightning on a daily schedule">
-    <input type="checkbox" id="lsEnabled" onchange="onLsChange()"> Schedule
-  </label>
-  <span class="ls-time-wrap" id="lsTimeWrap" style="display:none">
-    <input type="time" id="lsStart" class="time-input" onchange="onLsChange()" title="Lightning start time">
-    <span>–</span>
-    <input type="time" id="lsEnd" class="time-input" onchange="onLsChange()" title="Lightning end time">
-  </span>
+  <div class="lightning-group">
+    <button class="btn-lightning" id="lightningBtn" onclick="toggleLightning()" title="Simulate lightning flashes">⚡ Lightning</button>
+    <label class="ls-label" title="Auto-start/stop lightning on a daily schedule">
+      <input type="checkbox" id="lsEnabled" onchange="onLsChange()"> Schedule
+    </label>
+    <span class="ls-time-wrap" id="lsTimeWrap" style="display:none">
+      <input type="time" id="lsStart" class="time-input" onchange="onLsChange()" title="Lightning start time">
+      <span>–</span>
+      <input type="time" id="lsEnd" class="time-input" onchange="onLsChange()" title="Lightning end time">
+    </span>
+  </div>
   <div class="preset-sep"></div>
   <select id="presetSel" onchange="onPresetChange()" title="Load a preset or saved profile">
     <option value="">— Load Preset —</option>
