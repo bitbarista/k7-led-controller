@@ -91,7 +91,7 @@ class K7:
         buf = b''
         try:
             while True:
-                chunk = self._sock.recv(4096)
+                chunk = self._sock.recv(512)
                 if not chunk:
                     break
                 buf += chunk
