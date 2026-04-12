@@ -185,9 +185,12 @@ MINI = {
 
 # ── K7 Pro presets (6 channels: uv, royal_blue, blue, white, warm_white, red) ─
 #
-# K7 Pro PPFD not measured — channel ratios follow the same philosophy as Mini:
-# Royal Blue is the primary PPFD driver; Blue is spectral/aesthetic;
-# White arrives later and leaves earlier than blue (mimics solar arc).
+# K7 Pro PPFD not measured. Channel ratios follow the same philosophy as Mini.
+# Scale factors are extrapolated from Mini calibration measurements:
+#   LPS:   ×0.916 all channels
+#   Mixed: ×0.910 all channels
+#   SPS:   white ×1.23 (RB+Blue already at 100%)
+# Verify with a PPFD meter — Pro lamp efficiency may differ from Mini.
 # Red is kept at 0 for coral tanks.
 
 PRO = {
@@ -218,18 +221,18 @@ PRO = {
                 'Actinic pre/post periods — Hammer, Torch, Brain, Frogspawn.',
         'schedule': _build([
             ( 0, [ 0,  0,  0,  0,  0, 0]),
-            ( 7, [ 0,  6,  9,  0,  0, 0]),   # actinic only
-            ( 8, [ 3, 20, 24,  8,  4, 0]),
-            ( 9, [ 6, 34, 39, 16,  8, 0]),
-            (10, [10, 46, 46, 22, 10, 0]),
-            (11, [13, 56, 52, 27, 12, 0]),   # peak
-            (17, [13, 56, 52, 27, 12, 0]),
-            (18, [ 9, 39, 37, 14,  7, 0]),
-            (19, [ 4, 19, 21,  4,  2, 0]),
-            (20, [ 0,  6,  9,  0,  0, 0]),   # actinic only
+            ( 7, [ 0,  5,  8,  0,  0, 0]),   # actinic only
+            ( 8, [ 3, 18, 22,  7,  4, 0]),
+            ( 9, [ 5, 31, 36, 15,  7, 0]),
+            (10, [ 9, 42, 42, 20,  9, 0]),
+            (11, [12, 51, 48, 25, 11, 0]),   # peak
+            (17, [12, 51, 48, 25, 11, 0]),
+            (18, [ 8, 36, 34, 12,  6, 0]),
+            (19, [ 4, 17, 19,  4,  2, 0]),
+            (20, [ 0,  5,  8,  0,  0, 0]),   # actinic only
             (21, [ 0,  0,  0,  0,  0, 0]),
         ]),
-        'manual': [13, 56, 52, 27, 12, 0],
+        'manual': [12, 51, 48, 25, 11, 0],
     },
 
     'sps': {
@@ -239,18 +242,18 @@ PRO = {
         'schedule': _build([
             ( 0, [ 0,   0,  0,  0,  0, 0]),
             ( 7, [ 5,  17, 23,  0,  0, 0]),   # ramp
-            ( 8, [14,  47, 56, 11,  5, 0]),
-            ( 9, [26,  77, 77, 20,  8, 0]),
-            (10, [38,  96, 90, 29, 10, 0]),
-            (11, [46, 100,100, 34, 11, 0]),   # peak
-            (17, [46, 100,100, 34, 11, 0]),
-            (18, [32,  84, 77, 19,  6, 0]),
-            (19, [16,  54, 50,  6,  2, 0]),
+            ( 8, [14,  47, 56, 14,  5, 0]),
+            ( 9, [26,  77, 77, 25,  8, 0]),
+            (10, [38,  96, 90, 36, 10, 0]),
+            (11, [46, 100,100, 42, 11, 0]),   # peak
+            (17, [46, 100,100, 42, 11, 0]),
+            (18, [32,  84, 77, 23,  6, 0]),
+            (19, [16,  54, 50,  7,  2, 0]),
             (20, [ 5,  23, 25,  0,  0, 0]),
             (21, [ 0,   6,  9,  0,  0, 0]),
             (22, [ 0,   0,  0,  0,  0, 0]),
         ]),
-        'manual': [46, 100, 100, 34, 11, 0],
+        'manual': [46, 100, 100, 42, 11, 0],
     },
 
     'mixed': {
@@ -258,18 +261,18 @@ PRO = {
         'desc': 'SPS-level Royal Blue with LPS-appropriate White.',
         'schedule': _build([
             ( 0, [ 0,  0,  0,  0,  0, 0]),
-            ( 7, [ 2,  8, 11,  0,  0, 0]),
-            ( 8, [ 6, 26, 35, 10,  4, 0]),
-            ( 9, [12, 47, 45, 17,  8, 0]),
-            (10, [18, 63, 54, 22, 10, 0]),
-            (11, [24, 77, 70, 27, 12, 0]),   # peak
-            (17, [24, 77, 70, 27, 12, 0]),
-            (18, [15, 54, 51, 14,  6, 0]),
-            (19, [ 6, 28, 30,  4,  2, 0]),
-            (20, [ 2,  9, 12,  0,  0, 0]),
+            ( 7, [ 2,  7, 10,  0,  0, 0]),
+            ( 8, [ 5, 24, 32,  9,  4, 0]),
+            ( 9, [11, 43, 41, 15,  7, 0]),
+            (10, [16, 57, 49, 20,  9, 0]),
+            (11, [22, 70, 64, 25, 11, 0]),   # peak
+            (17, [22, 70, 64, 25, 11, 0]),
+            (18, [14, 49, 46, 12,  5, 0]),
+            (19, [ 5, 25, 27,  4,  2, 0]),
+            (20, [ 2,  8, 11,  0,  0, 0]),
             (21, [ 0,  0,  0,  0,  0, 0]),
         ]),
-        'manual': [24, 77, 70, 27, 12, 0],
+        'manual': [22, 70, 64, 25, 11, 0],
     },
 }
 
