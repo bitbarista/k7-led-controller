@@ -51,6 +51,12 @@ def api_devices():
     return jsonify(k7.DEVICES)
 
 
+@app.route('/api/time', methods=['POST'])
+def api_time():
+    """No-op on PC — clock is always correct. Present so the browser call doesn't 404."""
+    return jsonify({'ok': True})
+
+
 @app.route('/api/config', methods=['GET', 'POST'])
 def api_config():
     if request.method == 'POST':

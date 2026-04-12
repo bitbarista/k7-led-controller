@@ -871,6 +871,8 @@ async function init() {
   applyModeUI();
   loadPresets();
   readFromDevice();
+  // Sync server clock (no-op on PC Flask; sets ESP32 RTC so scheduler has correct time)
+  api('POST', '/api/time', { timestamp: Date.now() }).catch(() => {});
   // Restore lightning button state if server already has it running
   api('GET', '/api/lightning/status').then(s => setLightningBtn(s.active)).catch(()=>{});
   loadLightningSchedule();
