@@ -10,12 +10,34 @@
 <script src="/static/vendor/chartjs-plugin-dragdata.min.js"></script>
 <style>
 :root {
-  --bg:       #0d1117;
-  --surface:  #161b22;
-  --surface2: #1f2937;
-  --border:   rgba(255,255,255,0.1);
-  --text:     #c9d1d9;
-  --muted:    #6e7681;
+  --bg:              #0d1117;
+  --surface:         #161b22;
+  --surface2:        #1f2937;
+  --border:          rgba(255,255,255,0.1);
+  --text:            #c9d1d9;
+  --muted:           #6e7681;
+  --hover:           #2d3748;
+  --chart-grid:      rgba(255,255,255,0.05);
+  --tooltip-bg:      rgba(15,20,30,0.95);
+  --tooltip-border:  rgba(255,255,255,0.1);
+  --tooltip-text:    #c9d1d9;
+  --nowline:         rgba(255,255,255,0.45);
+  --nowline-label:   rgba(255,255,255,0.65);
+}
+[data-theme="light"] {
+  --bg:              #f6f8fa;
+  --surface:         #ffffff;
+  --surface2:        #eaeef2;
+  --border:          rgba(0,0,0,0.12);
+  --text:            #1c2128;
+  --muted:           #57606a;
+  --hover:           #d0d7de;
+  --chart-grid:      rgba(0,0,0,0.07);
+  --tooltip-bg:      rgba(255,255,255,0.97);
+  --tooltip-border:  rgba(0,0,0,0.15);
+  --tooltip-text:    #1c2128;
+  --nowline:         rgba(0,0,0,0.35);
+  --nowline-label:   rgba(0,0,0,0.55);
 }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; margin: 0; }
@@ -57,7 +79,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', syste
 /* ── day shift control ── */
 .shift-inner { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .shift-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 2px 8px; font-size: 0.8rem; cursor: pointer; line-height: 1.6; }
-.shift-btn:hover { background: #2d3748; }
+.shift-btn:hover { background: var(--hover); }
 .shift-val { min-width: 38px; text-align: center; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 
 /* ── controls bar (master + channel toggles, single row) ── */
@@ -90,24 +112,27 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', syste
 .btn-primary-custom { background: #238636; border: 1px solid #2ea043; color: #fff; border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s; }
 .btn-primary-custom:hover { background: #2ea043; }
 .btn-secondary-custom { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s; }
-.btn-secondary-custom:hover { background: #2d3748; }
+.btn-secondary-custom:hover { background: var(--hover); }
 .btn-danger-custom { background: #b91c1c; border: 1px solid #f85149; color: #fff; border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s; }
 .btn-danger-custom:hover { background: #dc2626; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 .ramp-group { display:flex; align-items:center; gap:8px; border:1px solid rgba(56,189,248,0.25); border-radius:8px; padding:3px 10px 3px 3px; background:rgba(56,189,248,0.04); flex-shrink:0; }
 .lightning-group { display:flex; align-items:center; gap:8px; border:1px solid rgba(227,173,14,0.25); border-radius:8px; padding:3px 10px 3px 3px; background:rgba(227,173,14,0.04); flex-shrink:0; }
 .btn-lightning { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
-.btn-lightning:hover { background: rgba(255,255,255,0.06); }
+.btn-lightning:hover { background: var(--hover); }
 .btn-lightning.active { background: rgba(227,173,14,0.15); border-color: #e3ad0e; color: #e3ad0e; }
 .preset-sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
 .ls-label { display:flex; align-items:center; gap:5px; font-size:0.82rem; color:var(--muted); cursor:pointer; user-select:none; white-space:nowrap; }
 .ls-label input[type=checkbox] { cursor:pointer; accent-color:#e3ad0e; }
 .ls-time-wrap { display:flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--muted); }
 .btn-ramp { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; flex-shrink:0; }
-.btn-ramp:hover { background: rgba(255,255,255,0.06); }
+.btn-ramp:hover { background: var(--hover); }
 .btn-ramp.active { background: rgba(56,189,248,0.15); border-color: #38bdf8; color: #38bdf8; }
 .time-input { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 6px; font-size:0.82rem; width:92px; }
 .time-input::-webkit-calendar-picker-indicator { filter:invert(0.6); cursor:pointer; }
+[data-theme="light"] .time-input::-webkit-calendar-picker-indicator { filter:none; opacity:0.5; }
+[data-theme="light"] .ch-slider::-webkit-slider-thumb { border-color: rgba(0,0,0,0.2); }
+[data-theme="light"] .master-slider::-webkit-slider-thumb { background: #57606a; border-color: rgba(0,0,0,0.2); }
 #presetSel { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: 0.85rem; max-width: 210px; cursor: pointer; }
 #presetDesc { font-size: 0.78rem; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -122,6 +147,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   <div class="status-dot busy" id="dot"></div>
   <span id="statusMsg">Connecting…</span>
   <div style="flex:1"></div>
+  <button id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark theme"
+          style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 10px;font-size:1rem;cursor:pointer;line-height:1">☀</button>
   <select id="deviceSel" onchange="onDeviceChange()" title="Device type">
     <option value="k7mini">K7 Mini</option>
     <option value="k7pro">K7 Pro</option>
@@ -181,7 +208,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   <button class="btn-danger-custom"    onclick="clearSchedule()">✕ Clear</button>
   <div class="ramp-group">
     <button class="btn-ramp" id="rampBtn" onclick="toggleRamp()" title="Enable smooth per-minute ramping — controller sends brightness directly to lamp every minute">≈ Smooth Ramp</button>
-    <span id="rampTick" style="font-size:0.78rem;color:var(--text-muted);display:none"></span>
+    <span id="rampTick" style="font-size:0.78rem;color:var(--muted);display:none"></span>
   </div>
   <div class="lightning-group">
     <button class="btn-lightning" id="lightningBtn" onclick="toggleLightning()" title="Simulate lightning flashes">⚡ Lightning</button>
@@ -450,18 +477,46 @@ const nowLinePlugin = {
     ctx.beginPath();
     ctx.moveTo(x, ys.top);
     ctx.lineTo(x, ys.bottom);
-    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.strokeStyle = cssVar('--nowline');
     ctx.lineWidth   = 1.5;
     ctx.setLineDash([4, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.font      = '600 11px system-ui,sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.fillStyle = cssVar('--nowline-label');
     ctx.textAlign = 'center';
     ctx.fillText(label, x, ys.top - 5);
     ctx.restore();
   }
 };
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function applyThemeToChart() {
+  if (!chart) return;
+  chart.options.plugins.legend.labels.color          = cssVar('--text');
+  chart.options.plugins.tooltip.backgroundColor      = cssVar('--tooltip-bg');
+  chart.options.plugins.tooltip.borderColor          = cssVar('--tooltip-border');
+  chart.options.plugins.tooltip.titleColor           = cssVar('--tooltip-text');
+  chart.options.plugins.tooltip.bodyColor            = cssVar('--tooltip-text');
+  chart.options.scales.x.ticks.color                 = cssVar('--muted');
+  chart.options.scales.x.grid.color                  = cssVar('--chart-grid');
+  chart.options.scales.y.ticks.color                 = cssVar('--muted');
+  chart.options.scales.y.grid.color                  = cssVar('--chart-grid');
+  chart.update('none');
+}
+
+function toggleTheme() {
+  const light = document.documentElement.getAttribute('data-theme') === 'light';
+  const next  = light ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  document.getElementById('themeBtn').textContent = next === 'light' ? '🌙' : '☀';
+  localStorage.setItem('k7-theme', next);
+  applyThemeToChart();
+}
 
 function initChart() {
   const ctx = document.getElementById('schedChart').getContext('2d');
@@ -477,10 +532,12 @@ function initChart() {
       maintainAspectRatio: false,
       interaction: { mode: 'nearest', intersect: true },
       plugins: {
-        legend: { position:'bottom', labels:{ color:'#c9d1d9', boxWidth:12, font:{size:12} } },
+        legend: { position:'bottom', labels:{ color:cssVar('--text'), boxWidth:12, font:{size:12} } },
         tooltip: {
-          backgroundColor: 'rgba(15,20,30,0.95)',
-          borderColor: 'rgba(255,255,255,0.1)',
+          backgroundColor: cssVar('--tooltip-bg'),
+          borderColor:     cssVar('--tooltip-border'),
+          titleColor:      cssVar('--tooltip-text'),
+          bodyColor:       cssVar('--tooltip-text'),
           borderWidth: 1,
           callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%` }
         },
@@ -511,11 +568,11 @@ function initChart() {
         },
       },
       scales: {
-        x: { ticks:{ color:'#6e7681', font:{size:11} }, grid:{ color:'rgba(255,255,255,0.05)' } },
+        x: { ticks:{ color:cssVar('--muted'), font:{size:11} }, grid:{ color:cssVar('--chart-grid') } },
         y: {
           min: 0, max: 100,
-          ticks:{ color:'#6e7681', font:{size:11}, callback: v => v+'%' },
-          grid:{ color:'rgba(255,255,255,0.05)' }
+          ticks:{ color:cssVar('--muted'), font:{size:11}, callback: v => v+'%' },
+          grid:{ color:cssVar('--chart-grid') }
         }
       },
       elements: {
@@ -897,6 +954,9 @@ async function deleteProfile() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
+  const savedTheme = localStorage.getItem('k7-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  document.getElementById('themeBtn').textContent = savedTheme === 'light' ? '🌙' : '☀';
   initChart();
   try {
     const c = await api('GET','/api/config');
