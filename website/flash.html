@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>K7 LED Controller — Flash Firmware</title>
+  <meta name="description" content="Flash K7 LED Controller firmware directly from your browser. No software required.">
+  <script type="module" src="https://unpkg.com/esp-web-tools@9/dist/web/install-button.js?module"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .flash-button {
+      background: linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%);
+      transition: all 0.3s ease;
+    }
+    .flash-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(3, 105, 161, 0.35);
+    }
+    .card {
+      transition: all 0.3s ease;
+      border: 2px solid transparent;
+    }
+    .card:hover { border-color: #0369a1; transform: translateY(-3px); }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <header class="bg-white shadow-sm">
+    <div class="max-w-4xl mx-auto px-4 py-5 flex items-center justify-between">
+      <a href="https://github.com/bitbarista/k7-led-controller" class="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+        <span class="text-3xl">🪸</span>
+        <div>
+          <h1 class="text-xl font-bold text-gray-900">K7 LED Controller</h1>
+          <p class="text-xs text-gray-500">ESP32-C3 firmware for Noo-Psyche K7 aquarium lights</p>
+        </div>
+      </a>
+      <a href="https://github.com/bitbarista/k7-led-controller" class="text-gray-400 hover:text-gray-700 transition-colors" title="GitHub">
+        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+        </svg>
+      </a>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 py-12">
+
+    <!-- Hero -->
+    <div class="text-center mb-10">
+      <h2 class="text-3xl font-bold text-gray-900 mb-3">Flash Firmware</h2>
+      <p class="text-gray-600 max-w-2xl mx-auto">
+        Install everything in one click — MicroPython, the K7 controller app, and the web UI.
+        Use Chrome, Edge, or Opera with your ESP32-C3 connected via USB.
+      </p>
+    </div>
+
+    <!-- Version badge -->
+    <div class="bg-white rounded-xl shadow p-4 mb-10 text-center border border-gray-100">
+      <p class="text-sm text-gray-500 mb-1">Latest release</p>
+      <p id="version-label" class="text-2xl font-bold text-sky-700">Loading…</p>
+      <p id="release-date"  class="text-xs text-gray-400 mt-1"></p>
+    </div>
+
+    <!-- Flash card -->
+    <div class="card bg-white rounded-xl shadow-lg p-10 text-center max-w-md mx-auto mb-12">
+      <div class="text-6xl mb-4">🔌</div>
+      <h3 class="text-xl font-bold text-gray-900 mb-2">ESP32-C3 Super Mini</h3>
+      <p class="text-gray-500 text-sm mb-6">
+        4 MB flash · MicroPython v1.28.0 included
+      </p>
+
+      <esp-web-install-button manifest="./releases/latest/manifest.json">
+        <button slot="activate"
+                class="flash-button text-white font-bold py-3 px-8 rounded-lg text-base w-full">
+          📥 Install Firmware
+        </button>
+        <span slot="unsupported" class="block text-red-500 text-sm mt-2">
+          ❌ Web Serial not supported. Use Chrome, Edge, or Opera.
+        </span>
+        <span slot="not-allowed" class="block text-yellow-600 text-sm mt-2">
+          ⚠️ Page must be served over HTTPS to use Web Serial.
+        </span>
+      </esp-web-install-button>
+
+      <p class="text-xs text-gray-400 mt-4">
+        ⚠️ Flashing erases the device — saved config and profiles will be lost.
+      </p>
+    </div>
+
+    <!-- Steps -->
+    <div class="bg-sky-50 rounded-xl p-8 mb-12">
+      <h3 class="text-lg font-bold text-gray-900 mb-6 text-center">After flashing</h3>
+      <div class="grid sm:grid-cols-4 gap-6 text-center">
+        <div>
+          <div class="w-10 h-10 bg-sky-700 text-white rounded-full flex items-center justify-center font-bold mx-auto mb-3">1</div>
+          <p class="text-sm font-medium">Connect to <strong>K7-Setup</strong> WiFi (open network)</p>
+        </div>
+        <div>
+          <div class="w-10 h-10 bg-sky-700 text-white rounded-full flex items-center justify-center font-bold mx-auto mb-3">2</div>
+          <p class="text-sm font-medium">Browse to <strong>http://192.168.5.1</strong> — the device scans for your lamp</p>
+        </div>
+        <div>
+          <div class="w-10 h-10 bg-sky-700 text-white rounded-full flex items-center justify-center font-bold mx-auto mb-3">3</div>
+          <p class="text-sm font-medium">Select your lamp and tap <strong>Connect &amp; Save</strong></p>
+        </div>
+        <div>
+          <div class="w-10 h-10 bg-sky-700 text-white rounded-full flex items-center justify-center font-bold mx-auto mb-3">4</div>
+          <p class="text-sm font-medium">Reconnect to <strong>K7-Controller</strong> (password: <code>12345678</code>) and browse to <strong>192.168.5.1</strong></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Troubleshooting -->
+    <div class="bg-white rounded-xl shadow p-8">
+      <h3 class="text-lg font-bold text-gray-900 mb-4">Troubleshooting</h3>
+      <dl class="space-y-4 text-sm text-gray-600">
+        <div>
+          <dt class="font-semibold text-gray-800">Device not detected</dt>
+          <dd>Try a different USB cable (some are charge-only). Make sure no other app (mpremote, screen, etc.) has the port open.</dd>
+        </div>
+        <div>
+          <dt class="font-semibold text-gray-800">Flashing fails immediately</dt>
+          <dd>Hold the BOOT button on the ESP32-C3 while clicking Install, then release when flashing begins.</dd>
+        </div>
+        <div>
+          <dt class="font-semibold text-gray-800">Lamp not found during setup</dt>
+          <dd>Make sure your K7 lamp is powered on. Its WiFi AP (K7mini… or K7_Pro…) must be visible. Tap <em>Scan again</em> if needed, or enter the SSID manually under the details panel.</dd>
+        </div>
+        <div>
+          <dt class="font-semibold text-gray-800">Browser not supported</dt>
+          <dd>Web Serial API is required. Use Chrome 89+, Edge 89+, or Opera 75+. Firefox and Safari are not supported.</dd>
+        </div>
+      </dl>
+      <div class="mt-6 pt-6 border-t border-gray-100 text-sm text-gray-500">
+        Need more help? See the
+        <a href="https://github.com/bitbarista/k7-led-controller" class="text-sky-600 hover:underline">GitHub repository</a>.
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="bg-white border-t mt-12">
+    <div class="max-w-4xl mx-auto px-4 py-6 text-center text-sm text-gray-400">
+      K7 LED Controller is open source software.
+      <a href="https://github.com/bitbarista/k7-led-controller" class="hover:text-gray-600 underline">GitHub</a>
+    </div>
+  </footer>
+
+  <script>
+    async function loadVersion() {
+      try {
+        const r = await fetch('https://api.github.com/repos/bitbarista/k7-led-controller/releases/latest');
+        const rel = await r.json();
+        if (rel.tag_name) {
+          document.getElementById('version-label').textContent = rel.tag_name;
+          document.getElementById('release-date').textContent =
+            'Released ' + new Date(rel.published_at).toLocaleDateString();
+        }
+      } catch {
+        document.getElementById('version-label').textContent = '—';
+        document.getElementById('release-date').textContent = 'Could not fetch release info';
+      }
+    }
+    loadVersion();
+  </script>
+
+</body>
+</html>

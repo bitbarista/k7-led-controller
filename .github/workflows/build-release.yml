@@ -1,0 +1,248 @@
+name: Build Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'Override version (e.g., 1.0.0-beta)'
+        required: false
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # MicroPython firmware for ESP32-C3 — update when upgrading MicroPython
+  MP_FIRMWARE_URL: https://micropython.org/resources/firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin
+  MICRODOT_VERSION: 2.6.0
+  # FAT filesystem offset and size (from device: Partition address=0x200000, size=0x200000)
+  VFS_OFFSET: 2097152
+  VFS_SIZE_BLOCKS: 512    # 512 × 4096 = 2 MB
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install tools
+      run: |
+        pip install esptool
+        sudo apt-get install -y mtools dosfstools
+
+    - name: Resolve version
+      id: version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "IS_RELEASE=true" >> $GITHUB_OUTPUT
+        elif [[ -n "${{ github.event.inputs.version_override }}" ]]; then
+          VERSION="${{ github.event.inputs.version_override }}"
+          echo "IS_RELEASE=false" >> $GITHUB_OUTPUT
+        else
+          VERSION="dev-$(date +%Y%m%d)-$(git rev-parse --short HEAD)"
+          echo "IS_RELEASE=false" >> $GITHUB_OUTPUT
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+
+    - name: Download MicroPython firmware
+      run: |
+        curl -L "${{ env.MP_FIRMWARE_URL }}" -o micropython.bin
+        echo "MicroPython firmware size: $(wc -c < micropython.bin) bytes"
+
+    - name: Get microdot package files
+      run: |
+        pip download "microdot==${{ env.MICRODOT_VERSION }}" --no-deps -d ./microdot_dl
+        python3 -m zipfile -e microdot_dl/microdot-*.whl ./microdot_extracted
+        # Locate the package directory (may be nested inside microdot/)
+        MICRODOT_SRC=$(find microdot_extracted -name "microdot.py" -path "*/microdot/*" | head -1 | xargs dirname)
+        echo "MICRODOT_SRC=$MICRODOT_SRC" >> $GITHUB_ENV
+        echo "microdot files: $(ls $MICRODOT_SRC)"
+
+    - name: Build FAT filesystem image
+      run: |
+        # Create 2 MB image (block size 4096, 512 blocks — matches device VFS partition)
+        dd if=/dev/zero bs=4096 count=${{ env.VFS_SIZE_BLOCKS }} of=vfs.bin
+        mkfs.fat -F 12 -S 4096 vfs.bin
+
+        export MTOOLS_SKIP_CHECK=1
+
+        # Create directory tree
+        mmd -i vfs.bin ::/lib
+        mmd -i vfs.bin ::/lib/microdot
+        mmd -i vfs.bin ::/static
+        mmd -i vfs.bin ::/static/vendor
+
+        # Python application files
+        mcopy -i vfs.bin esp32/main.py    ::/main.py
+        mcopy -i vfs.bin esp32/server.py  ::/server.py
+        mcopy -i vfs.bin esp32/k7mini.py  ::/k7mini.py
+        mcopy -i vfs.bin esp32/presets.py ::/presets.py
+
+        # Microdot web framework
+        mcopy -i vfs.bin "${{ env.MICRODOT_SRC }}/__init__.py" ::/lib/microdot/__init__.py
+        mcopy -i vfs.bin "${{ env.MICRODOT_SRC }}/microdot.py" ::/lib/microdot/microdot.py
+
+        # Web UI — sync from templates/ (same as deploy.sh)
+        mcopy -i vfs.bin templates/index.html                          ::/static/index.html
+        mcopy -i vfs.bin static/vendor/bootstrap.min.css               ::/static/vendor/bootstrap.min.css
+        mcopy -i vfs.bin static/vendor/chart.umd.min.js                ::/static/vendor/chart.umd.min.js
+        mcopy -i vfs.bin static/vendor/chartjs-plugin-dragdata.min.js  ::/static/vendor/chartjs-plugin-dragdata.min.js
+
+        echo "FAT image contents:"
+        mdir -i vfs.bin -/ ::
+
+    - name: Merge into single binary
+      run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
+        OUT="k7controller-v${VERSION}.bin"
+
+        esptool.py --chip esp32c3 merge_bin \
+          --flash_mode dio \
+          --flash_freq 80m \
+          --flash_size 4MB \
+          -o "$OUT" \
+          0x0 micropython.bin \
+          ${{ env.VFS_OFFSET }} vfs.bin
+
+        echo "Merged binary: $OUT  ($(wc -c < $OUT) bytes)"
+        echo "BIN_NAME=$OUT" >> $GITHUB_ENV
+
+    - name: Generate manifest
+      run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
+        cat > manifest.json << EOF
+        {
+          "name": "K7 LED Controller",
+          "version": "${VERSION}",
+          "new_install_prompt_erase": true,
+          "funding_url": "https://github.com/bitbarista/k7-led-controller",
+          "builds": [
+            {
+              "chipFamily": "ESP32-C3",
+              "parts": [
+                {
+                  "path": "k7controller-v${VERSION}.bin",
+                  "offset": 0
+                }
+              ]
+            }
+          ]
+        }
+        EOF
+        echo "Manifest:"
+        cat manifest.json
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: k7controller-v${{ steps.version.outputs.VERSION }}
+        path: |
+          ${{ env.BIN_NAME }}
+          manifest.json
+        retention-days: 90
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: master
+
+    - name: Extract version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: k7controller-v${{ steps.version.outputs.VERSION }}
+        path: artifacts/
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        name: K7 LED Controller v${{ steps.version.outputs.VERSION }}
+        files: artifacts/*
+        body: |
+          ## K7 LED Controller v${{ steps.version.outputs.VERSION }}
+
+          ### Installation
+
+          **Easiest — browser-based flash (Chrome/Edge/Opera):**
+          Visit the [flash page](https://bitbarista.github.io/k7-led-controller/flash.html), connect your ESP32-C3 via USB, and click Install.
+
+          **Manual — esptool:**
+          ```
+          esptool.py --chip esp32c3 write_flash 0x0 k7controller-v${{ steps.version.outputs.VERSION }}.bin
+          ```
+
+          ### What's included
+          - MicroPython v1.28.0 firmware
+          - K7 controller application (main.py, server.py, k7mini.py, presets.py)
+          - Microdot web framework v${{ env.MICRODOT_VERSION }}
+          - Web UI with vendor assets (Bootstrap, Chart.js)
+
+          ### After flashing
+          1. Connect to **K7-Setup** WiFi (open network)
+          2. Browse to **http://192.168.5.1**
+          3. The device will scan for your K7 lamp — select it and save
+          4. Reconnect to **K7-Controller** WiFi (password: `12345678`)
+          5. Browse to **http://192.168.5.1**
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update website with latest binary and manifest
+      run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
+
+        # Remove stale binary from previous release
+        rm -f website/releases/latest/k7controller-*.bin
+
+        # Copy new binary and manifest
+        cp "artifacts/k7controller-v${VERSION}.bin" "website/releases/latest/k7controller-v${VERSION}.bin"
+
+        # Write manifest with relative path (same-origin = no CORS issues)
+        cat > website/releases/latest/manifest.json << EOF
+        {
+          "name": "K7 LED Controller",
+          "version": "${VERSION}",
+          "new_install_prompt_erase": true,
+          "funding_url": "https://github.com/bitbarista/k7-led-controller",
+          "builds": [
+            {
+              "chipFamily": "ESP32-C3",
+              "parts": [
+                {
+                  "path": "k7controller-v${VERSION}.bin",
+                  "offset": 0
+                }
+              ]
+            }
+          ]
+        }
+        EOF
+
+    - name: Commit and push
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add website/releases/latest/
+        git commit -m "Update flash binary and manifest for v${{ steps.version.outputs.VERSION }}"
+        git push origin master

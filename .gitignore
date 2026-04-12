@@ -3,5 +3,6 @@ __pycache__/
 *.pyc
 *.yaml
 *.yml
+!.github/**/*.yml
 .env
 profiles.json
