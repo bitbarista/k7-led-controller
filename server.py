@@ -6,6 +6,7 @@ import threading
 import json
 import sys
 import os
+import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 import k7mini as k7
@@ -138,6 +139,27 @@ def api_preview():
             with _lamp() as lamp:
                 lamp.preview_brightness(channels)
             return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/lightning/flash', methods=['POST'])
+def api_lightning_flash():
+    """Flash the lamp briefly then restore. duration_ms clamped to 50–500 ms."""
+    d = request.json or {}
+    flash_ch   = d.get('flash',    [100] * 6)
+    restore_ch = d.get('restore',  [0]   * 6)
+    dur_ms     = max(50, min(500, int(d.get('duration', 120))))
+    with lock:
+        try:
+            with _lamp() as lamp:
+                lamp.preview_brightness(flash_ch)
+            time.sleep(dur_ms / 1000)
+            with _lamp() as lamp:
+                lamp.preview_brightness(restore_ch)
+            return jsonify({'ok': True})
+        except OSError as e:
+            return jsonify({'error': f'Connection failed — {e}'}), 503
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
