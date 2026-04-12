@@ -261,24 +261,30 @@ async def _do_event():
                         if not _lightning_active:
                             break
                         lamp.preview_brightness(flash)
-                        await asyncio.sleep(0.03 + random.random() * 0.05)
+                        # Use time.sleep (blocking) so the TCP connection stays
+                        # active — await here yields to other tasks and the idle
+                        # connection can be dropped by the lamp's AP
+                        time.sleep(0.03 + random.random() * 0.05)
                         lamp.preview_brightness(ambient)
                         if p < pulses - 1:
-                            await asyncio.sleep(0.04 + random.random() * 0.06)
+                            time.sleep(0.04 + random.random() * 0.06)
             except Exception:
                 pass
         if s < num_strikes - 1:
             await asyncio.sleep(0.08 + random.random() * 0.17)
 
-    # Fresh connection for restore
-    async with lock:
+    # Restore — retry up to 3 times so a single dropped connection doesn't
+    # leave the lamp stuck on the flash values
+    for _ in range(3):
         try:
-            with _lamp() as lamp:
-                lamp.preview_brightness(ambient)
-                if not _ramp_active:
-                    lamp.set_mode_auto()
+            async with lock:
+                with _lamp() as lamp:
+                    lamp.preview_brightness(ambient)
+                    if not _ramp_active:
+                        lamp.set_mode_auto()
+            break
         except Exception:
-            pass
+            await asyncio.sleep(1)
 
 
 async def _lightning_worker():
