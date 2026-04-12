@@ -70,4 +70,4 @@ The lamp communicates over TCP on port 8266 using a simple binary framing protoc
 
 ## Licence
 
-MIT
+[MIT](LICENSE)
