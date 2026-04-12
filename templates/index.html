@@ -143,7 +143,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   <div class="controls-bar">
     <div class="master-inner">
       <span class="master-label">Master</span>
-      <input type="range" id="masterSlider" class="master-slider" min="0" max="100" value="100" oninput="onMasterChange()">
+      <input type="range" id="masterSlider" class="master-slider" min="0" max="200" value="100" oninput="onMasterChange()">
       <span class="master-value" id="masterVal">100%</span>
     </div>
     <div class="shift-inner">
@@ -468,7 +468,7 @@ function initChart() {
             const ci   = chs.indexOf(ch);
             const cap  = channelBrightness[ch] ?? 100;
             const m    = masterBrightness / 100;
-            const vmax = Math.round(cap * m);
+            const vmax = Math.min(100, Math.round(cap * m));
             const v    = Math.max(0, Math.min(vmax, Math.round(value)));
             schedule[index][2 + ci] = v;
             // Back-calculate scheduleBase value, excluding this index from peak
