@@ -4,3 +4,4 @@ __pycache__/
 *.yaml
 *.yml
 .env
+profiles.json

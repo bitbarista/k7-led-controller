@@ -71,6 +71,12 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', syste
 .ch-toggle { padding: 3px 12px; border-radius: 99px; border: 1px solid; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s, background 0.15s; user-select: none; }
 .ch-toggle.off { opacity: 0.3; background: transparent !important; }
 
+/* ── per-channel scale bar ── */
+.ch-scale-bar { display: flex; gap: 12px; padding: 6px 20px; flex-wrap: wrap; border-bottom: 1px solid var(--border); align-items: center; }
+.ch-scale-item { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 150px; }
+.ch-scale-label { font-size: 0.78rem; font-weight: 600; width: 82px; flex-shrink: 0; }
+.ch-scale-val { width: 36px; text-align: right; font-size: 0.78rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+
 /* ── schedule chart ── */
 .chart-wrap { padding: 6px 20px 4px; height: calc(100vh - 285px); min-height: 300px; }
 #schedChart { width: 100%; height: 100%; }
@@ -148,6 +154,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
     </div>
     <div class="ch-toggles" id="chToggles"></div>
   </div>
+  <div class="ch-scale-bar" id="chScaleBar"></div>
   <div class="chart-wrap">
     <canvas id="schedChart"></canvas>
   </div>
@@ -160,9 +167,11 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   <button class="btn-secondary-custom" onclick="readFromDevice()">↻ Read from Device</button>
   <button class="btn-danger-custom"    onclick="clearSchedule()">✕ Clear</button>
   <div class="preset-sep"></div>
-  <select id="presetSel" onchange="onPresetChange()" title="Load a preset schedule">
+  <select id="presetSel" onchange="onPresetChange()" title="Load a preset or saved profile">
     <option value="">— Load Preset —</option>
   </select>
+  <button class="btn-secondary-custom" onclick="saveProfile()" title="Save current schedule as a profile">💾 Save</button>
+  <button class="btn-danger-custom" id="deleteProfileBtn" onclick="deleteProfile()" title="Delete selected profile" style="display:none">🗑 Delete</button>
   <span id="presetDesc"></span>
 </div>
 
@@ -198,11 +207,13 @@ let mode     = 'auto';   // 'auto' | 'manual'
 let schedule     = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
 let scheduleBase = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
 let masterBrightness = 100;
-let dayShift = 0;   // hours to rotate schedule (-12..+12, stored as 0..23)
+let dayShift = 0;          // hours to rotate schedule (-12..+12, stored as 0..23)
+let channelBrightness = {}; // ch key → 0..100 multiplier, default 100
 let manual   = [0,0,0,0,0,0];
 let chart    = null;
 let previewTimer = null;
-let presets  = {};   // key → {name, desc, manual, schedule}
+let presets       = {};   // key → {name, desc, manual, schedule}
+let savedProfiles = {};   // name → saved profile object
 const hiddenChannels = new Set();  // channel keys currently hidden in chart
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -233,8 +244,10 @@ function onDeviceChange() {
   cfg.device = document.getElementById('deviceSel').value;
   api('POST','/api/config', cfg).catch(()=>{});
   hiddenChannels.clear();
+  DEVICES[cfg.device].channels.forEach(ch => { channelBrightness[ch] = 100; });
   renderSliders();
   renderChannelToggles();
+  renderChannelScales();
   updateChart();
   updateColorStrip();
   loadPresets();
@@ -448,14 +461,22 @@ function initChart() {
           showTooltip: true,
           dragX: false,
           onDrag: function(e, datasetIndex, index, value) {
-            const ds = chart.data.datasets[datasetIndex];
+            const ds  = chart.data.datasets[datasetIndex];
             if (!ds || !ds.channelKey) return value;
-            const ch = ds.channelKey;
-            const ci = DEVICES[cfg.device].channels.indexOf(ch);
-            const v  = Math.max(0, Math.min(100, Math.round(value)));
+            const ch   = ds.channelKey;
+            const chs  = DEVICES[cfg.device].channels;
+            const ci   = chs.indexOf(ch);
+            const cap  = channelBrightness[ch] ?? 100;
+            const m    = masterBrightness / 100;
+            const vmax = Math.round(cap * m);
+            const v    = Math.max(0, Math.min(vmax, Math.round(value)));
             schedule[index][2 + ci] = v;
-            scheduleBase[index][2 + ci] = masterBrightness > 0
-              ? Math.min(100, Math.round(v * 100 / masterBrightness)) : v;
+            // Back-calculate scheduleBase value, excluding this index from peak
+            const peak = Math.max(1, ...scheduleBase
+              .filter((_, i) => i !== index).map(row => row[2 + ci]));
+            scheduleBase[index][2 + ci] = (cap * m > 0)
+              ? Math.min(100, Math.round(v * peak / (cap * m)))
+              : 0;
             updateColorStrip();
             return v;
           },
@@ -526,13 +547,52 @@ function onSliderChange(e) {
   triggerPreview();
 }
 
+// ── Per-channel scale sliders ─────────────────────────────────────────────────
+function renderChannelScales() {
+  const chs = DEVICES[cfg.device].channels;
+  const bar = document.getElementById('chScaleBar');
+  bar.innerHTML = '';
+  chs.forEach(ch => {
+    const val = channelBrightness[ch] ?? 100;
+    const item = document.createElement('div');
+    item.className = 'ch-scale-item';
+    item.innerHTML = `
+      <span class="ch-scale-label" style="color:${CH[ch].css}">${CH[ch].label}</span>
+      <input type="range" class="ch-slider" min="0" max="100" value="${val}"
+             style="flex:1; accent-color:${CH[ch].css}" data-ch="${ch}">
+      <span class="ch-scale-val" id="chscale_${ch}">${val}%</span>`;
+    item.querySelector('input').addEventListener('input', e => {
+      const ch = e.target.dataset.ch;
+      channelBrightness[ch] = parseInt(e.target.value);
+      document.getElementById(`chscale_${ch}`).textContent = channelBrightness[ch] + '%';
+      applyMaster();
+      updateChart();
+      updateColorStrip();
+    });
+    bar.appendChild(item);
+  });
+}
+
 // ── Master brightness ─────────────────────────────────────────────────────────
 function applyMaster() {
-  const m = masterBrightness / 100;
+  const m   = masterBrightness / 100;
+  const chs = DEVICES[cfg.device].channels;
+  // Normalise each channel by its own peak so the slider is an absolute output target
+  const peaks = chs.map((_, ci) =>
+    Math.max(1, ...scheduleBase.map(row => row[2 + ci]))
+  );
   for (let h = 0; h < 24; h++) {
     const srcH = ((h - dayShift) % 24 + 24) % 24;
     for (let ci = 0; ci < 6; ci++) {
-      schedule[h][2 + ci] = Math.min(100, Math.round(scheduleBase[srcH][2 + ci] * m));
+      if (ci < chs.length) {
+        const ch  = chs[ci];
+        const cap = channelBrightness[ch] ?? 100;
+        schedule[h][2 + ci] = Math.min(100,
+          Math.round((scheduleBase[srcH][2 + ci] / peaks[ci]) * cap * m)
+        );
+      } else {
+        schedule[h][2 + ci] = 0;
+      }
     }
   }
 }
@@ -540,12 +600,19 @@ function applyMaster() {
 function resetMaster() {
   masterBrightness = 100;
   dayShift = 0;
+  // Initialise each channel slider to the profile's actual peak for that channel
+  const chs = DEVICES[cfg.device].channels;
+  chs.forEach((ch, ci) => {
+    const peak = Math.max(0, ...scheduleBase.map(row => row[2 + ci]));
+    channelBrightness[ch] = peak > 0 ? peak : 100;
+  });
   const sl = document.getElementById('masterSlider');
   if (sl) sl.value = 100;
   const mv = document.getElementById('masterVal');
   if (mv) mv.textContent = '100%';
   const sv = document.getElementById('shiftVal');
   if (sv) sv.textContent = '+0h';
+  renderChannelScales();
   applyMaster();
 }
 
@@ -572,35 +639,138 @@ function onMasterChange() {
 async function loadPresets() {
   try {
     presets = await api('GET', '/api/presets');
-    const sel = document.getElementById('presetSel');
-    sel.innerHTML = '<option value="">— Load Preset —</option>';
-    for (const [key, p] of Object.entries(presets)) {
+    savedProfiles = await api('GET', '/api/profiles');
+  } catch(_) {}
+  rebuildPresetDropdown();
+}
+
+function rebuildPresetDropdown() {
+  const sel = document.getElementById('presetSel');
+  sel.innerHTML = '<option value="">— Load Preset —</option>';
+
+  // Built-in presets
+  for (const [key, p] of Object.entries(presets)) {
+    const opt = document.createElement('option');
+    opt.value       = `preset:${key}`;
+    opt.textContent = p.name;
+    sel.appendChild(opt);
+  }
+
+  // Saved profiles
+  const names = Object.keys(savedProfiles);
+  if (names.length) {
+    const sep = document.createElement('option');
+    sep.disabled = true;
+    sep.textContent = '── Saved Profiles ──';
+    sel.appendChild(sep);
+    for (const name of names) {
       const opt = document.createElement('option');
-      opt.value       = key;
-      opt.textContent = p.name;
+      opt.value       = `saved:${name}`;
+      opt.textContent = name;
+      if (savedProfiles[name].device !== cfg.device) opt.textContent += ' ⚠';
       sel.appendChild(opt);
     }
-    document.getElementById('presetDesc').textContent = '';
-  } catch(_) {}
+  }
+
+  document.getElementById('presetDesc').textContent = '';
+  document.getElementById('deleteProfileBtn').style.display = 'none';
 }
 
 function onPresetChange() {
-  const key = document.getElementById('presetSel').value;
-  if (!key || !presets[key]) {
-    document.getElementById('presetDesc').textContent = '';
-    return;
+  const val = document.getElementById('presetSel').value;
+  document.getElementById('deleteProfileBtn').style.display = 'none';
+  if (!val) { document.getElementById('presetDesc').textContent = ''; return; }
+
+  if (val.startsWith('preset:')) {
+    const key = val.slice(7);
+    const p = presets[key];
+    if (!p) return;
+    document.getElementById('presetDesc').textContent = p.desc;
+    scheduleBase = p.schedule.map(row => [...row]);
+    manual       = [...p.manual];
+    resetMaster();
+    updateChart();
+    updateColorStrip();
+    renderSliders();
+    setOk(`Preset loaded: ${p.name} — click Push to apply`);
+
+  } else if (val.startsWith('saved:')) {
+    const name = val.slice(6);
+    const p = savedProfiles[name];
+    if (!p) return;
+    document.getElementById('presetDesc').textContent =
+      p.device !== cfg.device ? `⚠ Saved for ${p.device}` : `Saved profile`;
+    document.getElementById('deleteProfileBtn').style.display = '';
+    scheduleBase = p.scheduleBase.map(row => [...row]);
+    manual       = [...(p.manual || manual)];
+    // Restore saved slider state
+    masterBrightness = p.masterBrightness ?? 100;
+    dayShift         = p.dayShift ?? 0;
+    const chs = DEVICES[cfg.device].channels;
+    chs.forEach(ch => { channelBrightness[ch] = p.channelBrightness?.[ch] ?? 100; });
+    // Sync UI controls
+    const sl = document.getElementById('masterSlider');
+    if (sl) sl.value = masterBrightness;
+    const mv = document.getElementById('masterVal');
+    if (mv) mv.textContent = masterBrightness + '%';
+    const sv = document.getElementById('shiftVal');
+    if (sv) {
+      const d = dayShift;
+      sv.textContent = d === 0 ? '+0h' : d <= 12 ? `+${d}h` : `-${24-d}h`;
+    }
+    renderChannelScales();
+    applyMaster();
+    updateChart();
+    updateColorStrip();
+    renderSliders();
+    setOk(`Profile loaded: ${name} — click Push to apply`);
   }
-  const p = presets[key];
-  document.getElementById('presetDesc').textContent = p.desc;
+}
 
-  scheduleBase = p.schedule.map(row => [...row]);
-  manual       = [...p.manual];
-  resetMaster();  // sets schedule = scheduleBase at 100%
+async function saveProfile() {
+  const name = prompt('Profile name:');
+  if (!name || !name.trim()) return;
+  const key = name.trim();
+  if (savedProfiles[key] && !confirm(`Profile "${key}" already exists. Overwrite?`)) return;
+  setBusy('Saving…');
+  try {
+    await api('POST', '/api/profiles', {
+      name:             key,
+      device:           cfg.device,
+      scheduleBase:     scheduleBase.map(row => [...row]),
+      manual:           [...manual],
+      channelBrightness: {...channelBrightness},
+      masterBrightness,
+      dayShift,
+    });
+    savedProfiles = await api('GET', '/api/profiles');
+    rebuildPresetDropdown();
+    // Select the newly saved profile
+    const sel = document.getElementById('presetSel');
+    for (const opt of sel.options) {
+      if (opt.value === `saved:${key}`) { sel.value = opt.value; break; }
+    }
+    onPresetChange();
+    setOk(`Profile "${key}" saved`);
+  } catch(e) {
+    setErr(e.message);
+  }
+}
 
-  updateChart();
-  updateColorStrip();
-  renderSliders();
-  setOk(`Preset loaded: ${p.name} — click Push to apply`);
+async function deleteProfile() {
+  const val = document.getElementById('presetSel').value;
+  if (!val.startsWith('saved:')) return;
+  const name = val.slice(6);
+  if (!confirm(`Delete profile "${name}"?`)) return;
+  setBusy('Deleting…');
+  try {
+    await api('DELETE', `/api/profiles/${encodeURIComponent(name)}`);
+    savedProfiles = await api('GET', '/api/profiles');
+    rebuildPresetDropdown();
+    setOk(`Profile "${name}" deleted`);
+  } catch(e) {
+    setErr(e.message);
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -613,8 +783,10 @@ async function init() {
     document.getElementById('deviceSel').value = cfg.device;
   } catch(_){}
 
+  DEVICES[cfg.device].channels.forEach(ch => { channelBrightness[ch] = 100; });
   renderSliders();
   renderChannelToggles();
+  renderChannelScales();
   updateChart();
   updateColorStrip();
   applyModeUI();

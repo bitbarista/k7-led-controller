@@ -3,6 +3,7 @@
 
 from flask import Flask, render_template, jsonify, request
 import threading
+import json
 import sys
 import os
 
@@ -15,6 +16,18 @@ app  = Flask(__name__)
 lock = threading.Lock()   # one device request at a time
 
 cfg = {'host': '192.168.4.1', 'port': 8266, 'device': 'k7mini'}
+
+PROFILES_FILE = os.path.join(os.path.dirname(__file__), 'profiles.json')
+
+def _load_profiles():
+    if os.path.exists(PROFILES_FILE):
+        with open(PROFILES_FILE) as f:
+            return json.load(f)
+    return {}
+
+def _save_profiles(data):
+    with open(PROFILES_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
 
 
 def _lamp():
@@ -89,6 +102,31 @@ def api_presets():
             'schedule': [list(row) for row in p['schedule']],
         }
     return jsonify(out)
+
+
+@app.route('/api/profiles', methods=['GET'])
+def api_profiles_get():
+    return jsonify(_load_profiles())
+
+
+@app.route('/api/profiles', methods=['POST'])
+def api_profiles_post():
+    d = request.json or {}
+    name = d.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'Name required'}), 400
+    profiles = _load_profiles()
+    profiles[name] = d
+    _save_profiles(profiles)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/profiles/<name>', methods=['DELETE'])
+def api_profiles_delete(name):
+    profiles = _load_profiles()
+    profiles.pop(name, None)
+    _save_profiles(profiles)
+    return jsonify({'ok': True})
 
 
 @app.route('/api/preview', methods=['POST'])
