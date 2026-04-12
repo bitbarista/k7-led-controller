@@ -209,9 +209,8 @@ def _do_event():
                             time.sleep(0.04 + random.random() * 0.06) # 40–100 ms dark gap
                     if s < num_strikes - 1:
                         time.sleep(0.08 + random.random() * 0.17)    # 80–250 ms dark between strikes
-                lamp.push_schedule(_last_manual,
-                                   [tuple(r) for r in _last_schedule],
-                                   mode='auto')
+                lamp.preview_brightness(ambient)   # snap to correct colours
+                lamp.set_mode_auto()               # return to schedule
     except Exception:
         pass
 
