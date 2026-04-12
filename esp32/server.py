@@ -21,13 +21,6 @@ import time
 import os
 import gc
 
-# Seed the RNG from hardware noise so every boot gets a different sequence
-try:
-    import machine
-    random.seed(machine.unique_id())
-except Exception:
-    pass
-
 from microdot import Microdot, send_file
 
 import k7mini as k7
@@ -231,13 +224,10 @@ def _lightning_flash_channels():
         return [40, 60, 60, 100, 100, 0]
 
 
-_lightning_lock        = asyncio.Lock()
-_lightning_active      = False
-_lightning_task        = None
-_manually_enabled      = False   # True = user explicitly started
-_user_stopped          = False   # True = user explicitly stopped; scheduler won't restart
-_lightning_event_count = 0
-_lightning_last_event  = None
+_lightning_lock   = asyncio.Lock()
+_lightning_active = False
+_lightning_task   = None
+_manually_enabled = False   # tracks the user's intent, independent of schedule
 
 
 async def _do_event():
@@ -262,34 +252,28 @@ async def _do_event():
                         if not _lightning_active:
                             break
                         lamp.preview_brightness(flash)
-                        # Use time.sleep (blocking) so the TCP connection stays
-                        # active — await here yields to other tasks and the idle
-                        # connection can be dropped by the lamp's AP
-                        time.sleep(0.03 + random.random() * 0.05)
+                        await asyncio.sleep(0.03 + random.random() * 0.05)
                         lamp.preview_brightness(ambient)
                         if p < pulses - 1:
-                            time.sleep(0.04 + random.random() * 0.06)
+                            await asyncio.sleep(0.04 + random.random() * 0.06)
             except Exception:
                 pass
         if s < num_strikes - 1:
             await asyncio.sleep(0.08 + random.random() * 0.17)
 
-    # Restore — retry up to 3 times so a single dropped connection doesn't
-    # leave the lamp stuck on the flash values
-    for _ in range(3):
+    # Fresh connection for restore
+    async with lock:
         try:
-            async with lock:
-                with _lamp() as lamp:
-                    lamp.preview_brightness(ambient)
-                    if not _ramp_active:
-                        lamp.set_mode_auto()
-            break
+            with _lamp() as lamp:
+                lamp.preview_brightness(ambient)
+                if not _ramp_active:
+                    lamp.set_mode_auto()
         except Exception:
-            await asyncio.sleep(1)
+            pass
 
 
 async def _lightning_worker():
-    global _lightning_active, _lightning_event_count, _lightning_last_event
+    global _lightning_active
     while _lightning_active:
         # Interruptible sleep: 15–90 s between events
         delay   = 15 + random.random() * 75
@@ -299,14 +283,12 @@ async def _lightning_worker():
             elapsed += 0.25
         if _lightning_active:
             await _do_event()
-            _lightning_event_count += 1
-            _lightning_last_event   = time.time()
 
 
 async def _ensure_lightning_started():
     global _lightning_active, _lightning_task, _last_schedule, _last_manual
     async with _lightning_lock:
-        if _lightning_active and _lightning_task and not _lightning_task.done():
+        if _lightning_active and _lightning_task:
             return
         # Snapshot lamp state so ambient restore is correct
         try:
@@ -325,25 +307,23 @@ async def _ensure_lightning_started():
 
 @app.route('/api/lightning/start', methods=['POST'])
 async def api_lightning_start(request):
-    global _manually_enabled, _user_stopped
+    global _manually_enabled
     _manually_enabled = True
-    _user_stopped     = False
     await _ensure_lightning_started()
     return {'ok': True}
 
 
 @app.route('/api/lightning/stop', methods=['POST'])
 async def api_lightning_stop(request):
-    global _lightning_active, _manually_enabled, _user_stopped
+    global _lightning_active, _manually_enabled
     _manually_enabled = False
-    _user_stopped     = True
     _lightning_active = False
     return {'ok': True}
 
 
 @app.route('/api/lightning/status')
 async def api_lightning_status(request):
-    return {'active': _lightning_active, 'events': _lightning_event_count, 'last_event': _lightning_last_event}
+    return {'active': _lightning_active}
 
 
 # ── Lightning schedule ────────────────────────────────────────────────────────
@@ -385,23 +365,15 @@ def _in_lightning_window():
 
 
 async def _lightning_scheduler():
-    global _lightning_active, _user_stopped
+    global _lightning_active
     _load_lightning_schedule()
-    _prev_in_window = False
     while True:
         await asyncio.sleep(30)
         if not _ls.get('enabled'):
             continue
-        in_window = _in_lightning_window()
-        # Reset user-stopped flag when a new window opens so the next
-        # scheduled period auto-starts even if the user stopped it last time
-        if in_window and not _prev_in_window:
-            _user_stopped = False
-        _prev_in_window = in_window
-        if in_window:
-            if not _user_stopped:
-                await _ensure_lightning_started()
-        elif not _manually_enabled:
+        if _in_lightning_window():
+            await _ensure_lightning_started()
+        else:
             _lightning_active = False
 
 

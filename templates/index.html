@@ -212,7 +212,6 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   </div>
   <div class="lightning-group">
     <button class="btn-lightning" id="lightningBtn" onclick="toggleLightning()" title="Simulate lightning flashes">⚡ Lightning</button>
-    <span id="lightningTick" style="font-size:0.78rem;color:var(--muted);display:none"></span>
     <label class="ls-label" title="Auto-start/stop lightning on a daily schedule">
       <input type="checkbox" id="lsEnabled" onchange="onLsChange()"> Schedule
     </label>
@@ -777,36 +776,20 @@ async function toggleRamp() {
 }
 
 // ── Lightning effect ──────────────────────────────────────────────────────────
-function setLightningBtn(active, events, lastEvent) {
-  const btn  = document.getElementById('lightningBtn');
-  const tick = document.getElementById('lightningTick');
+function setLightningBtn(active) {
+  const btn = document.getElementById('lightningBtn');
   btn.classList.toggle('active', active);
   btn.title = active ? 'Lightning active — click to stop' : 'Simulate lightning flashes';
-  if (active && events != null) {
-    const ago = lastEvent ? Math.round((Date.now() / 1000) - lastEvent) : null;
-    const agoStr = ago === null ? '' : ago < 5 ? ' · just now' : ` · ${ago}s ago`;
-    tick.textContent = `${events} event${events !== 1 ? 's' : ''}${agoStr}`;
-    tick.style.display = '';
-  } else {
-    tick.style.display = 'none';
-  }
-}
-
-async function pollLightningStatus() {
-  try {
-    const s = await api('GET', '/api/lightning/status');
-    setLightningBtn(s.active, s.events, s.last_event);
-  } catch {}
 }
 
 async function toggleLightning() {
   const status = await api('GET', '/api/lightning/status');
   if (status.active) {
     await api('POST', '/api/lightning/stop');
-    setLightningBtn(false, null, null);
+    setLightningBtn(false);
   } else {
     await api('POST', '/api/lightning/start');
-    setLightningBtn(true, 0, null);
+    setLightningBtn(true);
   }
 }
 
@@ -996,14 +979,11 @@ async function init() {
   loadPresets();
   readFromDevice();
   // Sync server clock (no-op on PC Flask; sets ESP32 RTC so scheduler has correct time)
-  // Send local time (not UTC) so the device RTC matches the timezone the
-  // schedule times were entered in. getTimezoneOffset() is negative for UTC+.
-  api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 }).catch(() => {});
+  api('POST', '/api/time', { timestamp: Date.now() }).catch(() => {});
   // Restore button states for server-side effects
   pollRampStatus();
   setInterval(pollRampStatus, 15000);
-  pollLightningStatus();
-  setInterval(pollLightningStatus, 15000);
+  api('GET', '/api/lightning/status').then(s => setLightningBtn(s.active)).catch(()=>{});
   loadLightningSchedule();
   // Redraw the now-line and colour strip highlight every minute
   setInterval(() => { if (chart) chart.update('none'); updateColorStrip(); }, 60000);

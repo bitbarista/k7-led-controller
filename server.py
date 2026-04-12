@@ -177,8 +177,7 @@ def _lightning_flash_channels():
 _lightning_lock   = threading.Lock()
 _lightning_active = False
 _lightning_thread = None
-_manually_enabled = False   # True = user explicitly started
-_user_stopped     = False   # True = user explicitly stopped; scheduler won't restart
+_manually_enabled = False   # tracks the user's intent, independent of schedule
 
 # Lightning schedule ── persisted to LIGHTNING_SCHEDULE_FILE
 _ls = {'enabled': False, 'start': '20:00', 'end': '23:00'}
@@ -311,21 +310,15 @@ def _ensure_lightning_started():
 
 def _lightning_scheduler():
     """Background thread: enforce the lightning schedule window every 30 s."""
-    global _lightning_active, _user_stopped
+    global _lightning_active
     _load_lightning_schedule()
-    _prev_in_window = False
     while True:
         time.sleep(30)
         if not _ls.get('enabled'):
             continue
-        in_window = _in_lightning_window()
-        if in_window and not _prev_in_window:
-            _user_stopped = False
-        _prev_in_window = in_window
-        if in_window:
-            if not _user_stopped:
-                _ensure_lightning_started()
-        elif not _manually_enabled:
+        if _in_lightning_window():
+            _ensure_lightning_started()
+        else:
             _lightning_active = False
 
 
@@ -334,18 +327,16 @@ threading.Thread(target=_lightning_scheduler, daemon=True).start()
 
 @app.route('/api/lightning/start', methods=['POST'])
 def api_lightning_start():
-    global _manually_enabled, _user_stopped
+    global _manually_enabled
     _manually_enabled = True
-    _user_stopped     = False
     _ensure_lightning_started()
     return jsonify({'ok': True})
 
 
 @app.route('/api/lightning/stop', methods=['POST'])
 def api_lightning_stop():
-    global _lightning_active, _manually_enabled, _user_stopped
+    global _lightning_active, _manually_enabled
     _manually_enabled = False
-    _user_stopped     = True
     _lightning_active = False
     return jsonify({'ok': True})
 
