@@ -516,6 +516,7 @@ function toggleTheme() {
   document.getElementById('themeBtn').textContent = next === 'light' ? '🌙' : '☀';
   localStorage.setItem('k7-theme', next);
   applyThemeToChart();
+  updateChart();
 }
 
 function initChart() {
@@ -584,17 +585,20 @@ function initChart() {
 }
 
 function updateChart() {
-  const chs = DEVICES[cfg.device].channels;
+  const chs   = DEVICES[cfg.device].channels;
+  const light = document.documentElement.getAttribute('data-theme') === 'light';
   chart.data.datasets = chs
     .filter(ch => !hiddenChannels.has(ch))
     .map(ch => {
       const ci  = chs.indexOf(ch);   // physical position in this device's channel list
       const [r,g,b] = CH[ch].rgb;
+      // White channel is invisible on a light background — use a visible grey instead
+      const lineColor = (ch === 'white' && light) ? '#888888' : CH[ch].css;
       return {
         label:           CH[ch].label,
         channelKey:      ch,
         data:            schedule.map(row => row[2 + ci]),
-        borderColor:     CH[ch].css,
+        borderColor:     lineColor,
         backgroundColor: `rgba(${r},${g},${b},0.18)`,
         fill:            true,
         tension:         0.35,
