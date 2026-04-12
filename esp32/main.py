@@ -121,13 +121,14 @@ SAVED_HTML = """\
 
 
 def _http_respond(conn, status, body, content_type='text/html'):
+    body_bytes = body.encode('utf-8')
     response = (
         f'HTTP/1.1 {status}\r\n'
         f'Content-Type: {content_type}; charset=utf-8\r\n'
-        f'Content-Length: {len(body)}\r\n'
+        f'Content-Length: {len(body_bytes)}\r\n'
         'Connection: close\r\n\r\n'
-    )
-    conn.sendall(response.encode() + body.encode())
+    ).encode()
+    conn.sendall(response + body_bytes)
 
 
 def run_setup_portal():
