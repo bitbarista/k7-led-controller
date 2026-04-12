@@ -35,6 +35,14 @@ cfg = {'host': '192.168.4.1', 'port': 8266, 'device': 'k7mini'}
 _last_schedule = [[h, 0, 0, 0, 0, 0, 0, 0] for h in range(24)]
 _last_manual   = [0] * 6
 
+
+def _interpolate_channels(schedule, h, m):
+    """Linearly interpolate channel values between hour slots h and h+1 at minute m."""
+    lo   = schedule[h % 24]
+    hi   = schedule[(h + 1) % 24]
+    frac = m / 60.0
+    return [max(0, min(100, round(lo[2+i] + frac * (hi[2+i] - lo[2+i])))) for i in range(len(lo) - 2)]
+
 PROFILES_FILE           = 'profiles.json'
 LIGHTNING_SCHEDULE_FILE = 'lightning_schedule.json'
 
@@ -258,7 +266,8 @@ async def _do_event():
         try:
             with _lamp() as lamp:
                 lamp.preview_brightness(ambient)
-                lamp.set_mode_auto()
+                if not _ramp_active:
+                    lamp.set_mode_auto()
         except Exception:
             pass
 
@@ -389,6 +398,76 @@ async def api_lightning_schedule_post(request):
         else:
             _lightning_active = False
     return _ls
+
+
+# ── Smooth ramp ───────────────────────────────────────────────────────────────
+
+_ramp_active = False
+_ramp_task   = None
+
+
+async def _ramp_worker():
+    """Send a preview_brightness every minute, interpolated to the current minute."""
+    global _ramp_active
+    while _ramp_active:
+        t = time.localtime()
+        h, m, s = t[3], t[4], t[5]
+        channels = _interpolate_channels(_last_schedule, h, m)
+        async with lock:
+            try:
+                with _lamp() as lamp:
+                    lamp.preview_brightness(channels)
+            except Exception:
+                pass
+        # Sleep to the next minute boundary in small steps so _ramp_active is checked promptly
+        sleep_s = max(1, 60 - s)
+        elapsed = 0.0
+        while elapsed < sleep_s and _ramp_active:
+            await asyncio.sleep(0.5)
+            elapsed += 0.5
+
+
+async def _ensure_ramp_started():
+    global _ramp_active, _ramp_task, _last_schedule, _last_manual
+    if _ramp_active and _ramp_task:
+        return
+    # Seed schedule from lamp if we have no real data yet
+    try:
+        async with lock:
+            with _lamp() as lamp:
+                raw = lamp.read_all()
+        state = k7.decode_state(raw)
+        if state and state.get('schedule'):
+            _last_schedule = [list(row) for row in state['schedule']]
+            _last_manual   = list(state['manual'])
+    except Exception:
+        pass
+    _ramp_active = True
+    _ramp_task   = asyncio.create_task(_ramp_worker())
+
+
+@app.route('/api/ramp/start', methods=['POST'])
+async def api_ramp_start(request):
+    await _ensure_ramp_started()
+    return {'ok': True}
+
+
+@app.route('/api/ramp/stop', methods=['POST'])
+async def api_ramp_stop(request):
+    global _ramp_active
+    _ramp_active = False
+    async with lock:
+        try:
+            with _lamp() as lamp:
+                lamp.set_mode_auto()
+        except Exception:
+            pass
+    return {'ok': True}
+
+
+@app.route('/api/ramp/status')
+async def api_ramp_status(request):
+    return {'active': _ramp_active}
 
 
 # ── Startup ───────────────────────────────────────────────────────────────────

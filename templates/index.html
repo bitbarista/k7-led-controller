@@ -102,6 +102,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .ls-label { display:flex; align-items:center; gap:5px; font-size:0.82rem; color:var(--muted); cursor:pointer; user-select:none; white-space:nowrap; }
 .ls-label input[type=checkbox] { cursor:pointer; accent-color:#e3ad0e; }
 .ls-time-wrap { display:flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--muted); }
+.btn-ramp { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; flex-shrink:0; }
+.btn-ramp:hover { background: rgba(255,255,255,0.06); }
+.btn-ramp.active { background: rgba(56,189,248,0.15); border-color: #38bdf8; color: #38bdf8; }
 .time-input { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 6px; font-size:0.82rem; width:92px; }
 .time-input::-webkit-calendar-picker-indicator { filter:invert(0.6); cursor:pointer; }
 #presetSel { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: 0.85rem; max-width: 210px; cursor: pointer; }
@@ -175,6 +178,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   <button class="btn-primary-custom" onclick="pushSchedule()" id="pushBtn">⬆ Push to Device</button>
   <button class="btn-secondary-custom" onclick="readFromDevice()">↻ Read from Device</button>
   <button class="btn-danger-custom"    onclick="clearSchedule()">✕ Clear</button>
+  <button class="btn-ramp" id="rampBtn" onclick="toggleRamp()" title="Enable smooth per-minute ramping — controller sends brightness directly to lamp every minute">≈ Smooth Ramp</button>
   <div class="lightning-group">
     <button class="btn-lightning" id="lightningBtn" onclick="toggleLightning()" title="Simulate lightning flashes">⚡ Lightning</button>
     <label class="ls-label" title="Auto-start/stop lightning on a daily schedule">
@@ -671,6 +675,26 @@ function onMasterChange() {
   updateColorStrip();
 }
 
+// ── Smooth ramp ───────────────────────────────────────────────────────────────
+function setRampBtn(active) {
+  const btn = document.getElementById('rampBtn');
+  btn.classList.toggle('active', active);
+  btn.title = active
+    ? 'Smooth ramp active — controller is sending per-minute brightness updates. Click to stop and return lamp to its built-in schedule.'
+    : 'Enable smooth per-minute ramping — controller sends brightness directly to lamp every minute';
+}
+
+async function toggleRamp() {
+  const status = await api('GET', '/api/ramp/status');
+  if (status.active) {
+    await api('POST', '/api/ramp/stop');
+    setRampBtn(false);
+  } else {
+    await api('POST', '/api/ramp/start');
+    setRampBtn(true);
+  }
+}
+
 // ── Lightning effect ──────────────────────────────────────────────────────────
 function setLightningBtn(active) {
   const btn = document.getElementById('lightningBtn');
@@ -873,7 +897,8 @@ async function init() {
   readFromDevice();
   // Sync server clock (no-op on PC Flask; sets ESP32 RTC so scheduler has correct time)
   api('POST', '/api/time', { timestamp: Date.now() }).catch(() => {});
-  // Restore lightning button state if server already has it running
+  // Restore button states for server-side effects
+  api('GET', '/api/ramp/status').then(s => setRampBtn(s.active)).catch(()=>{});
   api('GET', '/api/lightning/status').then(s => setLightningBtn(s.active)).catch(()=>{});
   loadLightningSchedule();
   // Redraw the now-line and colour strip highlight every minute
