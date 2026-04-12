@@ -477,4 +477,4 @@ async def api_ramp_status(request):
 async def main(host='0.0.0.0', port=80):
     """Start background tasks then run the web server."""
     asyncio.create_task(_lightning_scheduler())
-    await app.start_server(host=host, port=port, debug=False, max_concurrency=3)
+    await app.start_server(host=host, port=port, debug=False)
