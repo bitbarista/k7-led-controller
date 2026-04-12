@@ -234,7 +234,8 @@ def _lightning_flash_channels():
 _lightning_lock        = asyncio.Lock()
 _lightning_active      = False
 _lightning_task        = None
-_manually_enabled      = False   # tracks the user's intent, independent of schedule
+_manually_enabled      = False   # True = user explicitly started
+_user_stopped          = False   # True = user explicitly stopped; scheduler won't restart
 _lightning_event_count = 0
 _lightning_last_event  = None
 
@@ -324,16 +325,18 @@ async def _ensure_lightning_started():
 
 @app.route('/api/lightning/start', methods=['POST'])
 async def api_lightning_start(request):
-    global _manually_enabled
+    global _manually_enabled, _user_stopped
     _manually_enabled = True
+    _user_stopped     = False
     await _ensure_lightning_started()
     return {'ok': True}
 
 
 @app.route('/api/lightning/stop', methods=['POST'])
 async def api_lightning_stop(request):
-    global _lightning_active, _manually_enabled
+    global _lightning_active, _manually_enabled, _user_stopped
     _manually_enabled = False
+    _user_stopped     = True
     _lightning_active = False
     return {'ok': True}
 
@@ -382,14 +385,22 @@ def _in_lightning_window():
 
 
 async def _lightning_scheduler():
-    global _lightning_active
+    global _lightning_active, _user_stopped
     _load_lightning_schedule()
+    _prev_in_window = False
     while True:
         await asyncio.sleep(30)
         if not _ls.get('enabled'):
             continue
-        if _in_lightning_window():
-            await _ensure_lightning_started()
+        in_window = _in_lightning_window()
+        # Reset user-stopped flag when a new window opens so the next
+        # scheduled period auto-starts even if the user stopped it last time
+        if in_window and not _prev_in_window:
+            _user_stopped = False
+        _prev_in_window = in_window
+        if in_window:
+            if not _user_stopped:
+                await _ensure_lightning_started()
         elif not _manually_enabled:
             _lightning_active = False
 
