@@ -212,6 +212,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   </div>
   <div class="lightning-group">
     <button class="btn-lightning" id="lightningBtn" onclick="toggleLightning()" title="Simulate lightning flashes">⚡ Lightning</button>
+    <span id="lightningTick" style="font-size:0.78rem;color:var(--muted);display:none"></span>
     <label class="ls-label" title="Auto-start/stop lightning on a daily schedule">
       <input type="checkbox" id="lsEnabled" onchange="onLsChange()"> Schedule
     </label>
@@ -776,20 +777,36 @@ async function toggleRamp() {
 }
 
 // ── Lightning effect ──────────────────────────────────────────────────────────
-function setLightningBtn(active) {
-  const btn = document.getElementById('lightningBtn');
+function setLightningBtn(active, events, lastEvent) {
+  const btn  = document.getElementById('lightningBtn');
+  const tick = document.getElementById('lightningTick');
   btn.classList.toggle('active', active);
   btn.title = active ? 'Lightning active — click to stop' : 'Simulate lightning flashes';
+  if (active && events != null) {
+    const ago = lastEvent ? Math.round((Date.now() / 1000) - lastEvent) : null;
+    const agoStr = ago === null ? '' : ago < 5 ? ' · just now' : ` · ${ago}s ago`;
+    tick.textContent = `${events} event${events !== 1 ? 's' : ''}${agoStr}`;
+    tick.style.display = '';
+  } else {
+    tick.style.display = 'none';
+  }
+}
+
+async function pollLightningStatus() {
+  try {
+    const s = await api('GET', '/api/lightning/status');
+    setLightningBtn(s.active, s.events, s.last_event);
+  } catch {}
 }
 
 async function toggleLightning() {
   const status = await api('GET', '/api/lightning/status');
   if (status.active) {
     await api('POST', '/api/lightning/stop');
-    setLightningBtn(false);
+    setLightningBtn(false, null, null);
   } else {
     await api('POST', '/api/lightning/start');
-    setLightningBtn(true);
+    setLightningBtn(true, 0, null);
   }
 }
 
@@ -983,7 +1000,8 @@ async function init() {
   // Restore button states for server-side effects
   pollRampStatus();
   setInterval(pollRampStatus, 15000);
-  api('GET', '/api/lightning/status').then(s => setLightningBtn(s.active)).catch(()=>{});
+  pollLightningStatus();
+  setInterval(pollLightningStatus, 15000);
   loadLightningSchedule();
   // Redraw the now-line and colour strip highlight every minute
   setInterval(() => { if (chart) chart.update('none'); updateColorStrip(); }, 60000);

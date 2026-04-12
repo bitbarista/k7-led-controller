@@ -21,6 +21,13 @@ import time
 import os
 import gc
 
+# Seed the RNG from hardware noise so every boot gets a different sequence
+try:
+    import machine
+    random.seed(machine.unique_id())
+except Exception:
+    pass
+
 from microdot import Microdot, send_file
 
 import k7mini as k7
@@ -224,10 +231,12 @@ def _lightning_flash_channels():
         return [40, 60, 60, 100, 100, 0]
 
 
-_lightning_lock   = asyncio.Lock()
-_lightning_active = False
-_lightning_task   = None
-_manually_enabled = False   # tracks the user's intent, independent of schedule
+_lightning_lock        = asyncio.Lock()
+_lightning_active      = False
+_lightning_task        = None
+_manually_enabled      = False   # tracks the user's intent, independent of schedule
+_lightning_event_count = 0
+_lightning_last_event  = None
 
 
 async def _do_event():
@@ -273,7 +282,7 @@ async def _do_event():
 
 
 async def _lightning_worker():
-    global _lightning_active
+    global _lightning_active, _lightning_event_count, _lightning_last_event
     while _lightning_active:
         # Interruptible sleep: 15–90 s between events
         delay   = 15 + random.random() * 75
@@ -283,12 +292,14 @@ async def _lightning_worker():
             elapsed += 0.25
         if _lightning_active:
             await _do_event()
+            _lightning_event_count += 1
+            _lightning_last_event   = time.time()
 
 
 async def _ensure_lightning_started():
     global _lightning_active, _lightning_task, _last_schedule, _last_manual
     async with _lightning_lock:
-        if _lightning_active and _lightning_task:
+        if _lightning_active and _lightning_task and not _lightning_task.done():
             return
         # Snapshot lamp state so ambient restore is correct
         try:
@@ -323,7 +334,7 @@ async def api_lightning_stop(request):
 
 @app.route('/api/lightning/status')
 async def api_lightning_status(request):
-    return {'active': _lightning_active}
+    return {'active': _lightning_active, 'events': _lightning_event_count, 'last_event': _lightning_last_event}
 
 
 # ── Lightning schedule ────────────────────────────────────────────────────────
