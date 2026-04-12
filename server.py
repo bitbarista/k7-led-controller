@@ -162,39 +162,57 @@ _lightning_active = False
 _lightning_thread = None
 
 
+def _sleep_interruptible(seconds):
+    """Sleep in 0.25 s increments; returns False if lightning was stopped."""
+    elapsed = 0.0
+    while elapsed < seconds:
+        time.sleep(0.25)
+        elapsed += 0.25
+        if not _lightning_active:
+            return False
+    return True
+
+
+def _do_strike():
+    """Fire one strike (1–3 pulses). Silently skips if lamp is unreachable."""
+    pulses  = random.choices([1, 2, 3], weights=[65, 25, 10])[0]
+    flash   = _lightning_flash_channels()
+    h       = time.localtime().tm_hour
+    restore = list(_last_schedule[h][2:])
+    for i in range(pulses):
+        if not _lightning_active:
+            return
+        dur = 0.06 + random.random() * 0.12   # 60–180 ms flash
+        try:
+            with lock:
+                with _lamp() as lamp:
+                    lamp.preview_brightness(flash)
+            time.sleep(dur)
+            with lock:
+                with _lamp() as lamp:
+                    lamp.preview_brightness(restore)
+        except Exception:
+            pass   # lamp not reachable — skip silently
+        if i < pulses - 1:
+            time.sleep(0.04 + random.random() * 0.08)   # 40–80 ms gap between pulses
+
+
 def _lightning_worker():
     global _lightning_active
     while _lightning_active:
-        # Random interval between strikes: 15–90 s, checked every 0.25 s so it stops promptly
-        delay   = 15 + random.random() * 75
-        elapsed = 0.0
-        while elapsed < delay:
-            time.sleep(0.25)
-            elapsed += 0.25
-            if not _lightning_active:
-                return
+        # Wait 15–90 s before the next strike (or burst)
+        if not _sleep_interruptible(15 + random.random() * 75):
+            return
 
-        pulses  = random.choices([1, 2, 3], weights=[65, 25, 10])[0]
-        flash   = _lightning_flash_channels()
-        h       = time.localtime().tm_hour
-        restore = list(_last_schedule[h][2:])
+        _do_strike()
 
-        for i in range(pulses):
-            if not _lightning_active:
-                return
-            dur = 0.06 + random.random() * 0.12   # 60–180 ms flash
-            try:
-                with lock:
-                    with _lamp() as lamp:
-                        lamp.preview_brightness(flash)
-                time.sleep(dur)
-                with lock:
-                    with _lamp() as lamp:
-                        lamp.preview_brightness(restore)
-            except Exception:
-                pass   # lamp not reachable — skip pulse silently
-            if i < pulses - 1:
-                time.sleep(0.04 + random.random() * 0.08)   # 40–80 ms gap between pulses
+        # 20% chance of a storm burst: 2–5 more rapid strikes, 1–4 s apart
+        if random.random() < 0.2:
+            burst = random.randint(2, 5)
+            for _ in range(burst):
+                if not _sleep_interruptible(1.0 + random.random() * 3.0):
+                    return
+                _do_strike()
 
 
 @app.route('/api/lightning/start', methods=['POST'])
