@@ -166,9 +166,10 @@ def _lightning_flash_channels():
         return [40, 60, 60, 100, 100, 0]
 
 
-_lightning_lock   = threading.Lock()
-_lightning_active = False
-_lightning_thread = None
+_lightning_lock            = threading.Lock()
+_lightning_active          = False
+_lightning_thread          = None
+_schedule_stopped_lightning = False   # True when the scheduler (not the user) stopped lightning
 
 # Lightning schedule ── persisted to LIGHTNING_SCHEDULE_FILE
 _ls = {'enabled': False, 'start': '20:00', 'end': '23:00'}
@@ -279,8 +280,9 @@ def _lightning_worker():
 
 def _ensure_lightning_started():
     """Start the lightning worker if not already running. Reads lamp state first."""
-    global _lightning_active, _lightning_thread, _last_schedule, _last_manual
+    global _lightning_active, _lightning_thread, _last_schedule, _last_manual, _schedule_stopped_lightning
     with _lightning_lock:
+        _schedule_stopped_lightning = False
         if _lightning_active and _lightning_thread and _lightning_thread.is_alive():
             return
         try:
@@ -300,7 +302,7 @@ def _ensure_lightning_started():
 
 def _lightning_scheduler():
     """Background thread: enforce the lightning schedule window every 30 s."""
-    global _lightning_active
+    global _lightning_active, _schedule_stopped_lightning
     _load_lightning_schedule()
     while True:
         time.sleep(30)
@@ -309,6 +311,8 @@ def _lightning_scheduler():
         if _in_lightning_window():
             _ensure_lightning_started()
         else:
+            if _lightning_active:
+                _schedule_stopped_lightning = True
             _lightning_active = False
 
 
@@ -341,11 +345,16 @@ def api_lightning_schedule_get():
 
 @app.route('/api/lightning/schedule', methods=['POST'])
 def api_lightning_schedule_post():
+    global _schedule_stopped_lightning
     d = request.json or {}
+    was_enabled = _ls.get('enabled', False)
     if 'enabled' in d: _ls['enabled'] = bool(d['enabled'])
     if 'start'   in d: _ls['start']   = str(d['start'])
     if 'end'     in d: _ls['end']     = str(d['end'])
     _save_lightning_schedule()
+    # Schedule just disabled: if the scheduler was the one that stopped lightning, restart it
+    if was_enabled and not _ls['enabled'] and _schedule_stopped_lightning:
+        _ensure_lightning_started()
     return jsonify(_ls)
 
 
