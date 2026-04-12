@@ -173,48 +173,39 @@ def _sleep_interruptible(seconds):
     return True
 
 
-def _flash_pulse():
-    """Send one brief flash. Does not change mode — caller must restore afterwards."""
-    flash = _lightning_flash_channels()
-    dur   = 0.03 + random.random() * 0.05   # 30–80 ms
-    try:
-        with lock:
-            with _lamp() as lamp:
-                lamp.preview_brightness(flash)
-        time.sleep(dur)
-    except Exception:
-        pass
-
-
 def _do_event():
     """
-    Fire a complete lightning event then return lamp to auto schedule.
+    Fire a complete lightning event over a single TCP connection, then restore.
 
-    Single strike (80%): 1–3 rapid pulses, 20–50 ms apart.
-    Storm burst  (20%): 3–6 strikes, each 1–3 pulses, 100–500 ms between strikes.
-    set_mode_auto is called once after the whole event.
+    Single strike (80%): 1–3 pulses, 20–50 ms apart.
+    Storm burst  (20%): 3–6 strikes, 50–200 ms between strikes.
+
+    One connection is held for the whole event so there is no per-flash
+    TCP handshake overhead — flash timing is governed by sleeps only.
+    The lock is held for the full duration (max ~2 s for a large burst).
     """
     is_burst    = random.random() < 0.2
     num_strikes = random.randint(3, 6) if is_burst else 1
-
-    for s in range(num_strikes):
-        if not _lightning_active:
-            break
-        pulses = random.choices([1, 2, 3], weights=[65, 25, 10])[0]
-        for p in range(pulses):
-            if not _lightning_active:
-                break
-            _flash_pulse()
-            if p < pulses - 1:
-                time.sleep(0.02 + random.random() * 0.03)   # 20–50 ms between pulses
-        if s < num_strikes - 1:
-            time.sleep(0.1 + random.random() * 0.4)         # 100–500 ms between strikes
+    flash       = _lightning_flash_channels()
 
     try:
         with lock:
             with _lamp() as lamp:
+                for s in range(num_strikes):
+                    if not _lightning_active:
+                        break
+                    pulses = random.choices([1, 2, 3], weights=[65, 25, 10])[0]
+                    for p in range(pulses):
+                        if not _lightning_active:
+                            break
+                        lamp.preview_brightness(flash)
+                        time.sleep(0.03 + random.random() * 0.05)   # 30–80 ms flash
+                        if p < pulses - 1:
+                            time.sleep(0.02 + random.random() * 0.03)  # 20–50 ms between pulses
+                    if s < num_strikes - 1:
+                        time.sleep(0.05 + random.random() * 0.15)    # 50–200 ms between strikes
                 lamp.set_mode_auto()
-                lamp.sync_time()   # force immediate schedule re-evaluation
+                lamp.sync_time()
     except Exception:
         pass
 
