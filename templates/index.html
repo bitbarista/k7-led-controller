@@ -98,6 +98,11 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-lightning:hover { background: #2d3748; }
 .btn-lightning.active { background: rgba(227,173,14,0.15); border-color: #e3ad0e; color: #e3ad0e; }
 .preset-sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+.ls-label { display:flex; align-items:center; gap:5px; font-size:0.82rem; color:var(--muted); cursor:pointer; user-select:none; white-space:nowrap; }
+.ls-label input[type=checkbox] { cursor:pointer; accent-color:#e3ad0e; }
+.ls-time-wrap { display:flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--muted); }
+.time-input { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 6px; font-size:0.82rem; width:92px; }
+.time-input::-webkit-calendar-picker-indicator { filter:invert(0.6); cursor:pointer; }
 #presetSel { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: 0.85rem; max-width: 210px; cursor: pointer; }
 #presetDesc { font-size: 0.78rem; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -170,6 +175,14 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   <button class="btn-secondary-custom" onclick="readFromDevice()">↻ Read from Device</button>
   <button class="btn-danger-custom"    onclick="clearSchedule()">✕ Clear</button>
   <button class="btn-lightning" id="lightningBtn" onclick="toggleLightning()" title="Simulate lightning flashes">⚡ Lightning</button>
+  <label class="ls-label" title="Auto-start/stop lightning on a daily schedule">
+    <input type="checkbox" id="lsEnabled" onchange="onLsChange()"> Schedule
+  </label>
+  <span class="ls-time-wrap" id="lsTimeWrap" style="display:none">
+    <input type="time" id="lsStart" class="time-input" onchange="onLsChange()" title="Lightning start time">
+    <span>–</span>
+    <input type="time" id="lsEnd" class="time-input" onchange="onLsChange()" title="Lightning end time">
+  </span>
   <div class="preset-sep"></div>
   <select id="presetSel" onchange="onPresetChange()" title="Load a preset or saved profile">
     <option value="">— Load Preset —</option>
@@ -673,6 +686,31 @@ async function toggleLightning() {
   }
 }
 
+// ── Lightning schedule ────────────────────────────────────────────────────────
+function applyLsUI(ls) {
+  document.getElementById('lsEnabled').checked = !!ls.enabled;
+  document.getElementById('lsStart').value     = ls.start || '20:00';
+  document.getElementById('lsEnd').value       = ls.end   || '23:00';
+  document.getElementById('lsTimeWrap').style.display = ls.enabled ? '' : 'none';
+}
+
+async function loadLightningSchedule() {
+  try {
+    const ls = await api('GET', '/api/lightning/schedule');
+    applyLsUI(ls);
+  } catch(_) {}
+}
+
+async function onLsChange() {
+  const ls = {
+    enabled: document.getElementById('lsEnabled').checked,
+    start:   document.getElementById('lsStart').value,
+    end:     document.getElementById('lsEnd').value,
+  };
+  document.getElementById('lsTimeWrap').style.display = ls.enabled ? '' : 'none';
+  try { await api('POST', '/api/lightning/schedule', ls); } catch(_) {}
+}
+
 // ── Presets ───────────────────────────────────────────────────────────────────
 async function loadPresets() {
   try {
@@ -832,6 +870,7 @@ async function init() {
   readFromDevice();
   // Restore lightning button state if server already has it running
   api('GET', '/api/lightning/status').then(s => setLightningBtn(s.active)).catch(()=>{});
+  loadLightningSchedule();
   // Redraw the now-line and colour strip highlight every minute
   setInterval(() => { if (chart) chart.update('none'); updateColorStrip(); }, 60000);
 }

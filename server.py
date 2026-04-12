@@ -23,7 +23,8 @@ cfg = {'host': '192.168.4.1', 'port': 8266, 'device': 'k7mini'}
 _last_schedule = [[h, 0, 0, 0, 0, 0, 0, 0] for h in range(24)]
 _last_manual   = [0] * 6
 
-PROFILES_FILE = os.path.join(os.path.dirname(__file__), 'profiles.json')
+PROFILES_FILE           = os.path.join(os.path.dirname(__file__), 'profiles.json')
+LIGHTNING_SCHEDULE_FILE = os.path.join(os.path.dirname(__file__), 'lightning_schedule.json')
 
 def _load_profiles():
     if os.path.exists(PROFILES_FILE):
@@ -163,6 +164,44 @@ _lightning_lock   = threading.Lock()
 _lightning_active = False
 _lightning_thread = None
 
+# Lightning schedule ── persisted to LIGHTNING_SCHEDULE_FILE
+_ls = {'enabled': False, 'start': '20:00', 'end': '23:00'}
+
+def _load_lightning_schedule():
+    if os.path.exists(LIGHTNING_SCHEDULE_FILE):
+        try:
+            with open(LIGHTNING_SCHEDULE_FILE) as f:
+                _ls.update(json.load(f))
+        except Exception:
+            pass
+
+def _save_lightning_schedule():
+    with open(LIGHTNING_SCHEDULE_FILE, 'w') as f:
+        json.dump(_ls, f)
+
+def _parse_hhmm(s):
+    """Return total minutes from midnight for 'HH:MM', or None on error."""
+    try:
+        h, m = s.split(':')
+        return int(h) * 60 + int(m)
+    except Exception:
+        return None
+
+def _in_lightning_window():
+    """True if current local time falls inside the configured schedule window."""
+    if not _ls.get('enabled'):
+        return False
+    s_m = _parse_hhmm(_ls.get('start', ''))
+    e_m = _parse_hhmm(_ls.get('end', ''))
+    if s_m is None or e_m is None:
+        return False
+    t   = time.localtime()
+    now = t.tm_hour * 60 + t.tm_min
+    if s_m <= e_m:
+        return s_m <= now < e_m
+    else:                          # overnight window, e.g. 22:00 – 02:00
+        return now >= s_m or now < e_m
+
 
 def _sleep_interruptible(seconds):
     """Sleep in 0.25 s increments; returns False if lightning was stopped."""
@@ -232,13 +271,12 @@ def _lightning_worker():
         _do_event()
 
 
-@app.route('/api/lightning/start', methods=['POST'])
-def api_lightning_start():
+def _ensure_lightning_started():
+    """Start the lightning worker if not already running. Reads lamp state first."""
     global _lightning_active, _lightning_thread, _last_schedule, _last_manual
     with _lightning_lock:
         if _lightning_active and _lightning_thread and _lightning_thread.is_alive():
-            return jsonify({'ok': True})
-        # Read lamp state now so ambient restore values are correct even after server restart
+            return
         try:
             with lock:
                 with _lamp() as lamp:
@@ -252,6 +290,28 @@ def api_lightning_start():
         _lightning_active = True
         _lightning_thread = threading.Thread(target=_lightning_worker, daemon=True)
         _lightning_thread.start()
+
+
+def _lightning_scheduler():
+    """Background thread: enforce the lightning schedule window every 30 s."""
+    global _lightning_active
+    _load_lightning_schedule()
+    while True:
+        time.sleep(30)
+        if not _ls.get('enabled'):
+            continue
+        if _in_lightning_window():
+            _ensure_lightning_started()
+        else:
+            _lightning_active = False
+
+
+threading.Thread(target=_lightning_scheduler, daemon=True).start()
+
+
+@app.route('/api/lightning/start', methods=['POST'])
+def api_lightning_start():
+    _ensure_lightning_started()
     return jsonify({'ok': True})
 
 
@@ -266,6 +326,21 @@ def api_lightning_stop():
 def api_lightning_status():
     active = bool(_lightning_active and _lightning_thread and _lightning_thread.is_alive())
     return jsonify({'active': active})
+
+
+@app.route('/api/lightning/schedule', methods=['GET'])
+def api_lightning_schedule_get():
+    return jsonify(_ls)
+
+
+@app.route('/api/lightning/schedule', methods=['POST'])
+def api_lightning_schedule_post():
+    d = request.json or {}
+    if 'enabled' in d: _ls['enabled'] = bool(d['enabled'])
+    if 'start'   in d: _ls['start']   = str(d['start'])
+    if 'end'     in d: _ls['end']     = str(d['end'])
+    _save_lightning_schedule()
+    return jsonify(_ls)
 
 
 _prov_lock   = threading.Lock()
