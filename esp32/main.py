@@ -101,8 +101,8 @@ SETUP_HTML = """\
 <p>Connect your lamp and enter the last 4 digits of its WiFi name.</p>
 <form method="POST" action="/save">
   <label>Lamp WiFi suffix</label>
-  <input name="ssid4" maxlength="4" pattern="[0-9A-Za-z]{4}" placeholder="e.g. 1A2B" required>
-  <p class="hint">The last 4 characters of your lamp's SSID — e.g. K7mini<b>1A2B</b></p>
+  <input name="suffix" maxlength="8" pattern="[0-9A-Za-z]{1,8}" placeholder="e.g. 52609" required>
+  <p class="hint">The characters after K7mini in your lamp's SSID — e.g. K7mini<b>52609</b></p>
   <label>Device type</label>
   <select name="device">
     <option value="k7mini">K7 Mini</option>
@@ -157,10 +157,10 @@ def run_setup_portal():
                     if '=' in kv:
                         k, v = kv.split('=', 1)
                         params[k.strip()] = v.strip()
-                ssid4  = params.get('ssid4', '').strip()[:4]
+                suffix  = params.get('suffix', '').strip()[:8]
                 device = params.get('device', 'k7mini').strip()
-                if ssid4:
-                    save_config({'ssid4': ssid4, 'device': device})
+                if suffix:
+                    save_config({'suffix': suffix, 'device': device})
                     _http_respond(conn, '200 OK', SAVED_HTML)
                     conn.close()
                     srv.close()
@@ -181,15 +181,15 @@ def run_setup_portal():
 def boot():
     cfg = load_config()
 
-    if not cfg.get('ssid4'):
+    if not cfg.get('suffix'):
         print('No config — starting setup portal')
         run_setup_portal()
         return
 
-    ssid4  = cfg['ssid4']
+    suffix  = cfg['suffix']
     device = cfg.get('device', 'k7mini')
     prefix = LAMP_SSID_PREFIXES.get(device, 'K7mini')
-    lamp_ssid = f'{prefix}{ssid4}'
+    lamp_ssid = f'{prefix}{suffix}'
 
     print(f'Connecting STA → {lamp_ssid} ...', end='')
     if not connect_sta(lamp_ssid):
