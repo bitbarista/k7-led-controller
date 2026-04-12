@@ -174,11 +174,9 @@ def _sleep_interruptible(seconds):
 
 
 def _do_strike():
-    """Fire one strike (1–3 pulses). Silently skips if lamp is unreachable."""
-    pulses  = random.choices([1, 2, 3], weights=[65, 25, 10])[0]
-    flash   = _lightning_flash_channels()
-    h       = time.localtime().tm_hour
-    restore = list(_last_schedule[h][2:])
+    """Fire one strike (1–3 pulses), then return lamp to auto schedule."""
+    pulses = random.choices([1, 2, 3], weights=[65, 25, 10])[0]
+    flash  = _lightning_flash_channels()
     for i in range(pulses):
         if not _lightning_active:
             return
@@ -188,13 +186,17 @@ def _do_strike():
                 with _lamp() as lamp:
                     lamp.preview_brightness(flash)
             time.sleep(dur)
-            with lock:
-                with _lamp() as lamp:
-                    lamp.preview_brightness(restore)
         except Exception:
             pass   # lamp not reachable — skip silently
         if i < pulses - 1:
             time.sleep(0.04 + random.random() * 0.08)   # 40–80 ms gap between pulses
+    # Return to autonomous schedule immediately — don't rely on _last_schedule restore
+    try:
+        with lock:
+            with _lamp() as lamp:
+                lamp.set_mode_auto()
+    except Exception:
+        pass
 
 
 def _lightning_worker():
