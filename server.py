@@ -187,6 +187,8 @@ def _do_event():
     is_burst    = random.random() < 0.2
     num_strikes = random.randint(3, 6) if is_burst else 1
     flash       = _lightning_flash_channels()
+    h           = time.localtime().tm_hour
+    ambient     = list(_last_schedule[h][2:])   # restore between flashes
 
     try:
         with lock:
@@ -199,11 +201,12 @@ def _do_event():
                         if not _lightning_active:
                             break
                         lamp.preview_brightness(flash)
-                        time.sleep(0.03 + random.random() * 0.05)   # 30–80 ms flash
+                        time.sleep(0.03 + random.random() * 0.05)    # 30–80 ms ON
+                        lamp.preview_brightness(ambient)              # snap dark between pulses
                         if p < pulses - 1:
-                            time.sleep(0.02 + random.random() * 0.03)  # 20–50 ms between pulses
+                            time.sleep(0.04 + random.random() * 0.06) # 40–100 ms dark gap
                     if s < num_strikes - 1:
-                        time.sleep(0.05 + random.random() * 0.15)    # 50–200 ms between strikes
+                        time.sleep(0.08 + random.random() * 0.17)    # 80–250 ms dark between strikes
                 lamp.set_mode_auto()
                 lamp.sync_time()
     except Exception:
