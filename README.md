@@ -50,12 +50,28 @@ Then open `http://localhost:5000` in your browser.
 
 ## Connecting to the lamp
 
-By default the controller connects to `192.168.4.1:8266` — the lamp's own access point.
+### AP mode (direct connection)
 
-1. Connect your computer to the lamp's WiFi network (SSID: `k7mini` or similar)
+The lamp creates its own WiFi access point by default.
+
+| | K7 Mini | K7 Pro |
+|---|---|---|
+| SSID | `K7mini****` | `K7_Pro****` |
+| Password | `12345678` | `12345678` |
+| IP | `192.168.4.1` | `192.168.4.1` |
+
+(`****` = last 4 digits unique to your lamp)
+
+1. Connect your computer to the lamp's WiFi network
 2. Open the controller — it will read the current schedule automatically
 
-If the lamp is joined to your home network, enter its IP address in the host field at the top of the page.
+> **Note:** while connected to the lamp's AP your computer will have no internet access.
+
+### LAN mode (home network)
+
+To connect the lamp to your home WiFi network, use the official Noo-Psyche app to switch it to LAN mode. Once connected, enter the lamp's local IP address in the host field at the top of the controller page.
+
+To check or switch connection mode, click the R button on the lamp — two blue flashes means LAN mode, two red flashes means AP mode.
 
 ## Device support
 
