@@ -90,12 +90,12 @@ def _build(keyframes: list[tuple], hours: int = 24) -> list[list]:
 # ── K7 Mini presets (3 active channels: white, royal_blue, blue) ─────────────
 # Channel slots: [white, royal_blue, blue, 0, 0, 0]
 #
-# Calibrated from measured PPFD at 150 mm; scaled to target values at 300 mm.
-# Scale factors applied to previous measured outputs:
-#   FO:    ×0.645  (155 → ~100 µmol/m²/s at 300 mm)
-#   LPS:   ×0.745  (161 → ~120 µmol/m²/s at 300 mm)
-#   Mixed: ×0.875  (200 → ~175 µmol/m²/s at 300 mm)
-#   SPS:   ×1.125  (231 → ~260 µmol/m²/s at 300 mm)
+# Calibrated iteratively from measured PPFD at 150 mm; targets verified at 300 mm.
+# Final reference measurements (150 mm, preset at peak, in air):
+#   FO:    380 µmol/m²/s → ~95 µmol/m²/s at 300 mm  (within 5% — no adjustment)
+#   LPS:   ×0.916  (131 → ~120 µmol/m²/s at 300 mm)
+#   Mixed: ×0.910  (193 → ~175 µmol/m²/s at 300 mm)
+#   SPS:   white ×1.23  (245 → ~260 µmol/m²/s at 300 mm; RB+Blue already at 100%)
 
 MINI = {
 
@@ -122,21 +122,21 @@ MINI = {
         'name': 'LPS Reef',
         'desc': 'Royal Blue dominant for zooxanthellae absorption. Restrained White, '
                 'Blue for spectrum depth. Actinic pre/post periods. '
-                'Target ~120 µmol/m²/s at 300 mm — Hammer, Torch, Brain, Frogspawn.',
+                'Target ~120 µmol/m²/s at 300 mm in water — Hammer, Torch, Brain, Frogspawn.',
         'schedule': _build([
             ( 0, [ 0,  0,  0, 0, 0, 0]),
-            ( 7, [ 0,  6,  9, 0, 0, 0]),   # actinic pre-dawn
-            ( 8, [ 4, 19, 24, 0, 0, 0]),
-            ( 9, [ 7, 36, 39, 0, 0, 0]),
-            (10, [10, 46, 46, 0, 0, 0]),
-            (11, [13, 56, 52, 0, 0, 0]),   # peak: ~120 µmol/m²/s at 300 mm
-            (17, [13, 56, 52, 0, 0, 0]),
-            (18, [ 9, 39, 37, 0, 0, 0]),
-            (19, [ 4, 19, 21, 0, 0, 0]),
-            (20, [ 0,  6,  9, 0, 0, 0]),   # actinic post-dusk
+            ( 7, [ 0,  5,  8, 0, 0, 0]),   # actinic pre-dawn
+            ( 8, [ 4, 17, 22, 0, 0, 0]),
+            ( 9, [ 6, 33, 36, 0, 0, 0]),
+            (10, [ 9, 42, 42, 0, 0, 0]),
+            (11, [12, 51, 48, 0, 0, 0]),   # peak: ~120 µmol/m²/s at 300 mm in water
+            (17, [12, 51, 48, 0, 0, 0]),
+            (18, [ 8, 36, 34, 0, 0, 0]),
+            (19, [ 4, 17, 19, 0, 0, 0]),
+            (20, [ 0,  5,  8, 0, 0, 0]),   # actinic post-dusk
             (21, [ 0,  0,  0, 0, 0, 0]),
         ]),
-        'manual': [13, 56, 52, 0, 0, 0],
+        'manual': [12, 51, 48, 0, 0, 0],
     },
 
     'sps': {
@@ -146,19 +146,19 @@ MINI = {
                 'Target ~260 µmol/m²/s at 300 mm — Acropora, Montipora.',
         'schedule': _build([
             ( 0, [ 0,   0,  0, 0, 0, 0]),
-            ( 7, [ 6,  17, 23, 0, 0, 0]),   # ramp begins
-            ( 8, [17,  47, 56, 0, 0, 0]),
-            ( 9, [32,  77, 77, 0, 0, 0]),
-            (10, [45,  96, 90, 0, 0, 0]),
-            (11, [56, 100,100, 0, 0, 0]),   # peak: ~260 µmol/m²/s at 300 mm
-            (17, [56, 100,100, 0, 0, 0]),
-            (18, [39,  84, 77, 0, 0, 0]),
-            (19, [20,  54, 50, 0, 0, 0]),
-            (20, [ 7,  23, 25, 0, 0, 0]),
+            ( 7, [ 7,  17, 23, 0, 0, 0]),   # ramp begins
+            ( 8, [21,  47, 56, 0, 0, 0]),
+            ( 9, [39,  77, 77, 0, 0, 0]),
+            (10, [55,  96, 90, 0, 0, 0]),
+            (11, [69, 100,100, 0, 0, 0]),   # peak: ~260 µmol/m²/s at 300 mm
+            (17, [69, 100,100, 0, 0, 0]),
+            (18, [48,  84, 77, 0, 0, 0]),
+            (19, [25,  54, 50, 0, 0, 0]),
+            (20, [ 9,  23, 25, 0, 0, 0]),
             (21, [ 0,   6,  9, 0, 0, 0]),
             (22, [ 0,   0,  0, 0, 0, 0]),
         ]),
-        'manual': [56, 100, 100, 0, 0, 0],
+        'manual': [69, 100, 100, 0, 0, 0],
     },
 
     'mixed': {
@@ -167,18 +167,18 @@ MINI = {
                 'Target ~175 µmol/m²/s at 300 mm.',
         'schedule': _build([
             ( 0, [ 0,  0,  0, 0, 0, 0]),
-            ( 7, [ 2,  8, 11, 0, 0, 0]),
-            ( 8, [ 6, 26, 35, 0, 0, 0]),
-            ( 9, [12, 47, 45, 0, 0, 0]),
-            (10, [18, 63, 54, 0, 0, 0]),
-            (11, [28, 77, 70, 0, 0, 0]),   # peak: ~175 µmol/m²/s at 300 mm
-            (17, [28, 77, 70, 0, 0, 0]),
-            (18, [18, 54, 51, 0, 0, 0]),
-            (19, [ 7, 28, 30, 0, 0, 0]),
-            (20, [ 2,  9, 12, 0, 0, 0]),
+            ( 7, [ 2,  7, 10, 0, 0, 0]),
+            ( 8, [ 5, 24, 32, 0, 0, 0]),
+            ( 9, [11, 43, 41, 0, 0, 0]),
+            (10, [16, 57, 49, 0, 0, 0]),
+            (11, [25, 70, 64, 0, 0, 0]),   # peak: ~175 µmol/m²/s at 300 mm
+            (17, [25, 70, 64, 0, 0, 0]),
+            (18, [16, 49, 46, 0, 0, 0]),
+            (19, [ 6, 25, 27, 0, 0, 0]),
+            (20, [ 2,  8, 11, 0, 0, 0]),
             (21, [ 0,  0,  0, 0, 0, 0]),
         ]),
-        'manual': [28, 77, 70, 0, 0, 0],
+        'manual': [25, 70, 64, 0, 0, 0],
     },
 }
 
