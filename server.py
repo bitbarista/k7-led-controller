@@ -177,14 +177,16 @@ def _sleep_interruptible(seconds):
 
 def _do_event():
     """
-    Fire a complete lightning event over a single TCP connection, then restore.
+    Fire a complete lightning event, then restore.
 
     Single strike (80%): 1–3 pulses, 20–50 ms apart.
-    Storm burst  (20%): 3–6 strikes, 50–200 ms between strikes.
+    Storm burst  (20%): 3–6 strikes, 80–250 ms between strikes.
 
-    One connection is held for the whole event so there is no per-flash
-    TCP handshake overhead — flash timing is governed by sleeps only.
-    The lock is held for the full duration (max ~2 s for a large burst).
+    One TCP connection is used per strike so that a dropped connection
+    during a long burst doesn't prevent the final restore from reaching
+    the lamp.  Intra-strike pulses still share a single connection.
+    A fresh connection is always opened for the final restore, regardless
+    of whether any strike connections succeeded.
     """
     is_burst    = random.random() < 0.2
     num_strikes = random.randint(3, 6) if is_burst else 1
@@ -192,12 +194,12 @@ def _do_event():
     h           = time.localtime().tm_hour
     ambient     = list(_last_schedule[h][2:])   # restore between flashes
 
-    try:
-        with lock:
-            with _lamp() as lamp:
-                for s in range(num_strikes):
-                    if not _lightning_active:
-                        break
+    for s in range(num_strikes):
+        if not _lightning_active:
+            break
+        try:
+            with lock:
+                with _lamp() as lamp:
                     pulses = random.choices([1, 2, 3], weights=[65, 25, 10])[0]
                     for p in range(pulses):
                         if not _lightning_active:
@@ -207,10 +209,17 @@ def _do_event():
                         lamp.preview_brightness(ambient)              # snap dark between pulses
                         if p < pulses - 1:
                             time.sleep(0.04 + random.random() * 0.06) # 40–100 ms dark gap
-                    if s < num_strikes - 1:
-                        time.sleep(0.08 + random.random() * 0.17)    # 80–250 ms dark between strikes
-                lamp.preview_brightness(ambient)   # snap to correct colours
-                lamp.set_mode_auto()               # return to schedule
+        except Exception:
+            pass
+        if s < num_strikes - 1:
+            time.sleep(0.08 + random.random() * 0.17)    # 80–250 ms dark between strikes
+
+    # Fresh connection for restore — always attempted even if a strike connection failed
+    try:
+        with lock:
+            with _lamp() as lamp:
+                lamp.preview_brightness(ambient)
+                lamp.set_mode_auto()
     except Exception:
         pass
 
