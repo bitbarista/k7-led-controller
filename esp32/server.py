@@ -589,6 +589,30 @@ async def _ensure_lunar_started():
         _lunar_task = asyncio.create_task(_lunar_worker())
 
 
+async def _lunar_apply_now():
+    """Immediately push the current lunar overlay to the lamp.
+
+    Called after any settings change so the effect is visible at once rather
+    than waiting up to 59 s for the next minute-boundary tick.
+    Both cases handled: ramp owns the lamp (hand_luminance) and standalone
+    lunar (preview_brightness).
+    """
+    if not _lunar_active or not _in_lunar_window():
+        return
+    t = time.localtime()
+    channels = _interpolate_channels(_last_schedule, t[3], t[4])
+    _apply_lunar_overlay(channels)
+    async with lock:
+        try:
+            with _lamp() as lamp:
+                if _ramp_active:
+                    lamp.hand_luminance(channels)
+                else:
+                    lamp.preview_brightness(channels)
+        except Exception:
+            pass
+
+
 @app.route('/api/lunar/status')
 async def api_lunar_status(request):
     return {
@@ -608,6 +632,7 @@ async def api_lunar_start(request):
     global _lunar_stopped
     _lunar_stopped = False
     await _ensure_lunar_started()
+    await _lunar_apply_now()
     return {'ok': True}
 
 
@@ -633,6 +658,7 @@ async def api_lunar_schedule_post(request):
         _lunar_stopped = False   # re-enabling schedule clears manual stop
     elif was_enabled and not _lm['enabled']:
         _lunar_active = False
+    await _lunar_apply_now()
     return _lm
 
 
