@@ -237,8 +237,12 @@ async def _do_event():
     is_burst    = random.random() < 0.2
     num_strikes = random.randint(3, 6) if is_burst else 1
     flash       = _lightning_flash_channels()
-    h           = time.localtime()[3]
-    ambient     = list(_last_schedule[h][2:])
+    t           = time.localtime()
+    h, m        = t[3], t[4]
+    # Interpolated so restore exactly matches what ramp is showing (not the raw hour slot)
+    ambient = _interpolate_channels(_last_schedule, h, m)
+    if _lunar_active and _in_lunar_window():
+        _apply_lunar_overlay(ambient)
 
     for s in range(num_strikes):
         if not _lightning_active:
@@ -264,8 +268,13 @@ async def _do_event():
     async with lock:
         try:
             with _lamp() as lamp:
-                lamp.preview_brightness(ambient)
-                if not _ramp_active:
+                if _ramp_active:
+                    # Ramp owns the lamp in manual mode — restore with hand_luminance
+                    # so the stored value stays in sync with what the ramp expects.
+                    # preview_brightness here would cause a step at the next minute tick.
+                    lamp.hand_luminance(ambient)
+                else:
+                    lamp.preview_brightness(ambient)
                     lamp.set_mode_auto()
         except Exception:
             pass
