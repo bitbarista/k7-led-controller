@@ -597,7 +597,12 @@ async def _lunar_apply_now():
     Both cases handled: ramp owns the lamp (hand_luminance) and standalone
     lunar (preview_brightness).
     """
-    if not _lunar_active or not _in_lunar_window():
+    # Apply if explicitly active, OR if the schedule just enabled it and we're in window
+    in_window = _in_lunar_window()
+    scheduled_and_in_window = _lm.get('enabled') and in_window and not _lunar_stopped
+    if not (_lunar_active or scheduled_and_in_window):
+        return
+    if not in_window:
         return
     t = time.localtime()
     channels = _interpolate_channels(_last_schedule, t[3], t[4])
