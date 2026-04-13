@@ -25,6 +25,7 @@ from microdot import Microdot, send_file
 
 import k7mini as k7
 import presets
+import moon
 
 app  = Microdot()
 lock = asyncio.Lock()   # one device request at a time
@@ -45,6 +46,7 @@ def _interpolate_channels(schedule, h, m):
 
 PROFILES_FILE           = 'profiles.json'
 LIGHTNING_SCHEDULE_FILE = 'lightning_schedule.json'
+LUNAR_FILE              = 'lunar_schedule.json'
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -422,6 +424,8 @@ async def _ramp_worker():
         t = time.localtime()
         h, m, s = t[3], t[4], t[5]
         channels = _interpolate_channels(_last_schedule, h, m)
+        if _lunar_active and _in_lunar_window():
+            _apply_lunar_overlay(channels)
         async with lock:
             try:
                 with _lamp() as lamp:
@@ -480,9 +484,157 @@ async def api_ramp_status(request):
     return {'active': _ramp_active, 'last_tick': _ramp_last_tick}
 
 
+# ── Lunar cycle ───────────────────────────────────────────────────────────────
+
+_lm = {'enabled': False, 'start': '21:00', 'end': '06:00', 'max_intensity': 15}
+
+_lunar_active  = False
+_lunar_task    = None
+_lunar_stopped = False   # set when user stops; prevents scheduler restarting
+
+
+def _load_lunar_cfg():
+    if _file_exists(LUNAR_FILE):
+        try:
+            with open(LUNAR_FILE) as f:
+                _lm.update(json.load(f))
+        except Exception:
+            pass
+
+
+def _save_lunar_cfg():
+    with open(LUNAR_FILE, 'w') as f:
+        json.dump(_lm, f)
+
+
+def _in_lunar_window():
+    s_m = _parse_hhmm(_lm.get('start', ''))
+    e_m = _parse_hhmm(_lm.get('end', ''))
+    if s_m is None or e_m is None:
+        return False
+    t   = time.localtime()
+    now = t[3] * 60 + t[4]
+    if s_m <= e_m:
+        return s_m <= now < e_m
+    else:
+        return now >= s_m or now < e_m
+
+
+def _apply_lunar_overlay(channels):
+    """Add lunar brightness contribution to channel list in-place (never dims)."""
+    pct = round(_lm.get('max_intensity', 15) * moon.illumination())
+    if pct <= 0:
+        return
+    if cfg['device'] == 'k7mini':
+        channels[1] = max(channels[1], pct)
+    else:
+        channels[1] = max(channels[1], pct)
+        channels[2] = max(channels[2], round(pct * 0.7))
+
+
+async def _lunar_worker():
+    """Standalone worker used when ramp is not active."""
+    global _lunar_active
+    while _lunar_active:
+        if _ramp_active:
+            break   # ramp has taken over lunar duty
+        if _in_lunar_window():
+            channels = list(_last_schedule[time.localtime()[3]][2:])
+            _apply_lunar_overlay(channels)
+            async with lock:
+                try:
+                    with _lamp() as lamp:
+                        lamp.preview_brightness(channels)
+                except Exception:
+                    pass
+        t       = time.localtime()
+        sleep_s = max(1, 60 - t[5])
+        elapsed = 0.0
+        while elapsed < sleep_s and _lunar_active and not _ramp_active:
+            await asyncio.sleep(0.5)
+            elapsed += 0.5
+    if not _ramp_active:
+        async with lock:
+            try:
+                with _lamp() as lamp:
+                    lamp.set_mode_auto()
+            except Exception:
+                pass
+    _lunar_active = False
+
+
+async def _ensure_lunar_started():
+    global _lunar_active, _lunar_task
+    _lunar_active = True
+    if not _ramp_active:
+        _lunar_task = asyncio.create_task(_lunar_worker())
+
+
+@app.route('/api/lunar/status')
+async def api_lunar_status(request):
+    return {
+        'active':        _lunar_active,
+        'phase':         moon.phase(),
+        'illumination':  round(moon.illumination() * 100),
+        'phase_name':    moon.phase_name(),
+        'enabled':       _lm.get('enabled', False),
+        'start':         _lm.get('start', '21:00'),
+        'end':           _lm.get('end', '06:00'),
+        'max_intensity': _lm.get('max_intensity', 15),
+    }
+
+
+@app.route('/api/lunar/start', methods=['POST'])
+async def api_lunar_start(request):
+    global _lunar_stopped
+    _lunar_stopped = False
+    await _ensure_lunar_started()
+    return {'ok': True}
+
+
+@app.route('/api/lunar/stop', methods=['POST'])
+async def api_lunar_stop(request):
+    global _lunar_active, _lunar_stopped
+    _lunar_stopped = True
+    _lunar_active  = False
+    return {'ok': True}
+
+
+@app.route('/api/lunar/schedule', methods=['POST'])
+async def api_lunar_schedule_post(request):
+    global _lunar_active, _lunar_stopped
+    d = request.json or {}
+    was_enabled = _lm.get('enabled', False)
+    if 'enabled'       in d: _lm['enabled']       = bool(d['enabled'])
+    if 'start'         in d: _lm['start']         = str(d['start'])
+    if 'end'           in d: _lm['end']           = str(d['end'])
+    if 'max_intensity' in d: _lm['max_intensity'] = int(d['max_intensity'])
+    _save_lunar_cfg()
+    if not was_enabled and _lm['enabled']:
+        _lunar_stopped = False   # re-enabling schedule clears manual stop
+    elif was_enabled and not _lm['enabled']:
+        _lunar_active = False
+    return _lm
+
+
+async def _lunar_scheduler():
+    global _lunar_active
+    _load_lunar_cfg()
+    while True:
+        await asyncio.sleep(60)
+        if not _lm.get('enabled'):
+            continue
+        if _in_lunar_window():
+            if not _lunar_stopped:
+                await _ensure_lunar_started()
+        else:
+            _lunar_active = False
+
+
 # ── Startup ───────────────────────────────────────────────────────────────────
 
 async def main(host='0.0.0.0', port=80):
     """Start background tasks then run the web server."""
     asyncio.create_task(_lightning_scheduler())
+    asyncio.create_task(_lunar_scheduler())
     await app.start_server(host=host, port=port, debug=False)
