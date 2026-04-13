@@ -297,6 +297,7 @@ let dayShift = 0;          // hours to rotate schedule (-12..+12, stored as 0..2
 let channelBrightness = {}; // ch key → 0..100 multiplier, default 100
 let manual   = [0,0,0,0,0,0];
 let chart    = null;
+let lunarState = null;   // last data from /api/lunar/status — used by updateChart()
 let previewTimer = null;
 let presets       = {};   // key → {name, desc, manual, schedule}
 let savedProfiles = {};   // name → saved profile object
@@ -615,20 +616,47 @@ function initChart() {
   });
 }
 
+function _hourInLunarWindow(h, start, end) {
+  const sH = parseInt(start.split(':')[0]);
+  const eH = parseInt(end.split(':')[0]);
+  if (sH <= eH) return h >= sH && h < eH;
+  return h >= sH || h < eH;   // overnight window e.g. 21:00–06:00
+}
+
 function updateChart() {
   const chs   = DEVICES[cfg.device].channels;
   const light = document.documentElement.getAttribute('data-theme') === 'light';
+
+  // Lunar overlay: floor value applied to moonlight channels during the window
+  let lunarFloor = 0, lunarWin = null;
+  if (lunarState && lunarState.enabled && lunarState.max_intensity > 0) {
+    lunarFloor = lunarState.max_intensity * lunarState.illumination / 100;
+    lunarWin   = { start: lunarState.start, end: lunarState.end };
+  }
+
   chart.data.datasets = chs
     .filter(ch => !hiddenChannels.has(ch))
     .map(ch => {
-      const ci  = chs.indexOf(ch);   // physical position in this device's channel list
+      const ci  = chs.indexOf(ch);
       const [r,g,b] = CH[ch].rgb;
-      // White channel is invisible on a light background — use a visible grey instead
       const lineColor = (ch === 'white' && light) ? '#888888' : CH[ch].css;
+
+      // Determine lunar contribution for this channel
+      let lunarContrib = 0;
+      if (lunarWin && lunarFloor > 0) {
+        if (ch === 'royal_blue') lunarContrib = lunarFloor;
+        else if (ch === 'blue' && cfg.device !== 'k7mini') lunarContrib = lunarFloor * 0.7;
+      }
+
       return {
         label:           CH[ch].label,
         channelKey:      ch,
-        data:            schedule.map(row => row[2 + ci]),
+        data: schedule.map((row, h) => {
+          const v = row[2 + ci];
+          if (lunarContrib > 0 && _hourInLunarWindow(h, lunarWin.start, lunarWin.end))
+            return Math.max(v, Math.round(lunarContrib));
+          return v;
+        }),
         borderColor:     lineColor,
         backgroundColor: `rgba(${r},${g},${b},0.18)`,
         fill:            true,
@@ -864,6 +892,7 @@ function setLunarBtn(active) {
 }
 
 function applyLunarUI(d) {
+  lunarState = d;
   setLunarBtn(d.active);
   document.getElementById('lmEnabled').checked              = !!d.enabled;
   document.getElementById('lmStart').value                  = d.start         || '21:00';
@@ -875,6 +904,7 @@ function applyLunarUI(d) {
     document.getElementById('lunarPhase').textContent =
       `${emoji} ${d.phase_name} · ${d.illumination}%`;
   }
+  if (chart) updateChart();
 }
 
 async function loadLunarStatus() {
