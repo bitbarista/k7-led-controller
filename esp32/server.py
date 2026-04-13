@@ -26,8 +26,9 @@ from microdot import Microdot, send_file
 import k7mini as k7
 import presets
 
-app  = Microdot()
-lock = asyncio.Lock()   # one device request at a time
+app        = Microdot()
+lock       = asyncio.Lock()   # one device request at a time
+_file_sem  = asyncio.Semaphore(1)   # serialise static file transfers to limit peak RAM
 
 cfg = {'host': '192.168.4.1', 'port': 8266, 'device': 'k7mini'}
 
@@ -81,12 +82,15 @@ def _save_profiles(data):
 
 @app.route('/')
 async def index(request):
-    return send_file('static/index.html', content_type='text/html')
+    async with _file_sem:
+        return send_file('static/index.html', content_type='text/html')
 
 
 @app.route('/static/<path:path>')
 async def static_files(request, path):
-    return send_file('static/' + path)
+    async with _file_sem:
+        gc.collect()
+        return send_file('static/' + path)
 
 
 @app.route('/api/devices')
