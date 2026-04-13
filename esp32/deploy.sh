@@ -27,7 +27,7 @@ $MP mkdir :static 2>/dev/null || true
 $MP mkdir :static/vendor 2>/dev/null || true
 
 echo "=== Copying Python files ==="
-for f in main.py server.py k7mini.py presets.py moon.py; do
+for f in main.py server.py k7mini.py presets.py moon.py setup.py; do
     echo "  $f"
     $MP cp "$SCRIPT_DIR/$f" ":$f"
 done
