@@ -400,8 +400,15 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   try {
-    const s = await api('GET','/api/state');
+    const [s, rampStatus] = await Promise.all([
+      api('GET', '/api/state'),
+      api('GET', '/api/ramp/status'),
+    ]);
     mode = s.mode;
+    // Ramp drives the lamp via hardware-manual commands but the controller is
+    // operating in schedule mode — keep the auto panel when ramp is active.
+    if (rampStatus.active && mode === 'manual') mode = 'auto';
+    setRampBtn(rampStatus.active, rampStatus.last_tick);
     applyModeUI();
     if (s.schedule && s.schedule.length === 24) {
       schedule     = s.schedule;
