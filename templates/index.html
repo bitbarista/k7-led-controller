@@ -627,11 +627,13 @@ function updateChart() {
   const chs   = DEVICES[cfg.device].channels;
   const light = document.documentElement.getAttribute('data-theme') === 'light';
 
-  // Lunar overlay: floor value applied to moonlight channels during the window
-  let lunarFloor = 0, lunarWin = null;
-  if (lunarState && lunarState.enabled && lunarState.max_intensity > 0) {
-    lunarFloor = lunarState.max_intensity * lunarState.illumination / 100;
-    lunarWin   = { start: lunarState.start, end: lunarState.end };
+  // Lunar overlay: floor value applied to moonlight channels during the window.
+  // Show whenever lunar is scheduled or manually active.
+  let lunarFloor = 0, lunarFullMoon = 0, lunarWin = null;
+  if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
+    lunarFloor    = lunarState.max_intensity * lunarState.illumination / 100;
+    lunarFullMoon = lunarState.max_intensity;   // dashed reference at full moon
+    lunarWin      = { start: lunarState.start, end: lunarState.end };
   }
 
   chart.data.datasets = chs
@@ -648,7 +650,7 @@ function updateChart() {
         else if (ch === 'blue' && cfg.device !== 'k7mini') lunarContrib = lunarFloor * 0.7;
       }
 
-      return {
+      const datasets = [{
         label:           CH[ch].label,
         channelKey:      ch,
         data: schedule.map((row, h) => {
@@ -661,8 +663,29 @@ function updateChart() {
         backgroundColor: `rgba(${r},${g},${b},0.18)`,
         fill:            true,
         tension:         0.35,
-      };
-    });
+      }];
+
+      // Dashed full-moon reference line so the window is visible at any phase
+      if (lunarContrib > 0) {
+        const fmVal = ch === 'royal_blue' ? lunarFullMoon : Math.round(lunarFullMoon * 0.7);
+        datasets.push({
+          label:           CH[ch].label + ' (full moon)',
+          channelKey:      ch,
+          data: schedule.map((_, h) =>
+            _hourInLunarWindow(h, lunarWin.start, lunarWin.end) ? fmVal : null),
+          borderColor:     lineColor,
+          borderDash:      [4, 4],
+          borderWidth:     1,
+          backgroundColor: 'transparent',
+          fill:            false,
+          tension:         0,
+          pointRadius:     0,
+          spanGaps:        false,
+        });
+      }
+
+      return datasets;
+    }).flat();
   chart.update('none');
 }
 
