@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy K7 Controller firmware to an ESP32-S3 via mpremote.
+# Deploy K7 Controller firmware to XIAO ESP32-S3 via mpremote.
 #
 # Usage:
 #   ./deploy.sh              # auto-detect port
@@ -10,6 +10,9 @@
 #   MicroPython flashed to the device
 #   Microdot installed on the device:
 #     mpremote mip install microdot
+#
+# Note: XIAO ESP32-S3 native USB (/dev/ttyACM0) resets on port open.
+#   mpremote handles this correctly; do NOT use raw serial tools.
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,7 +27,7 @@ $MP mkdir :static 2>/dev/null || true
 $MP mkdir :static/vendor 2>/dev/null || true
 
 echo "=== Copying Python files ==="
-for f in main.py server.py k7mini.py presets.py; do
+for f in main.py server.py k7mini.py presets.py moon.py; do
     echo "  $f"
     $MP cp "$SCRIPT_DIR/$f" ":$f"
 done

@@ -19,7 +19,6 @@ import random
 import json
 import time
 import os
-import gc
 
 from microdot import Microdot, send_file
 
@@ -88,8 +87,8 @@ async def index(request):
 
 @app.route('/static/<path:path>')
 async def static_files(request, path):
-    gc.collect()
-    return send_file('static/' + path)
+    max_age = 86400 if path.startswith('vendor/') else None
+    return send_file('static/' + path, max_age=max_age)
 
 
 @app.route('/api/devices')
@@ -133,7 +132,6 @@ async def api_state(request):
             if not state:
                 return {'error': 'Could not decode device response'}, 500
             state['schedule'] = [list(e) for e in state['schedule']]
-            gc.collect()
             return state
         except OSError as e:
             return {'error': f'Connection failed — {e}'}, 503
@@ -174,15 +172,12 @@ async def api_presets(request):
             # Build schedule from keyframes on demand — don't hold all schedules in RAM
             'schedule': [list(row) for row in presets.build_schedule(p['keyframes'])],
         }
-    gc.collect()   # recover the intermediate schedule lists immediately
     return out
 
 
 @app.route('/api/profiles', methods=['GET'])
 async def api_profiles_get(request):
-    data = _load_profiles()
-    gc.collect()
-    return data
+    return _load_profiles()
 
 
 @app.route('/api/profiles', methods=['POST'])
@@ -418,7 +413,15 @@ _ramp_last_tick = None   # epoch seconds of last preview_brightness sent
 
 
 async def _ramp_worker():
-    """Send a preview_brightness every minute, interpolated to the current minute."""
+    """
+    Send hand_luminance every minute, interpolated to the current minute.
+
+    Uses CMD_HAND_LUMINANCE (not preview_brightness) because the lamp runs its
+    own internal schedule in auto mode — it would override a preview on every
+    minute tick, causing the observed up/down oscillation.  We switch the lamp
+    to manual mode on ramp start so the controller owns the brightness, then
+    restore auto mode on stop.
+    """
     global _ramp_active, _ramp_last_tick
     while _ramp_active:
         t = time.localtime()
@@ -429,7 +432,7 @@ async def _ramp_worker():
         async with lock:
             try:
                 with _lamp() as lamp:
-                    lamp.preview_brightness(channels)
+                    lamp.hand_luminance(channels)
                 _ramp_last_tick = time.time()
             except Exception:
                 pass
@@ -456,6 +459,13 @@ async def _ensure_ramp_started():
             _last_manual   = list(state['manual'])
     except Exception:
         pass
+    # Switch lamp to manual mode so its internal schedule can't override our values
+    async with lock:
+        try:
+            with _lamp() as lamp:
+                lamp.set_mode_manual()
+        except Exception:
+            pass
     _ramp_active = True
     _ramp_task   = asyncio.create_task(_ramp_worker())
 

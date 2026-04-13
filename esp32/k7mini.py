@@ -120,6 +120,10 @@ class K7:
         self._sock.settimeout(self.timeout)
         return data
 
+    def hand_luminance(self, channels):
+        """Set manual brightness (persists in manual mode). channels: 6 ints 0-100."""
+        self._send(_pkt(CMD_HAND_LUMINANCE, bytes(channels)))
+
     def preview_brightness(self, channels):
         """Preview brightness without saving. channels: 6 ints 0-100."""
         self._send(_pkt(CMD_PREVIEW_LUMINANCE, bytes(channels)))
