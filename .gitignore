@@ -6,3 +6,13 @@ __pycache__/
 !.github/**/*.yml
 .env
 profiles.json
+
+# PC development server (kept locally for reference, not part of this project)
+server.py
+moon.py
+k7mini.py
+presets.py
+esptouch.py
+requirements.txt
+run.bat
+run.sh
