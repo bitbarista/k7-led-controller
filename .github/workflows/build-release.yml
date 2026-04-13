@@ -12,12 +12,12 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  # MicroPython firmware for ESP32-C3 — update when upgrading MicroPython
-  MP_FIRMWARE_URL: https://micropython.org/resources/firmware/ESP32_GENERIC_C3-20260406-v1.28.0.bin
+  # MicroPython firmware for XIAO ESP32-S3 (SPIRAM_OCT variant) — update when upgrading MicroPython
+  MP_FIRMWARE_URL: https://micropython.org/resources/firmware/ESP32_GENERIC_S3-SPIRAM_OCT-20260406-v1.28.0.bin
   MICRODOT_VERSION: 2.6.0
-  # FAT filesystem offset and size (from device: Partition address=0x200000, size=0x200000)
+  # FAT filesystem offset and size (from device: Partition address=0x200000, size=0x600000)
   VFS_OFFSET: 2097152
-  VFS_SIZE_BLOCKS: 512    # 512 × 4096 = 2 MB
+  VFS_SIZE_BLOCKS: 1536   # 1536 × 4096 = 6 MB
 
 jobs:
   build:
@@ -86,6 +86,8 @@ jobs:
         mcopy -i vfs.bin esp32/server.py  ::/server.py
         mcopy -i vfs.bin esp32/k7mini.py  ::/k7mini.py
         mcopy -i vfs.bin esp32/presets.py ::/presets.py
+        mcopy -i vfs.bin esp32/moon.py    ::/moon.py
+        mcopy -i vfs.bin esp32/setup.py   ::/setup.py
 
         # Microdot web framework
         mcopy -i vfs.bin "${{ env.MICRODOT_SRC }}/__init__.py" ::/lib/microdot/__init__.py
@@ -105,10 +107,10 @@ jobs:
         VERSION=${{ steps.version.outputs.VERSION }}
         OUT="k7controller-v${VERSION}.bin"
 
-        esptool.py --chip esp32c3 merge_bin \
-          --flash_mode dio \
+        esptool.py --chip esp32s3 merge_bin \
+          --flash_mode qio \
           --flash_freq 80m \
-          --flash_size 4MB \
+          --flash_size 8MB \
           -o "$OUT" \
           0x0 micropython.bin \
           ${{ env.VFS_OFFSET }} vfs.bin
@@ -127,7 +129,7 @@ jobs:
           "funding_url": "https://github.com/bitbarista/k7-led-controller",
           "builds": [
             {
-              "chipFamily": "ESP32-C3",
+              "chipFamily": "ESP32-S3",
               "parts": [
                 {
                   "path": "k7controller-v${VERSION}.bin",
@@ -186,16 +188,16 @@ jobs:
           ### Installation
 
           **Easiest — browser-based flash (Chrome/Edge/Opera):**
-          Visit the [flash page](https://bitbarista.github.io/k7-led-controller/flash.html), connect your ESP32-C3 via USB, and click Install.
+          Visit the [flash page](https://bitbarista.github.io/k7-led-controller/flash.html), connect your XIAO ESP32-S3 via USB, and click Install.
 
           **Manual — esptool:**
           ```
-          esptool.py --chip esp32c3 write_flash 0x0 k7controller-v${{ steps.version.outputs.VERSION }}.bin
+          esptool.py --chip esp32s3 write_flash 0x0 k7controller-v${{ steps.version.outputs.VERSION }}.bin
           ```
 
           ### What's included
-          - MicroPython v1.28.0 firmware
-          - K7 controller application (main.py, server.py, k7mini.py, presets.py)
+          - MicroPython v1.28.0 firmware (ESP32-S3 SPIRAM_OCT)
+          - K7 controller application (main.py, server.py, k7mini.py, presets.py, moon.py, setup.py)
           - Microdot web framework v${{ env.MICRODOT_VERSION }}
           - Web UI with vendor assets (Bootstrap, Chart.js)
 
@@ -227,7 +229,7 @@ jobs:
           "funding_url": "https://github.com/bitbarista/k7-led-controller",
           "builds": [
             {
-              "chipFamily": "ESP32-C3",
+              "chipFamily": "ESP32-S3",
               "parts": [
                 {
                   "path": "k7controller-v${VERSION}.bin",

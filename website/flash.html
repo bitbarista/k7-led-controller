@@ -31,7 +31,7 @@
         <span class="text-3xl">🪸</span>
         <div>
           <h1 class="text-xl font-bold text-gray-900">K7 LED Controller</h1>
-          <p class="text-xs text-gray-500">ESP32-C3 firmware for Noo-Psyche K7 aquarium lights</p>
+          <p class="text-xs text-gray-500">XIAO ESP32-S3 firmware for Noo-Psyche K7 aquarium lights</p>
         </div>
       </a>
       <a href="https://github.com/bitbarista/k7-led-controller" class="text-gray-400 hover:text-gray-700 transition-colors" title="GitHub">
@@ -49,7 +49,7 @@
       <h2 class="text-3xl font-bold text-gray-900 mb-3">Flash Firmware</h2>
       <p class="text-gray-600 max-w-2xl mx-auto">
         Install everything in one click — MicroPython, the K7 controller app, and the web UI.
-        Use Chrome, Edge, or Opera with your ESP32-C3 connected via USB.
+        Use Chrome, Edge, or Opera with your XIAO ESP32-S3 connected via USB.
       </p>
     </div>
 
@@ -63,9 +63,9 @@
     <!-- Flash card -->
     <div class="card bg-white rounded-xl shadow-lg p-10 text-center max-w-md mx-auto mb-12">
       <div class="text-6xl mb-4">🔌</div>
-      <h3 class="text-xl font-bold text-gray-900 mb-2">ESP32-C3 Super Mini</h3>
+      <h3 class="text-xl font-bold text-gray-900 mb-2">Seeed XIAO ESP32-S3</h3>
       <p class="text-gray-500 text-sm mb-6">
-        4 MB flash · MicroPython v1.28.0 included
+        8 MB flash · 8 MB PSRAM · MicroPython v1.28.0 included
       </p>
 
       <esp-web-install-button manifest="./releases/latest/manifest.json">
@@ -119,7 +119,7 @@
         </div>
         <div>
           <dt class="font-semibold text-gray-800">Flashing fails immediately</dt>
-          <dd>Hold the BOOT button on the ESP32-C3 while clicking Install, then release when flashing begins.</dd>
+          <dd>Hold the BOOT (B) button on the XIAO while pressing RST, then release when flashing begins. Alternatively, hold BOOT while plugging in the USB cable.</dd>
         </div>
         <div>
           <dt class="font-semibold text-gray-800">Lamp not found during setup</dt>

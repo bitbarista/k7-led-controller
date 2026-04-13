@@ -37,17 +37,11 @@ The board draws ~80 mA and can run from any USB phone charger.
 
 ## Flashing
 
-### 1 — Flash MicroPython
+### 1 — Flash MicroPython + firmware (easiest)
 
-Download the latest **ESP32-S3 SPIRAM OCT** firmware from [micropython.org/download/ESP32_GENERIC_S3](https://micropython.org/download/ESP32_GENERIC_S3/) (the `SPIRAM_OCT` variant).
+Visit **[bitbarista.github.io/k7-led-controller/flash.html](https://bitbarista.github.io/k7-led-controller/flash.html)** — connect your XIAO ESP32-S3 via USB and click Install. Works in Chrome, Edge, and Opera. No software required.
 
-```bash
-pip install esptool
-esptool --port /dev/ttyACM0 erase-flash
-esptool --port /dev/ttyACM0 --baud 460800 write-flash -z 0x0 ESP32_GENERIC_S3-SPIRAM_OCT-*.bin
-```
-
-> On Windows use the COM port instead of `/dev/ttyACM0`. On first connect the XIAO may need the **RST** button pressed if the port doesn't respond.
+If the device is not detected, hold the **BOOT (B)** button while pressing **RST**, then click Install again.
 
 ### 2 — Deploy the controller firmware
 
