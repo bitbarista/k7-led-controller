@@ -938,11 +938,10 @@ async function toggleLunar() {
   const s = await api('GET', '/api/lunar/status');
   if (s.active) {
     await api('POST', '/api/lunar/stop');
-    setLunarBtn(false);
   } else {
     await api('POST', '/api/lunar/start');
-    setLunarBtn(true);
   }
+  await loadLunarStatus();
 }
 
 async function onLmChange() {
@@ -954,6 +953,7 @@ async function onLmChange() {
   };
   document.getElementById('lmTimeWrap').style.display = lm.enabled ? '' : 'none';
   try { await api('POST', '/api/lunar/schedule', lm); } catch(_) {}
+  await loadLunarStatus();
 }
 
 // ── Presets ───────────────────────────────────────────────────────────────────
