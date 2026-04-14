@@ -46,6 +46,7 @@ def _interpolate_channels(schedule, h, m):
 PROFILES_FILE           = 'profiles.json'
 LIGHTNING_SCHEDULE_FILE = 'lightning_schedule.json'
 LUNAR_FILE              = 'lunar_schedule.json'
+STATE_FILE              = 'state.json'
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -76,6 +77,26 @@ def _load_profiles():
 def _save_profiles(data):
     with open(PROFILES_FILE, 'w') as f:
         json.dump(data, f)
+
+def _load_state():
+    if _file_exists(STATE_FILE):
+        try:
+            with open(STATE_FILE) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _save_state():
+    try:
+        with open(STATE_FILE, 'w') as f:
+            json.dump({
+                'ramp':      _ramp_active,
+                'lightning': _manually_enabled,
+                'lunar':     _lunar_active and not _lunar_stopped,
+            }, f)
+    except Exception:
+        pass
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -148,15 +169,18 @@ async def api_push(request):
             manual   = d['manual']
             schedule = [tuple(e) for e in d['schedule']]
             mode     = d.get('mode', 'auto')
+            if _ramp_active:
+                mode = 'manual'   # ramp owns the lamp; don't hand control back to auto
             with _lamp() as lamp:
                 lamp.push_schedule(manual, schedule, mode)
             _last_schedule = [list(e) for e in schedule]
             _last_manual   = list(manual)
-            return {'ok': True}
         except OSError as e:
             return {'error': f'Connection failed — {e}'}, 503
         except Exception as e:
             return {'error': str(e)}, 500
+    await _lunar_apply_now()   # re-apply overlay immediately if lunar is active
+    return {'ok': True}
 
 
 @app.route('/api/presets')
@@ -319,6 +343,7 @@ async def api_lightning_start(request):
     _manually_enabled = True
     _user_stopped     = False
     await _ensure_lightning_started()
+    _save_state()
     return {'ok': True}
 
 
@@ -328,6 +353,7 @@ async def api_lightning_stop(request):
     _manually_enabled = False
     _user_stopped     = True
     _lightning_active = False
+    _save_state()
     return {'ok': True}
 
 
@@ -482,6 +508,7 @@ async def _ensure_ramp_started():
 @app.route('/api/ramp/start', methods=['POST'])
 async def api_ramp_start(request):
     await _ensure_ramp_started()
+    _save_state()
     return {'ok': True}
 
 
@@ -495,6 +522,7 @@ async def api_ramp_stop(request):
                 lamp.set_mode_auto()
         except Exception:
             pass
+    _save_state()
     return {'ok': True}
 
 
@@ -618,6 +646,22 @@ async def _lunar_apply_now():
             pass
 
 
+async def _lunar_restore_now():
+    """Immediately remove the lunar overlay — restore plain schedule brightness."""
+    t = time.localtime()
+    channels = _interpolate_channels(_last_schedule, t[3], t[4])
+    async with lock:
+        try:
+            with _lamp() as lamp:
+                if _ramp_active:
+                    lamp.hand_luminance(channels)
+                else:
+                    lamp.preview_brightness(channels)
+                    lamp.set_mode_auto()
+        except Exception:
+            pass
+
+
 @app.route('/api/lunar/status')
 async def api_lunar_status(request):
     return {
@@ -638,6 +682,7 @@ async def api_lunar_start(request):
     _lunar_stopped = False
     await _ensure_lunar_started()
     await _lunar_apply_now()
+    _save_state()
     return {'ok': True}
 
 
@@ -646,6 +691,8 @@ async def api_lunar_stop(request):
     global _lunar_active, _lunar_stopped
     _lunar_stopped = True
     _lunar_active  = False
+    await _lunar_restore_now()
+    _save_state()
     return {'ok': True}
 
 
@@ -660,10 +707,13 @@ async def api_lunar_schedule_post(request):
     if 'max_intensity' in d: _lm['max_intensity'] = int(d['max_intensity'])
     _save_lunar_cfg()
     if not was_enabled and _lm['enabled']:
-        _lunar_stopped = False   # re-enabling schedule clears manual stop
+        _lunar_stopped = False
+        await _lunar_apply_now()       # just enabled — apply overlay immediately
     elif was_enabled and not _lm['enabled']:
         _lunar_active = False
-    await _lunar_apply_now()
+        await _lunar_restore_now()     # just disabled — remove overlay immediately
+    else:
+        await _lunar_apply_now()       # settings changed (intensity/times) — re-apply
     return _lm
 
 
@@ -685,6 +735,32 @@ async def _lunar_scheduler():
 
 async def main(host='0.0.0.0', port=80):
     """Start background tasks then run the web server."""
+    global _manually_enabled, _user_stopped, _last_schedule, _last_manual
+    # Load persisted config so effect restores have correct settings
+    _load_lightning_schedule()
+    _load_lunar_cfg()
+    # Seed schedule from lamp so restored effects use real brightness values
+    try:
+        async with lock:
+            with _lamp() as lamp:
+                raw = lamp.read_all()
+        state = k7.decode_state(raw)
+        if state and state.get('schedule'):
+            _last_schedule = [list(row) for row in state['schedule']]
+            _last_manual   = list(state['manual'])
+    except Exception:
+        pass
+    # Restore previously active effects
+    saved = _load_state()
+    if saved.get('ramp'):
+        await _ensure_ramp_started()
+    if saved.get('lightning'):
+        _manually_enabled = True
+        _user_stopped     = False
+        await _ensure_lightning_started()
+    if saved.get('lunar'):
+        await _ensure_lunar_started()
+        await _lunar_apply_now()
     asyncio.create_task(_lightning_scheduler())
     asyncio.create_task(_lunar_scheduler())
     await app.start_server(host=host, port=port, debug=False)

@@ -891,13 +891,13 @@ async function pollRampStatus() {
 }
 
 async function toggleRamp() {
-  const status = await api('GET', '/api/ramp/status');
-  if (status.active) {
-    await api('POST', '/api/ramp/stop');
-    setRampBtn(false, null);
-  } else {
-    await api('POST', '/api/ramp/start');
-    setRampBtn(true, null);
+  const active = document.getElementById('rampPill').classList.contains('active');
+  setRampBtn(!active, null);
+  try {
+    await api('POST', active ? '/api/ramp/stop' : '/api/ramp/start');
+  } catch(e) {
+    setRampBtn(active, null);
+    setErr(e.message);
   }
 }
 
@@ -910,13 +910,13 @@ function setLightningBtn(active) {
 }
 
 async function toggleLightning() {
-  const status = await api('GET', '/api/lightning/status');
-  if (status.active) {
-    await api('POST', '/api/lightning/stop');
-    setLightningBtn(false);
-  } else {
-    await api('POST', '/api/lightning/start');
-    setLightningBtn(true);
+  const active = document.getElementById('lightningPill').classList.contains('active');
+  setLightningBtn(!active);
+  try {
+    await api('POST', active ? '/api/lightning/stop' : '/api/lightning/start');
+  } catch(e) {
+    setLightningBtn(active);
+    setErr(e.message);
   }
 }
 
@@ -981,13 +981,14 @@ async function loadLunarStatus() {
 }
 
 async function toggleLunar() {
-  const s = await api('GET', '/api/lunar/status');
-  if (s.active) {
-    await api('POST', '/api/lunar/stop');
-  } else {
-    await api('POST', '/api/lunar/start');
+  const active = document.getElementById('lunarPill').classList.contains('active');
+  setLunarBtn(!active);
+  try {
+    await api('POST', active ? '/api/lunar/stop' : '/api/lunar/start');
+  } catch(e) {
+    setLunarBtn(active);
+    setErr(e.message);
   }
-  await loadLunarStatus();
 }
 
 async function onLmChange() {
