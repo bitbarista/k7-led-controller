@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>K7 LED Controller — Setup Guide</title>
+  <meta name="description" content="Step-by-step guide to setting up the K7 LED Controller for your Noo-Psyche aquarium light. No technical knowledge required.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .step-num {
+      min-width: 2.5rem;
+      height: 2.5rem;
+      background: linear-gradient(135deg, #0369a1, #0c4a6e);
+    }
+    .tip { border-left: 4px solid #0369a1; }
+    .warn { border-left: 4px solid #d97706; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white shadow-sm">
+    <div class="max-w-3xl mx-auto px-4 py-5 flex items-center justify-between">
+      <a href="https://bitbarista.github.io/k7-led-controller/" class="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+        <span class="text-3xl">🪸</span>
+        <div>
+          <h1 class="text-xl font-bold text-gray-900">K7 LED Controller</h1>
+          <p class="text-xs text-gray-500">Setup guide for Noo-Psyche K7 aquarium lights</p>
+        </div>
+      </a>
+      <nav class="flex gap-4 text-sm text-sky-600">
+        <a href="flash.html" class="hover:underline">Flash firmware</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 py-10">
+
+    <!-- Hero -->
+    <div class="text-center mb-10">
+      <h2 class="text-3xl font-bold text-gray-900 mb-3">Setup Guide</h2>
+      <p class="text-gray-600 max-w-xl mx-auto text-lg">
+        Everything you need to get your K7 lamp under full control —
+        no technical knowledge required.
+      </p>
+    </div>
+
+    <!-- What is this -->
+    <div class="bg-white rounded-xl shadow p-8 mb-8">
+      <h3 class="text-xl font-bold text-gray-900 mb-4">What is this?</h3>
+      <p class="text-gray-600 mb-4">
+        The K7 LED Controller is a small add-on device that gives your Noo-Psyche K7 Mini
+        or K7 Pro aquarium light a proper web interface — accessible from any phone, tablet,
+        or computer connected to the same WiFi.
+      </p>
+      <p class="text-gray-600 mb-4">
+        Once set up it runs <strong>24 hours a day</strong>, completely independently.
+        Your phone or laptop is only needed to make changes — the controller keeps the
+        lighting schedule running even when everything else is switched off.
+      </p>
+      <div class="grid sm:grid-cols-3 gap-4 mt-6 text-center text-sm">
+        <div class="bg-sky-50 rounded-lg p-4">
+          <div class="text-2xl mb-2">📅</div>
+          <p class="font-semibold text-gray-800">24-hour schedule</p>
+          <p class="text-gray-500 mt-1">Set different brightness levels for each hour of the day</p>
+        </div>
+        <div class="bg-sky-50 rounded-lg p-4">
+          <div class="text-2xl mb-2">🌙</div>
+          <p class="font-semibold text-gray-800">Lunar cycle</p>
+          <p class="text-gray-500 mt-1">Automatically dims and brightens with the real moon phase</p>
+        </div>
+        <div class="bg-sky-50 rounded-lg p-4">
+          <div class="text-2xl mb-2">⛈️</div>
+          <p class="font-semibold text-gray-800">Weather effects</p>
+          <p class="text-gray-500 mt-1">Random lightning flashes and passing cloud dimming</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- What you need -->
+    <div class="bg-white rounded-xl shadow p-8 mb-8">
+      <h3 class="text-xl font-bold text-gray-900 mb-6">What you need to buy</h3>
+      <div class="space-y-5">
+
+        <div class="flex gap-4 items-start">
+          <div class="step-num rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">1</div>
+          <div>
+            <p class="font-semibold text-gray-900">Seeed Studio XIAO ESP32-S3</p>
+            <p class="text-gray-600 text-sm mt-1">
+              A tiny WiFi-enabled microcontroller about the size of a postage stamp.
+              Search for <strong>"XIAO ESP32-S3"</strong> on Amazon, AliExpress, Mouser, or Seeed Studio directly.
+              Costs around £6–£10 / $8–$12.
+            </p>
+            <p class="text-gray-500 text-sm mt-1">
+              Either the standard version or the "Sense" version will work. You do not need any other variant.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex gap-4 items-start">
+          <div class="step-num rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">2</div>
+          <div>
+            <p class="font-semibold text-gray-900">USB-C cable</p>
+            <p class="text-gray-600 text-sm mt-1">
+              Any USB-C cable works for both flashing (setting up) and for permanent power.
+              You may already have one — a phone charging cable is fine.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex gap-4 items-start">
+          <div class="step-num rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">3</div>
+          <div>
+            <p class="font-semibold text-gray-900">USB phone charger</p>
+            <p class="text-gray-600 text-sm mt-1">
+              Any USB charger with a spare port. The board uses less power than a phone on standby,
+              so any old charger is fine.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="tip bg-sky-50 rounded-r-lg p-4 mt-6 text-sm text-gray-600">
+        <strong class="text-sky-800">That's it.</strong> No soldering. No special cables to the lamp.
+        The controller connects to your lamp over WiFi, so there are no wires between them.
+      </div>
+    </div>
+
+    <!-- Step 1: Flash -->
+    <div class="bg-white rounded-xl shadow p-8 mb-8">
+      <div class="flex items-center gap-4 mb-6">
+        <div class="step-num rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0">1</div>
+        <h3 class="text-xl font-bold text-gray-900">Flash the firmware</h3>
+      </div>
+      <p class="text-gray-600 mb-4">
+        "Flashing" means loading the K7 Controller software onto the board.
+        You only need to do this once.
+      </p>
+      <ol class="space-y-3 text-gray-600 text-sm mb-6">
+        <li class="flex gap-2"><span class="font-bold text-sky-700 flex-shrink-0">a.</span>
+          Open <strong>Google Chrome</strong>, <strong>Microsoft Edge</strong>, or <strong>Opera</strong> on a laptop or desktop computer.
+          <em>(Firefox and Safari will not work for this step.)</em>
+        </li>
+        <li class="flex gap-2"><span class="font-bold text-sky-700 flex-shrink-0">b.</span>
+          Plug your XIAO ESP32-S3 into the computer using the USB-C cable.
+        </li>
+        <li class="flex gap-2"><span class="font-bold text-sky-700 flex-shrink-0">c.</span>
+          Go to the <a href="flash.html" class="text-sky-600 underline font-medium">Flash Firmware page</a>
+          and click <strong>Install Firmware</strong>. Follow the on-screen prompts to select the device
+          and confirm the install.
+        </li>
+        <li class="flex gap-2"><span class="font-bold text-sky-700 flex-shrink-0">d.</span>
+          Wait for the progress bar to finish. The board will reboot automatically.
+        </li>
+      </ol>
+      <div class="warn bg-amber-50 rounded-r-lg p-4 text-sm text-gray-600">
+        <strong class="text-amber-700">If the device is not detected:</strong>
+        Hold the small <strong>BOOT (B)</strong> button on the board while pressing the
+        <strong>RST</strong> button, then release both. Click Install Firmware again.
+        Also check that you are using a data-capable USB cable — some cables are charge-only
+        and will not work.
+      </div>
+    </div>
+
+    <!-- Step 2: WiFi setup -->
+    <div class="bg-white rounded-xl shadow p-8 mb-8">
+      <div class="flex items-center gap-4 mb-6">
+        <div class="step-num rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0">2</div>
+        <h3 class="text-xl font-bold text-gray-900">Connect it to your lamp</h3>
+      </div>
+      <p class="text-gray-600 mb-4">
+        After flashing, the board needs to know where your lamp is.
+        Do this from your phone or the same computer — it takes about two minutes.
+      </p>
+      <ol class="space-y-4 text-gray-600 text-sm">
+        <li class="flex gap-2">
+          <span class="font-bold text-sky-700 flex-shrink-0">a.</span>
+          <div>
+            Make sure your K7 lamp is <strong>switched on</strong>.
+          </div>
+        </li>
+        <li class="flex gap-2">
+          <span class="font-bold text-sky-700 flex-shrink-0">b.</span>
+          <div>
+            On your phone or laptop, open the WiFi settings and connect to the network
+            called <strong>K7-Setup</strong>. There is no password — just tap Connect.
+          </div>
+        </li>
+        <li class="flex gap-2">
+          <span class="font-bold text-sky-700 flex-shrink-0">c.</span>
+          <div>
+            Open a web browser and go to <strong>http://192.168.5.1</strong>.
+            You should see a setup page with a list of nearby lamps.
+          </div>
+        </li>
+        <li class="flex gap-2">
+          <span class="font-bold text-sky-700 flex-shrink-0">d.</span>
+          <div>
+            Your lamp should appear in the list (it will have a name like <em>K7mini_XXXX</em>).
+            Tap it to select it, then tap <strong>Connect &amp; Save</strong>.
+          </div>
+        </li>
+        <li class="flex gap-2">
+          <span class="font-bold text-sky-700 flex-shrink-0">e.</span>
+          <div>
+            The board reboots. The <strong>K7-Setup</strong> network will disappear —
+            that is normal and means it worked.
+          </div>
+        </li>
+      </ol>
+      <div class="tip bg-sky-50 rounded-r-lg p-4 mt-6 text-sm text-gray-600">
+        <strong class="text-sky-800">Lamp not in the list?</strong>
+        Make sure the lamp is powered on and within a few metres of the board.
+        Tap <em>Scan again</em> to search once more.
+        You can also type the lamp's WiFi name manually — it is printed on a sticker
+        on the lamp, or visible in your phone's WiFi settings when the lamp is on.
+      </div>
+    </div>
+
+    <!-- Step 3: Connect and use -->
+    <div class="bg-white rounded-xl shadow p-8 mb-8">
+      <div class="flex items-center gap-4 mb-6">
+        <div class="step-num rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0">3</div>
+        <h3 class="text-xl font-bold text-gray-900">Open the controller</h3>
+      </div>
+      <ol class="space-y-4 text-gray-600 text-sm">
+        <li class="flex gap-2">
+          <span class="font-bold text-sky-700 flex-shrink-0">a.</span>
+          <div>
+            In your WiFi settings, connect to the network called <strong>K7-Controller</strong>.
+            The password is <code class="bg-gray-100 px-1 rounded">12345678</code>.
+          </div>
+        </li>
+        <li class="flex gap-2">
+          <span class="font-bold text-sky-700 flex-shrink-0">b.</span>
+          <div>
+            Open a browser and go to <strong>http://192.168.5.1</strong>.
+            The controller will load and automatically read the current settings from your lamp.
+          </div>
+        </li>
+        <li class="flex gap-2">
+          <span class="font-bold text-sky-700 flex-shrink-0">c.</span>
+          <div>
+            Unplug the USB-C cable from your computer and plug it into a USB charger near the tank.
+            The controller is now running permanently — you don't need a computer connected any more.
+          </div>
+        </li>
+      </ol>
+      <div class="tip bg-sky-50 rounded-r-lg p-4 mt-6 text-sm text-gray-600">
+        <strong class="text-sky-800">Bookmark it.</strong>
+        Add <strong>http://192.168.5.1</strong> as a bookmark on your phone's home screen
+        so you can open it with one tap whenever you're connected to <em>K7-Controller</em>.
+        On iPhone: tap the Share button → <em>Add to Home Screen</em>.
+        On Android: tap the menu → <em>Add to Home Screen</em>.
+      </div>
+    </div>
+
+    <!-- Using the controller -->
+    <div class="bg-white rounded-xl shadow p-8 mb-8">
+      <h3 class="text-xl font-bold text-gray-900 mb-6">Using the controller</h3>
+
+      <div class="space-y-6">
+
+        <div>
+          <h4 class="font-semibold text-gray-800 mb-2">Setting the lighting schedule</h4>
+          <p class="text-gray-600 text-sm">
+            The main screen shows a graph with 24 hours across the bottom and brightness on the side.
+            <strong>Drag any point up or down</strong> to change the brightness for that hour.
+            When you're happy, tap <strong>Push</strong> to send the schedule to the lamp.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-semibold text-gray-800 mb-2">Presets</h4>
+          <p class="text-gray-600 text-sm">
+            Don't know where to start? Use the presets dropdown to load a ready-made schedule
+            for Fish Only, LPS Reef, SPS Reef, or Mixed Reef. You can then adjust it to suit
+            your tank and save it as your own named profile.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-semibold text-gray-800 mb-2">Smooth Ramp</h4>
+          <p class="text-gray-600 text-sm">
+            By default the lamp steps between brightness levels once per hour, which looks a bit abrupt.
+            Turn on <strong>Smooth Ramp</strong> and the controller will gradually adjust the brightness
+            every minute so transitions look like a natural sunrise and sunset.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-semibold text-gray-800 mb-2">Lunar Cycle</h4>
+          <p class="text-gray-600 text-sm">
+            Enables a gentle blue moonlight glow overnight that follows the real moon.
+            On a full moon you'll see a soft blue shimmer; on a new moon it's completely off.
+            The 29.5-day cycle runs automatically — just switch it on.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-semibold text-gray-800 mb-2">Lightning &amp; Clouds</h4>
+          <p class="text-gray-600 text-sm">
+            Optional effects for a more natural look. <strong>Lightning</strong> produces occasional
+            white flashes — you can set a time window so it only fires in the evening.
+            <strong>Clouds</strong> makes the light periodically dim for 20–90 seconds as if clouds
+            were passing overhead, with the frequency controlled by the density slider.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Troubleshooting -->
+    <div class="bg-white rounded-xl shadow p-8 mb-8">
+      <h3 class="text-xl font-bold text-gray-900 mb-6">Troubleshooting</h3>
+      <dl class="space-y-5 text-sm">
+
+        <div>
+          <dt class="font-semibold text-gray-800">The K7-Controller WiFi doesn't appear after setup</dt>
+          <dd class="text-gray-600 mt-1">
+            Unplug and re-plug the USB power on the board to restart it.
+            Wait about 10 seconds then look for K7-Controller in your WiFi list again.
+            If K7-Setup reappears instead, the lamp connection was not saved —
+            go through Step 2 again.
+          </dd>
+        </div>
+
+        <div>
+          <dt class="font-semibold text-gray-800">The controller opens but shows an error reading from the lamp</dt>
+          <dd class="text-gray-600 mt-1">
+            Make sure the lamp is powered on. The K7 lamp creates its own WiFi network —
+            if the lamp is off or in standby that network disappears and the controller
+            cannot reach it. Switch the lamp back on and tap the refresh button.
+          </dd>
+        </div>
+
+        <div>
+          <dt class="font-semibold text-gray-800">I pushed a schedule but the lamp didn't change</dt>
+          <dd class="text-gray-600 mt-1">
+            Check that the lamp is in <strong>Auto</strong> mode (not Manual) using the mode
+            toggle at the top of the controller page. Also make sure the schedule actually has
+            non-zero values for the current hour of the day.
+          </dd>
+        </div>
+
+        <div>
+          <dt class="font-semibold text-gray-800">My phone lost internet when I connected to K7-Controller</dt>
+          <dd class="text-gray-600 mt-1">
+            That is expected — the K7-Controller network is only for talking to the lamp,
+            not for general internet browsing. Switch back to your normal home WiFi when
+            you're done making changes. The controller keeps running your schedule in
+            the background regardless.
+          </dd>
+        </div>
+
+        <div>
+          <dt class="font-semibold text-gray-800">I want to change the WiFi password or lamp connection</dt>
+          <dd class="text-gray-600 mt-1">
+            Flash the firmware again (Step 1) and redo the WiFi setup (Step 2).
+            Your saved profiles and schedules will be lost, so note them down first.
+          </dd>
+        </div>
+
+      </dl>
+    </div>
+
+    <!-- Footer nav -->
+    <div class="text-center text-sm text-gray-500">
+      Need to reflash? Go to the
+      <a href="flash.html" class="text-sky-600 hover:underline">Flash Firmware page</a>.
+    </div>
+
+  </main>
+
+  <footer class="bg-white border-t mt-12">
+    <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-gray-400">
+      K7 LED Controller is open source software — not affiliated with or endorsed by Noo-Psyche.
+      <a href="https://github.com/bitbarista/k7-led-controller" class="hover:text-gray-600 underline ml-1">GitHub</a>
+    </div>
+  </footer>
+
+</body>
+</html>
