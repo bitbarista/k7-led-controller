@@ -859,7 +859,7 @@ def _apply_cloud(base, dim, colour_shift):
     full depth to simulate the warmer colour of overcast light.
     """
     factor = 1.0 - dim
-    extra  = 0.25 * dim if colour_shift else 0.0
+    extra  = 0.15 * dim if colour_shift else 0.0
     out = list(base)
     for i in range(len(out)):
         if i == 0:    # white — least affected
@@ -870,108 +870,111 @@ def _apply_cloud(base, dim, colour_shift):
 
 
 async def _cloud_worker():
+    """
+    Cloud dimming effect: gap → snap dim → hold → snap bright → repeat.
+
+    Each cloud is an instant snap to a dimmed level, held for 20-90 s,
+    then a snap back.  No gradual fades — avoids TCP reconnect artefacts.
+    Schedule is resynced every 15 s during gap and hold so daytime
+    brightness changes are tracked correctly.
+    """
     global _cloud_active
-    while _cloud_active:
-        density = _cs.get('density', 30) / 100.0   # 0–1
-        depth   = _cs.get('depth', 60) / 100.0     # 0–1
-        shift   = _cs.get('colour_shift', True)
 
-        # Gap between cloud events: dense sky → short gaps, clear sky → long gaps
-        gap_base = max(3.0, 120.0 * (1.0 - density) + 5.0 * density)
-        gap_s    = gap_base + random.random() * gap_base
-        elapsed  = 0.0
-        while elapsed < gap_s and _cloud_active:
-            await asyncio.sleep(0.5)
-            elapsed += 0.5
-        if not _cloud_active:
-            break
+    def _dimmed_channels(dim, shift):
+        t = time.localtime()
+        ch = _apply_cloud(
+            _interpolate_channels(_last_schedule, t[3], t[4]), dim, shift)
+        if _lunar_active and _in_lunar_window():
+            _apply_lunar_overlay(ch)
+        return ch
 
-        # Pick cloud properties
-        dim        = depth * (0.4 + 0.6 * random.random())   # 40–100 % of max depth
-        ramp_in_s  = 3.0 + random.random() * 9.0             # 3–12 s fade in
-        hold_s     = 10.0 + random.random() * 80.0           # 10–90 s overcast
-        ramp_out_s = 3.0 + random.random() * 9.0             # 3–12 s fade out
-
-        # Fade in (darken)
-        steps = max(4, round(ramp_in_s * 2))
-        for step in range(steps + 1):
-            if not _cloud_active:
-                break
-            t  = time.localtime()
-            ch = _apply_cloud(
-                _interpolate_channels(_last_schedule, t[3], t[4]),
-                dim * step / steps, shift)
-            if _lunar_active and _in_lunar_window():
-                _apply_lunar_overlay(ch)
-            async with lock:
-                try:
-                    with _lamp() as lamp:
-                        if _ramp_active:
-                            lamp.hand_luminance(ch)
-                        else:
-                            lamp.preview_brightness(ch)
-                except Exception:
-                    pass
-            await asyncio.sleep(0.5)
-
-        # Hold with subtle flicker
-        elapsed = 0.0
-        while elapsed < hold_s and _cloud_active:
-            t       = time.localtime()
-            flicker = max(0.0, min(1.0, dim + (random.random() - 0.5) * 0.08))
-            ch      = _apply_cloud(
-                _interpolate_channels(_last_schedule, t[3], t[4]),
-                flicker, shift)
-            if _lunar_active and _in_lunar_window():
-                _apply_lunar_overlay(ch)
-            async with lock:
-                try:
-                    with _lamp() as lamp:
-                        if _ramp_active:
-                            lamp.hand_luminance(ch)
-                        else:
-                            lamp.preview_brightness(ch)
-                except Exception:
-                    pass
-            sleep_t = 2.0 + random.random() * 3.0
-            await asyncio.sleep(sleep_t)
-            elapsed += sleep_t
-
-        if not _cloud_active:
-            break
-
-        # Fade out (brighten)
-        steps = max(4, round(ramp_out_s * 2))
-        for step in range(steps + 1):
-            if not _cloud_active:
-                break
-            t  = time.localtime()
-            ch = _apply_cloud(
-                _interpolate_channels(_last_schedule, t[3], t[4]),
-                dim * (1.0 - step / steps), shift)
-            if _lunar_active and _in_lunar_window():
-                _apply_lunar_overlay(ch)
-            async with lock:
-                try:
-                    with _lamp() as lamp:
-                        if _ramp_active:
-                            lamp.hand_luminance(ch)
-                        else:
-                            lamp.preview_brightness(ch)
-                except Exception:
-                    pass
-            await asyncio.sleep(0.5)
-
-    # Restore on exit
-    _cloud_active = False
-    if not _ramp_active:
+    def _full_channels():
         t  = time.localtime()
         ch = _interpolate_channels(_last_schedule, t[3], t[4])
+        if _lunar_active and _in_lunar_window():
+            _apply_lunar_overlay(ch)
+        return ch
+
+    # Switch to manual, set correct current brightness immediately.
+    if not _ramp_active:
         async with lock:
             try:
                 with _lamp() as lamp:
-                    lamp.preview_brightness(ch)
-                    lamp.set_mode_auto()
+                    lamp.set_mode_manual()
+                    lamp.hand_luminance(_full_channels())
+            except Exception:
+                pass
+
+    while _cloud_active:
+        density = _cs.get('density', 30) / 100.0
+        depth   = _cs.get('depth', 60) / 100.0
+        shift   = _cs.get('colour_shift', True)
+
+        # ── Gap between clouds ────────────────────────────────────────────
+        gap_base  = max(300.0, 7200.0 * (1.0 - density) ** 2)
+        gap_s     = gap_base + random.random() * gap_base
+        elapsed   = 0.0
+        last_sync = 0.0
+        while elapsed < gap_s and _cloud_active:
+            await asyncio.sleep(0.5)
+            elapsed += 0.5
+            if not _ramp_active and elapsed - last_sync >= 15.0:
+                last_sync = elapsed
+                async with lock:
+                    try:
+                        with _lamp() as lamp:
+                            lamp.hand_luminance(_full_channels())
+                    except Exception:
+                        pass
+        if not _cloud_active:
+            break
+
+        # ── Snap to dimmed level ──────────────────────────────────────────
+        target_dim = depth * (0.4 + 0.6 * random.random())
+        async with lock:
+            try:
+                with _lamp() as lamp:
+                    lamp.hand_luminance(_dimmed_channels(target_dim, shift))
+            except Exception:
+                pass
+
+        # ── Hold, resyncing schedule every 15 s ───────────────────────────
+        hold_s    = 20.0 + random.random() * 70.0
+        elapsed   = 0.0
+        last_sync = 0.0
+        while elapsed < hold_s and _cloud_active:
+            await asyncio.sleep(0.5)
+            elapsed += 0.5
+            if elapsed - last_sync >= 15.0:
+                last_sync = elapsed
+                async with lock:
+                    try:
+                        with _lamp() as lamp:
+                            lamp.hand_luminance(_dimmed_channels(target_dim, shift))
+                    except Exception:
+                        pass
+
+        if not _cloud_active:
+            break
+
+        # ── Snap back to full ─────────────────────────────────────────────
+        async with lock:
+            try:
+                with _lamp() as lamp:
+                    lamp.hand_luminance(_full_channels())
+            except Exception:
+                pass
+
+    # Restore auto mode
+    _cloud_active = False
+    if not _ramp_active:
+        async with lock:
+            try:
+                with _lamp() as lamp:
+                    lamp.push_schedule(
+                        _last_manual,
+                        [tuple(r) for r in _last_schedule],
+                        'auto')
             except Exception:
                 pass
 
