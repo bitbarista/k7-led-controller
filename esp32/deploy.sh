@@ -19,8 +19,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PORT="${1:-}"
 MP="mpremote${PORT:+ connect $PORT}"
 
-echo "=== Syncing index.html from templates/ ==="
-cp "$SCRIPT_DIR/../templates/index.html" "$SCRIPT_DIR/static/index.html"
+echo "=== Syncing HTML templates ==="
+cp "$SCRIPT_DIR/../templates/index.html"  "$SCRIPT_DIR/static/index.html"
+cp "$SCRIPT_DIR/../templates/mobile.html" "$SCRIPT_DIR/static/mobile.html"
 
 echo "=== Creating directories on device ==="
 $MP mkdir :static 2>/dev/null || true
@@ -35,6 +36,8 @@ done
 echo "=== Copying static assets ==="
 echo "  static/index.html"
 $MP cp "$SCRIPT_DIR/static/index.html" ":static/index.html"
+echo "  static/mobile.html"
+$MP cp "$SCRIPT_DIR/static/mobile.html" ":static/mobile.html"
 
 VENDOR_SRC="$SCRIPT_DIR/../static/vendor"
 for f in bootstrap.min.css chart.umd.min.js chartjs-plugin-dragdata.min.js; do

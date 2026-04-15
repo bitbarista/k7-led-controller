@@ -56,7 +56,7 @@ def start_ap(ssid=AP_SSID, password=AP_PASSWORD):
     ap = network.WLAN(network.AP_IF)
     ap.active(True)
     ap.config(essid=ssid, password=password, authmode=3)
-    ap.ifconfig((AP_IP, '255.255.255.0', AP_IP, '8.8.8.8'))
+    ap.ifconfig((AP_IP, '255.255.255.0', AP_IP, AP_IP))
     t = 0
     while not ap.active() and t < 5:
         time.sleep(0.2); t += 0.2

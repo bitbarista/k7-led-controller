@@ -7,6 +7,7 @@ RAM during normal operation.
 
 import network
 import socket
+import uselect
 import time
 from machine import reset
 
@@ -121,6 +122,23 @@ def _parse_form(raw):
     return params
 
 
+def _dns_response(data, ip):
+    """Build a minimal DNS A-record response — resolves any name to ip."""
+    resp  = data[:2]
+    resp += b'\x81\x80'
+    resp += data[4:6]
+    resp += data[4:6]
+    resp += b'\x00\x00\x00\x00'
+    resp += data[12:]
+    resp += b'\xc0\x0c'
+    resp += b'\x00\x01'
+    resp += b'\x00\x01'
+    resp += b'\x00\x00\x00\x3c'
+    resp += b'\x00\x04'
+    resp += bytes(int(x) for x in ip.split('.'))
+    return resp
+
+
 def _respond(conn, status, body, content_type='text/html'):
     body_bytes = body.encode('utf-8')
     header = (
@@ -138,12 +156,20 @@ def save_config(cfg):
         json.dump(cfg, f)
 
 
+_CAPTIVE_PATHS = frozenset((
+    '/hotspot-detect.html', '/library/test/success.html',
+    '/generate_204', '/gen_204',
+    '/connecttest.txt', '/ncsi.txt',
+    '/redirect', '/canonical.html',
+))
+
+
 def run_portal():
     """Block until first-run config is saved, then reboot."""
     ap = network.WLAN(network.AP_IF)
     ap.active(True)
     ap.config(essid='K7-Setup', authmode=0)
-    ap.ifconfig((AP_IP, '255.255.255.0', AP_IP, '8.8.8.8'))
+    ap.ifconfig((AP_IP, '255.255.255.0', AP_IP, AP_IP))
     print('Scanning for K7 lamps...')
     lamps = _scan_k7_lamps()
     print(f'Found: {lamps}')
@@ -154,44 +180,71 @@ def run_portal():
     srv.bind(('0.0.0.0', 80))
     srv.listen(3)
 
+    dns = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    dns.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    dns.bind(('0.0.0.0', 53))
+
     while True:
-        conn, _ = srv.accept()
-        try:
-            raw = conn.recv(2048).decode('utf-8', 'ignore')
-            first_line = raw.split('\r\n')[0]
+        readable, _, _ = uselect.select([srv, dns], [], [], 1.0)
+        for sock in readable:
+            if sock is dns:
+                try:
+                    data, addr = dns.recvfrom(512)
+                    if data:
+                        dns.sendto(_dns_response(data, AP_IP), addr)
+                except Exception as e:
+                    print('DNS error:', e)
+                continue
 
-            if first_line.startswith('POST /scan'):
-                lamps = _scan_k7_lamps()
-                print(f'Rescan: {lamps}')
-                _respond(conn, '200 OK', _build_html(lamps))
+            conn, _ = srv.accept()
+            try:
+                raw = conn.recv(2048).decode('utf-8', 'ignore')
+                first_line = raw.split('\r\n')[0]
 
-            elif first_line.startswith('POST /save'):
-                params    = _parse_form(raw)
-                lamp_ssid = params.get('lamp_ssid', '').strip()
-                device    = params.get('device', '').strip()
+                if first_line.startswith('POST /scan'):
+                    lamps = _scan_k7_lamps()
+                    print(f'Rescan: {lamps}')
+                    _respond(conn, '200 OK', _build_html(lamps))
 
-                if not lamp_ssid and 'lamp_sel' in params:
-                    sel = params['lamp_sel']
-                    if '|' in sel:
-                        lamp_ssid, device = sel.split('|', 1)
+                elif first_line.startswith('POST /save'):
+                    params    = _parse_form(raw)
+                    lamp_ssid = params.get('lamp_ssid', '').strip()
+                    device    = params.get('device', '').strip()
 
-                if not device:
-                    device = 'k7pro' if lamp_ssid.startswith('K7_Pro') else 'k7mini'
+                    if not lamp_ssid and 'lamp_sel' in params:
+                        sel = params['lamp_sel']
+                        if '|' in sel:
+                            lamp_ssid, device = sel.split('|', 1)
 
-                if lamp_ssid:
-                    save_config({'lamp_ssid': lamp_ssid, 'device': device})
-                    _respond(conn, '200 OK', _SAVED_HTML)
-                    conn.close()
-                    srv.close()
-                    time.sleep(3)
-                    reset()
-                    return
-                _respond(conn, '400 Bad Request', '<p>No lamp selected.</p>')
+                    if not device:
+                        device = 'k7pro' if lamp_ssid.startswith('K7_Pro') else 'k7mini'
 
-            else:
-                _respond(conn, '200 OK', _build_html(lamps))
+                    if lamp_ssid:
+                        save_config({'lamp_ssid': lamp_ssid, 'device': device})
+                        _respond(conn, '200 OK', _SAVED_HTML)
+                        conn.close()
+                        srv.close()
+                        dns.close()
+                        time.sleep(3)
+                        reset()
+                        return
+                    _respond(conn, '400 Bad Request', '<p>No lamp selected.</p>')
 
-        except Exception as e:
-            print('Setup portal error:', e)
-        finally:
-            conn.close()
+                else:
+                    parts = first_line.split()
+                    path  = parts[1] if len(parts) > 1 else '/'
+                    if path in _CAPTIVE_PATHS:
+                        hdr = (
+                            f'HTTP/1.1 302 Found\r\n'
+                            f'Location: http://{AP_IP}/\r\n'
+                            'Content-Length: 0\r\n'
+                            'Connection: close\r\n\r\n'
+                        ).encode()
+                        conn.sendall(hdr)
+                    else:
+                        _respond(conn, '200 OK', _build_html(lamps))
+
+            except Exception as e:
+                print('Setup portal error:', e)
+            finally:
+                conn.close()

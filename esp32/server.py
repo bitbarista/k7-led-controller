@@ -19,6 +19,7 @@ import random
 import json
 import time
 import os
+import socket
 
 from microdot import Microdot, send_file
 
@@ -46,6 +47,7 @@ def _interpolate_channels(schedule, h, m):
 PROFILES_FILE           = 'profiles.json'
 LIGHTNING_SCHEDULE_FILE = 'lightning_schedule.json'
 LUNAR_FILE              = 'lunar_schedule.json'
+CLOUD_FILE              = 'cloud_settings.json'
 STATE_FILE              = 'state.json'
 
 
@@ -94,6 +96,7 @@ def _save_state():
                 'ramp':      _ramp_active,
                 'lightning': _manually_enabled,
                 'lunar':     _lunar_active and not _lunar_stopped,
+                'clouds':    _cloud_active,
             }, f)
     except Exception:
         pass
@@ -101,8 +104,26 @@ def _save_state():
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+_master_brightness = 100   # UI-side master dimmer, persisted so all clients share it
+
+@app.route('/api/master', methods=['GET', 'POST'])
+async def api_master(request):
+    global _master_brightness
+    if request.method == 'POST':
+        d = request.json or {}
+        if 'value' in d:
+            _master_brightness = max(0, min(200, int(d['value'])))
+    return {'value': _master_brightness}
+
+
 @app.route('/')
 async def index(request):
+    view = (request.args or {}).get('view', '')
+    if view == 'desktop':
+        return send_file('static/index.html', content_type='text/html')
+    ua = (request.headers or {}).get('User-Agent', '')
+    if view == 'mobile' or any(kw in ua for kw in ('Mobile', 'Android', 'iPhone', 'iPad')):
+        return send_file('static/mobile.html', content_type='text/html')
     return send_file('static/index.html', content_type='text/html')
 
 
@@ -110,6 +131,57 @@ async def index(request):
 async def static_files(request, path):
     max_age = 86400 if path.startswith('vendor/') else None
     return send_file('static/' + path, max_age=max_age)
+
+
+# ── Captive portal redirects ──────────────────────────────────────────────────
+# iOS, Android, and Windows each probe different URLs to detect captive portals.
+# Redirect them all to the controller root so the OS shows the portal dialog.
+
+async def _captive_redirect(request):
+    return '', 302, {'Location': 'http://192.168.5.1/'}
+
+for _cp_url in (
+    '/hotspot-detect.html', '/library/test/success.html',  # iOS/macOS
+    '/generate_204', '/gen_204',                            # Android/Chrome
+    '/connecttest.txt', '/ncsi.txt',                        # Windows
+    '/redirect', '/canonical.html',                         # misc
+):
+    app.route(_cp_url)(_captive_redirect)
+
+
+# ── DNS spoofing ──────────────────────────────────────────────────────────────
+
+def _dns_response(data, ip):
+    """Build a minimal DNS A-record response — resolves any name to ip."""
+    resp  = data[:2]                                          # transaction ID
+    resp += b'\x81\x80'                                       # QR=1, RD=1, RA=1
+    resp += data[4:6]                                         # QDCOUNT (echo)
+    resp += data[4:6]                                         # ANCOUNT = QDCOUNT
+    resp += b'\x00\x00\x00\x00'                              # NSCOUNT, ARCOUNT
+    resp += data[12:]                                         # original question
+    resp += b'\xc0\x0c'                                       # name pointer → offset 12
+    resp += b'\x00\x01'                                       # TYPE A
+    resp += b'\x00\x01'                                       # CLASS IN
+    resp += b'\x00\x00\x00\x3c'                              # TTL = 60 s
+    resp += b'\x00\x04'                                       # RDLENGTH = 4
+    resp += bytes(int(x) for x in ip.split('.'))              # RDATA
+    return resp
+
+
+async def _dns_server(ip='192.168.5.1'):
+    """Non-blocking UDP DNS server — spoofs all A queries with the AP IP."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(('0.0.0.0', 53))
+    sock.setblocking(False)
+    while True:
+        try:
+            data, addr = sock.recvfrom(512)
+            if data:
+                sock.sendto(_dns_response(data, ip), addr)
+        except OSError:
+            pass
+        await asyncio.sleep(0.05)
 
 
 @app.route('/api/devices')
@@ -152,7 +224,14 @@ async def api_state(request):
             state = k7.decode_state(raw)
             if not state:
                 return {'error': 'Could not decode device response'}, 500
-            state['schedule'] = [list(e) for e in state['schedule']]
+            # Return _last_schedule unscaled by master so clients can apply
+            # their own master for display — prevents double-scaling when
+            # reading back a schedule that was pushed with master pre-applied.
+            mb = _master_brightness / 100.0 if _master_brightness > 0 else 1.0
+            state['schedule'] = [
+                list(row[:2]) + [min(100, round((v or 0) / mb)) for v in row[2:]]
+                for row in _last_schedule
+            ]
             return state
         except OSError as e:
             return {'error': f'Connection failed — {e}'}, 503
@@ -180,6 +259,18 @@ async def api_push(request):
         except Exception as e:
             return {'error': str(e)}, 500
     await _lunar_apply_now()   # re-apply overlay immediately if lunar is active
+    # If ramp is active but lunar didn't cover it (not active / out of window),
+    # immediately drive the lamp to the new schedule so the change is visible
+    # at once rather than waiting up to 60 s for the next ramp tick.
+    if _ramp_active and not (_lunar_active and _in_lunar_window()):
+        t = time.localtime()
+        channels = _interpolate_channels(_last_schedule, t[3], t[4])
+        async with lock:
+            try:
+                with _lamp() as lamp:
+                    lamp.hand_luminance(channels)
+            except Exception:
+                pass
     return {'ok': True}
 
 
@@ -359,7 +450,12 @@ async def api_lightning_stop(request):
 
 @app.route('/api/lightning/status')
 async def api_lightning_status(request):
-    return {'active': _lightning_active}
+    return {
+        'active':  _lightning_active,
+        'enabled': _ls.get('enabled', False),
+        'start':   _ls.get('start', '20:00'),
+        'end':     _ls.get('end',   '23:00'),
+    }
 
 
 # ── Lightning schedule ────────────────────────────────────────────────────────
@@ -569,7 +665,8 @@ def _in_lunar_window():
 
 def _apply_lunar_overlay(channels):
     """Add lunar brightness contribution to channel list in-place (never dims)."""
-    pct = round(_lm.get('max_intensity', 15) * moon.illumination())
+    raw = _lm.get('max_intensity', 15) * moon.illumination()
+    pct = int(raw) + (1 if raw > int(raw) else 0)  # ceiling so low intensity still fires
     if pct <= 0:
         return
     if cfg['device'] == 'k7mini':
@@ -731,6 +828,191 @@ async def _lunar_scheduler():
             _lunar_active = False
 
 
+# ── Clouds effect ─────────────────────────────────────────────────────────────
+
+_cs = {'density': 30, 'depth': 60, 'colour_shift': True}
+_cloud_active = False
+_cloud_task   = None
+
+
+def _load_cloud_settings():
+    if _file_exists(CLOUD_FILE):
+        try:
+            with open(CLOUD_FILE) as f:
+                _cs.update(json.load(f))
+        except Exception:
+            pass
+
+
+def _save_cloud_settings():
+    try:
+        with open(CLOUD_FILE, 'w') as f:
+            json.dump(_cs, f)
+    except Exception:
+        pass
+
+
+def _apply_cloud(base, dim, colour_shift):
+    """Return a new channel list with cloud dimming applied.
+
+    White is dimmed by (1-dim).  Blue channels are dimmed an extra 25 % at
+    full depth to simulate the warmer colour of overcast light.
+    """
+    factor = 1.0 - dim
+    extra  = 0.25 * dim if colour_shift else 0.0
+    out = list(base)
+    for i in range(len(out)):
+        if i == 0:    # white — least affected
+            out[i] = max(0, round(out[i] * factor))
+        else:         # royal_blue, blue — dims more under clouds
+            out[i] = max(0, round(out[i] * max(0.0, factor - extra)))
+    return out
+
+
+async def _cloud_worker():
+    global _cloud_active
+    while _cloud_active:
+        density = _cs.get('density', 30) / 100.0   # 0–1
+        depth   = _cs.get('depth', 60) / 100.0     # 0–1
+        shift   = _cs.get('colour_shift', True)
+
+        # Gap between cloud events: dense sky → short gaps, clear sky → long gaps
+        gap_base = max(3.0, 120.0 * (1.0 - density) + 5.0 * density)
+        gap_s    = gap_base + random.random() * gap_base
+        elapsed  = 0.0
+        while elapsed < gap_s and _cloud_active:
+            await asyncio.sleep(0.5)
+            elapsed += 0.5
+        if not _cloud_active:
+            break
+
+        # Pick cloud properties
+        dim        = depth * (0.4 + 0.6 * random.random())   # 40–100 % of max depth
+        ramp_in_s  = 3.0 + random.random() * 9.0             # 3–12 s fade in
+        hold_s     = 10.0 + random.random() * 80.0           # 10–90 s overcast
+        ramp_out_s = 3.0 + random.random() * 9.0             # 3–12 s fade out
+
+        # Fade in (darken)
+        steps = max(4, round(ramp_in_s * 2))
+        for step in range(steps + 1):
+            if not _cloud_active:
+                break
+            t  = time.localtime()
+            ch = _apply_cloud(
+                _interpolate_channels(_last_schedule, t[3], t[4]),
+                dim * step / steps, shift)
+            if _lunar_active and _in_lunar_window():
+                _apply_lunar_overlay(ch)
+            async with lock:
+                try:
+                    with _lamp() as lamp:
+                        if _ramp_active:
+                            lamp.hand_luminance(ch)
+                        else:
+                            lamp.preview_brightness(ch)
+                except Exception:
+                    pass
+            await asyncio.sleep(0.5)
+
+        # Hold with subtle flicker
+        elapsed = 0.0
+        while elapsed < hold_s and _cloud_active:
+            t       = time.localtime()
+            flicker = max(0.0, min(1.0, dim + (random.random() - 0.5) * 0.08))
+            ch      = _apply_cloud(
+                _interpolate_channels(_last_schedule, t[3], t[4]),
+                flicker, shift)
+            if _lunar_active and _in_lunar_window():
+                _apply_lunar_overlay(ch)
+            async with lock:
+                try:
+                    with _lamp() as lamp:
+                        if _ramp_active:
+                            lamp.hand_luminance(ch)
+                        else:
+                            lamp.preview_brightness(ch)
+                except Exception:
+                    pass
+            sleep_t = 2.0 + random.random() * 3.0
+            await asyncio.sleep(sleep_t)
+            elapsed += sleep_t
+
+        if not _cloud_active:
+            break
+
+        # Fade out (brighten)
+        steps = max(4, round(ramp_out_s * 2))
+        for step in range(steps + 1):
+            if not _cloud_active:
+                break
+            t  = time.localtime()
+            ch = _apply_cloud(
+                _interpolate_channels(_last_schedule, t[3], t[4]),
+                dim * (1.0 - step / steps), shift)
+            if _lunar_active and _in_lunar_window():
+                _apply_lunar_overlay(ch)
+            async with lock:
+                try:
+                    with _lamp() as lamp:
+                        if _ramp_active:
+                            lamp.hand_luminance(ch)
+                        else:
+                            lamp.preview_brightness(ch)
+                except Exception:
+                    pass
+            await asyncio.sleep(0.5)
+
+    # Restore on exit
+    _cloud_active = False
+    if not _ramp_active:
+        t  = time.localtime()
+        ch = _interpolate_channels(_last_schedule, t[3], t[4])
+        async with lock:
+            try:
+                with _lamp() as lamp:
+                    lamp.preview_brightness(ch)
+                    lamp.set_mode_auto()
+            except Exception:
+                pass
+
+
+@app.route('/api/clouds/status')
+async def api_clouds_status(request):
+    return {
+        'active':        _cloud_active,
+        'density':       _cs.get('density', 30),
+        'depth':         _cs.get('depth', 60),
+        'colour_shift':  _cs.get('colour_shift', True),
+    }
+
+
+@app.route('/api/clouds/start', methods=['POST'])
+async def api_clouds_start(request):
+    global _cloud_active, _cloud_task
+    _cloud_active = True
+    _cloud_task   = asyncio.create_task(_cloud_worker())
+    _save_state()
+    return {'ok': True}
+
+
+@app.route('/api/clouds/stop', methods=['POST'])
+async def api_clouds_stop(request):
+    global _cloud_active
+    _cloud_active = False
+    _save_state()
+    return {'ok': True}
+
+
+@app.route('/api/clouds/settings', methods=['POST'])
+async def api_clouds_settings(request):
+    d = request.json or {}
+    for k in ('density', 'depth', 'colour_shift'):
+        if k in d:
+            _cs[k] = d[k]
+    _save_cloud_settings()
+    return {'ok': True}
+
+
 # ── Startup ───────────────────────────────────────────────────────────────────
 
 async def main(host='0.0.0.0', port=80):
@@ -739,6 +1021,7 @@ async def main(host='0.0.0.0', port=80):
     # Load persisted config so effect restores have correct settings
     _load_lightning_schedule()
     _load_lunar_cfg()
+    _load_cloud_settings()
     # Seed schedule from lamp so restored effects use real brightness values
     try:
         async with lock:
@@ -761,6 +1044,11 @@ async def main(host='0.0.0.0', port=80):
     if saved.get('lunar'):
         await _ensure_lunar_started()
         await _lunar_apply_now()
+    if saved.get('clouds'):
+        global _cloud_active, _cloud_task
+        _cloud_active = True
+        _cloud_task   = asyncio.create_task(_cloud_worker())
     asyncio.create_task(_lightning_scheduler())
     asyncio.create_task(_lunar_scheduler())
+    asyncio.create_task(_dns_server())
     await app.start_server(host=host, port=port, debug=False)

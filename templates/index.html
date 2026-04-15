@@ -129,6 +129,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .fx-pill[data-fx="lightning"].active .fx-btn { color:#e3ad0e; background:rgba(227,173,14,0.12); }
 .fx-pill[data-fx="lunar"].active     { border-color:rgba(99,102,241,0.5); }
 .fx-pill[data-fx="lunar"].active .fx-btn     { color:#818cf8; background:rgba(99,102,241,0.12); }
+.fx-pill[data-fx="clouds"].active   { border-color:rgba(148,163,184,0.5); }
+.fx-pill[data-fx="clouds"].active .fx-btn   { color:#94a3b8; background:rgba(148,163,184,0.12); }
+.cloud-num { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 4px; font-size:0.82rem; width:3.2rem; text-align:center; }
 .fx-flyout { display:none; position:absolute; bottom:calc(100% + 8px); left:0; min-width:215px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 14px; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:200; }
 .fx-flyout.open { display:block; }
 .fx-flyout-title { font-size:0.75rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px; }
@@ -282,6 +285,30 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
       </div>
     </div>
 
+    <!-- Clouds -->
+    <div class="fx-pill" data-fx="clouds" id="cloudsPill">
+      <button class="fx-btn" id="cloudsBtn" onclick="toggleClouds()" title="Simulate passing clouds — random dimming events">☁ Clouds</button>
+      <button class="fx-cfg" id="cloudsCfgBtn" onclick="toggleFlyout('clouds')" title="Cloud settings">⚙</button>
+      <div class="fx-flyout" id="cloudsFlyout">
+        <div class="fx-flyout-title">Clouds</div>
+        <div class="fx-flyout-row">
+          <span style="font-size:0.85rem;color:var(--muted)">Density</span>
+          <input type="number" id="cloudDensity" class="cloud-num" min="1" max="100" value="30" onchange="onCloudsChange()" title="How often clouds pass (%)">
+          <span style="font-size:0.85rem;color:var(--muted)">%</span>
+        </div>
+        <div class="fx-flyout-row">
+          <span style="font-size:0.85rem;color:var(--muted)">Max depth</span>
+          <input type="number" id="cloudDepth" class="cloud-num" min="1" max="100" value="60" onchange="onCloudsChange()" title="Maximum dimming depth (%)">
+          <span style="font-size:0.85rem;color:var(--muted)">%</span>
+        </div>
+        <div class="fx-flyout-row" style="margin-top:4px">
+          <label class="ls-label" title="Dim blue channels more than white to simulate overcast warmth">
+            <input type="checkbox" id="cloudShift" checked onchange="onCloudsChange()"> Colour shift
+          </label>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <div class="bar-sep"></div>
@@ -400,9 +427,10 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   try {
-    const [s, rampStatus] = await Promise.all([
+    const [s, rampStatus, masterData] = await Promise.all([
       api('GET', '/api/state'),
       api('GET', '/api/ramp/status'),
+      api('GET', '/api/master'),
     ]);
     mode = s.mode;
     // Ramp drives the lamp via hardware-manual commands but the controller is
@@ -414,6 +442,16 @@ async function readFromDevice() {
       schedule     = s.schedule;
       scheduleBase = s.schedule.map(row => [...row]);
       resetMaster();
+      // Restore master from server (overrides resetMaster's 100% default)
+      const mv = masterData?.value ?? 100;
+      if (mv !== 100) {
+        masterBrightness = mv;
+        const sl = document.getElementById('masterSlider');
+        if (sl) sl.value = mv;
+        const mval = document.getElementById('masterVal');
+        if (mval) mval.textContent = mv + '%';
+        applyMaster(); syncChannelSliders();
+      }
     }
     if (s.manual) manual = s.manual;
     updateChart();
@@ -857,6 +895,7 @@ function changeShift(delta) {
   updateColorStrip();
 }
 
+let _masterTimer = null;
 function onMasterChange() {
   masterBrightness = parseInt(document.getElementById('masterSlider').value);
   document.getElementById('masterVal').textContent = masterBrightness + '%';
@@ -864,6 +903,23 @@ function onMasterChange() {
   syncChannelSliders();
   updateChart();
   updateColorStrip();
+  clearTimeout(_masterTimer);
+  _masterTimer = setTimeout(_autoPushMaster, 400);
+}
+
+async function _autoPushMaster() {
+  try {
+    const chs = DEVICES[cfg.device].channels;
+    const pushSched = schedule.map(row => {
+      const r = [...row];
+      chs.forEach((ch, ci) => { if (hiddenChannels.has(ch)) r[2 + ci] = 0; });
+      return r;
+    });
+    await Promise.all([
+      api('POST', '/api/master', {value: masterBrightness}),
+      api('POST', '/api/push', {manual, schedule: pushSched, mode}),
+    ]);
+  } catch(_) {}
 }
 
 // ── Smooth ramp ───────────────────────────────────────────────────────────────
@@ -888,6 +944,48 @@ async function pollRampStatus() {
     const s = await api('GET', '/api/ramp/status');
     setRampBtn(s.active, s.last_tick);
   } catch {}
+}
+
+function _setIfUnfocused(id, setter) {
+  const el = document.getElementById(id);
+  if (el && document.activeElement !== el) setter(el);
+}
+
+async function pollEffectStates() {
+  try {
+    const [ramp, light, lunar, master, clouds] = await Promise.all([
+      api('GET', '/api/ramp/status'),
+      api('GET', '/api/lightning/status'),
+      api('GET', '/api/lunar/status'),
+      api('GET', '/api/master'),
+      api('GET', '/api/clouds/status'),
+    ]);
+    const masterSlider = document.getElementById('masterSlider');
+    if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
+      masterBrightness = master.value;
+      masterSlider.value = master.value;
+      document.getElementById('masterVal').textContent = master.value + '%';
+      applyMaster(); syncChannelSliders(); updateChart(); updateColorStrip();
+    }
+    setRampBtn(ramp.active, ramp.last_tick);
+    setLightningBtn(light.active);
+    _setIfUnfocused('lsEnabled', el => { el.checked = !!light.enabled; });
+    _setIfUnfocused('lsStart',   el => { el.value = light.start || '20:00'; });
+    _setIfUnfocused('lsEnd',     el => { el.value = light.end   || '23:00'; });
+    document.getElementById('lsTimeWrap').style.display = light.enabled ? '' : 'none';
+    // Lunar: sync settings but skip updateChart() — that runs in loadLunarStatus (60 s)
+    lunarState = lunar;
+    setLunarBtn(lunar.active);
+    _setIfUnfocused('lmEnabled',      el => { el.checked = !!lunar.enabled; });
+    _setIfUnfocused('lmStart',        el => { el.value = lunar.start || '21:00'; });
+    _setIfUnfocused('lmEnd',          el => { el.value = lunar.end   || '06:00'; });
+    _setIfUnfocused('lmMaxIntensity', el => { el.value = lunar.max_intensity != null ? lunar.max_intensity : 15; });
+    document.getElementById('lmTimeWrap').style.display = lunar.enabled ? '' : 'none';
+    if (lunar.phase_name != null)
+      document.getElementById('lunarPhase').textContent =
+        `${moonEmoji(lunar.phase||0)} ${lunar.phase_name} · ${lunar.illumination}%`;
+    applyCloudsUI(clouds);
+  } catch(_) {}
 }
 
 async function toggleRamp() {
@@ -1001,6 +1099,42 @@ async function onLmChange() {
   document.getElementById('lmTimeWrap').style.display = lm.enabled ? '' : 'none';
   try { await api('POST', '/api/lunar/schedule', lm); } catch(_) {}
   await loadLunarStatus();
+}
+
+// ── Clouds effect ─────────────────────────────────────────────────────────────
+function setCloudsBtn(active) {
+  const pill = document.getElementById('cloudsPill');
+  const btn  = document.getElementById('cloudsBtn');
+  pill.classList.toggle('active', active);
+  btn.title = active ? 'Clouds active — click to stop' : 'Simulate passing clouds — random dimming events';
+}
+
+async function toggleClouds() {
+  const active = document.getElementById('cloudsPill').classList.contains('active');
+  setCloudsBtn(!active);
+  try {
+    await api('POST', active ? '/api/clouds/stop' : '/api/clouds/start');
+  } catch(e) {
+    setCloudsBtn(active);
+    setErr(e.message);
+  }
+}
+
+function applyCloudsUI(d) {
+  setCloudsBtn(d.active);
+  _setIfUnfocused('cloudDensity', el => { el.value = d.density ?? 30; });
+  _setIfUnfocused('cloudDepth',   el => { el.value = d.depth   ?? 60; });
+  _setIfUnfocused('cloudShift',   el => { el.checked = d.colour_shift !== false; });
+}
+
+async function onCloudsChange() {
+  try {
+    await api('POST', '/api/clouds/settings', {
+      density:      parseInt(document.getElementById('cloudDensity').value) || 30,
+      depth:        parseInt(document.getElementById('cloudDepth').value)   || 60,
+      colour_shift: document.getElementById('cloudShift').checked,
+    });
+  } catch(_) {}
 }
 
 // ── Flyout panels ─────────────────────────────────────────────────────────────
@@ -1187,9 +1321,8 @@ async function init() {
   // schedule times were entered in. getTimezoneOffset() is negative for UTC+.
   api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 }).catch(() => {});
   // Restore button states for server-side effects
-  pollRampStatus();
-  setInterval(pollRampStatus, 15000);
-  api('GET', '/api/lightning/status').then(s => setLightningBtn(s.active)).catch(()=>{});
+  pollEffectStates();
+  setInterval(pollEffectStates, 5000);
   loadLightningSchedule();
   loadLunarStatus();
   setInterval(loadLunarStatus, 60000);
