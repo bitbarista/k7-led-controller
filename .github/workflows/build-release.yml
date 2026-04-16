@@ -37,8 +37,7 @@ jobs:
 
     - name: Install tools
       run: |
-        pip install esptool
-        sudo apt-get install -y mtools dosfstools
+        pip install esptool littlefs-python
 
     - name: Resolve version
       id: version
@@ -70,41 +69,50 @@ jobs:
         echo "MICRODOT_SRC=$MICRODOT_SRC" >> $GITHUB_ENV
         echo "microdot files: $(ls $MICRODOT_SRC)"
 
-    - name: Build FAT filesystem image
+    - name: Build LittleFS filesystem image
       run: |
-        # Create 2 MB image (block size 4096, 512 blocks — matches device VFS partition)
-        dd if=/dev/zero bs=4096 count=${{ env.VFS_SIZE_BLOCKS }} of=vfs.bin
-        mkfs.fat -F 12 -S 4096 vfs.bin
+        # MicroPython ESP32-S3 uses LittleFS with 4096-byte blocks
+        python3 - <<'PYEOF'
+        import littlefs, os, shutil
 
-        export MTOOLS_SKIP_CHECK=1
+        BLOCK_SIZE  = 4096
+        BLOCK_COUNT = int("${{ env.VFS_SIZE_BLOCKS }}")
+        MICRODOT    = os.environ["MICRODOT_SRC"]
 
-        # Create directory tree
-        mmd -i vfs.bin ::/lib
-        mmd -i vfs.bin ::/lib/microdot
-        mmd -i vfs.bin ::/static
-        mmd -i vfs.bin ::/static/vendor
+        fs = littlefs.LittleFS(block_size=BLOCK_SIZE, block_count=BLOCK_COUNT)
 
-        # Python application files
-        mcopy -i vfs.bin esp32/main.py    ::/main.py
-        mcopy -i vfs.bin esp32/server.py  ::/server.py
-        mcopy -i vfs.bin esp32/k7mini.py  ::/k7mini.py
-        mcopy -i vfs.bin esp32/presets.py ::/presets.py
-        mcopy -i vfs.bin esp32/moon.py    ::/moon.py
-        mcopy -i vfs.bin esp32/setup.py   ::/setup.py
+        def add(src, dst):
+            parent = dst.rsplit("/", 1)[0]
+            if parent and parent != "/":
+                try: fs.makedirs(parent)
+                except FileExistsError: pass
+            with open(src, "rb") as f_in, fs.open(dst, "wb") as f_out:
+                f_out.write(f_in.read())
+            print(f"  {src} -> {dst}")
 
-        # Microdot web framework
-        mcopy -i vfs.bin "${{ env.MICRODOT_SRC }}/__init__.py" ::/lib/microdot/__init__.py
-        mcopy -i vfs.bin "${{ env.MICRODOT_SRC }}/microdot.py" ::/lib/microdot/microdot.py
+        # Application files
+        add("esp32/main.py",    "/main.py")
+        add("esp32/server.py",  "/server.py")
+        add("esp32/k7mini.py",  "/k7mini.py")
+        add("esp32/presets.py", "/presets.py")
+        add("esp32/moon.py",    "/moon.py")
+        add("esp32/setup.py",   "/setup.py")
 
-        # Web UI — sync from templates/ (same as deploy.sh)
-        mcopy -i vfs.bin templates/index.html                          ::/static/index.html
-        mcopy -i vfs.bin templates/mobile.html                         ::/static/mobile.html
-        mcopy -i vfs.bin static/vendor/bootstrap.min.css               ::/static/vendor/bootstrap.min.css
-        mcopy -i vfs.bin static/vendor/chart.umd.min.js                ::/static/vendor/chart.umd.min.js
-        mcopy -i vfs.bin static/vendor/chartjs-plugin-dragdata.min.js  ::/static/vendor/chartjs-plugin-dragdata.min.js
+        # Microdot
+        add(f"{MICRODOT}/__init__.py", "/lib/microdot/__init__.py")
+        add(f"{MICRODOT}/microdot.py", "/lib/microdot/microdot.py")
 
-        echo "FAT image contents:"
-        mdir -i vfs.bin -/ ::
+        # Web UI
+        add("templates/index.html",                         "/static/index.html")
+        add("templates/mobile.html",                        "/static/mobile.html")
+        add("static/vendor/bootstrap.min.css",              "/static/vendor/bootstrap.min.css")
+        add("static/vendor/chart.umd.min.js",               "/static/vendor/chart.umd.min.js")
+        add("static/vendor/chartjs-plugin-dragdata.min.js", "/static/vendor/chartjs-plugin-dragdata.min.js")
+
+        with open("vfs.bin", "wb") as out:
+            out.write(bytes(fs.context))
+        print(f"LittleFS image: {os.path.getsize('vfs.bin')} bytes ({BLOCK_COUNT} x {BLOCK_SIZE})")
+        PYEOF
 
     - name: Merge into single binary
       run: |
