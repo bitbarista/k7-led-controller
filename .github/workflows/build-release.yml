@@ -110,7 +110,7 @@ jobs:
         add("static/vendor/chartjs-plugin-dragdata.min.js", "/static/vendor/chartjs-plugin-dragdata.min.js")
 
         with open("vfs.bin", "wb") as out:
-            out.write(bytes(fs.context))
+            out.write(fs.context.buffer)
         print(f"LittleFS image: {os.path.getsize('vfs.bin')} bytes ({BLOCK_COUNT} x {BLOCK_SIZE})")
         PYEOF
 
