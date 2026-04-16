@@ -1,6 +1,6 @@
 {
   "name": "K7 LED Controller",
-  "version": "1.0.0",
+  "version": "2.6.2",
   "new_install_prompt_erase": true,
   "funding_url": "https://github.com/bitbarista/k7-led-controller",
   "builds": [
@@ -8,7 +8,7 @@
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "k7controller-v1.0.0.bin",
+          "path": "k7controller-v2.6.2.bin",
           "offset": 0
         }
       ]
