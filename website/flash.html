@@ -222,13 +222,19 @@
       <h3>Seeed XIAO ESP32-S3</h3>
       <p class="sub">8 MB flash · 8 MB PSRAM · MicroPython v1.28.0 included</p>
 
+      <button id="prep-btn" class="flash-btn" style="background:linear-gradient(135deg,#0f766e,#134e4a);margin-bottom:0.75rem" onclick="enterBootloader()">
+        🔧 Prepare Device for Flashing
+      </button>
+      <div id="prep-status" style="font-size:0.78rem;color:#64748b;min-height:1.2em;margin-bottom:0.75rem"></div>
+
       <esp-web-install-button manifest="./releases/latest/manifest.json">
         <button slot="activate" class="flash-btn">📥 Install Firmware</button>
         <span slot="unsupported" class="unsupported">❌ Web Serial not supported. Use Chrome, Edge, or Opera.</span>
         <span slot="not-allowed" class="not-allowed">⚠️ Page must be served over HTTPS to use Web Serial.</span>
       </esp-web-install-button>
 
-      <p class="flash-note">⚠️ Flashing erases the device — saved config and profiles will be lost.</p>
+      <p class="flash-note">⚠️ Flashing erases the device — saved config and profiles will be lost.<br>
+        If flashing fails, click <em>Prepare Device</em> first to enter bootloader mode, then Install.</p>
     </div>
 
     <!-- After flashing steps -->
@@ -304,6 +310,49 @@
       }
     }
     loadVersion();
+
+    const _delay = ms => new Promise(r => setTimeout(r, ms));
+
+    async function enterBootloader() {
+      const btn    = document.getElementById('prep-btn');
+      const status = document.getElementById('prep-status');
+      btn.disabled = true;
+      status.style.color = '#64748b';
+      status.textContent = 'Select the device serial port…';
+
+      let port;
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        const writer = port.writable.getWriter();
+
+        status.textContent = 'Interrupting running code…';
+        // Ctrl-C twice to stop any running script
+        await writer.write(new Uint8Array([0x03]));
+        await _delay(200);
+        await writer.write(new Uint8Array([0x03]));
+        await _delay(300);
+
+        // Send bootloader command at the REPL prompt
+        await writer.write(new TextEncoder().encode('import machine; machine.bootloader()\r\n'));
+        await _delay(500);
+
+        writer.releaseLock();
+        status.style.color = '#16a34a';
+        status.textContent = '✓ Device is in bootloader mode — click Install Firmware now';
+      } catch (e) {
+        status.style.color = '#dc2626';
+        status.textContent = 'Error: ' + (e.message || e);
+        btn.disabled = false;
+      } finally {
+        try {
+          if (port) {
+            try { const r = port.readable?.getReader(); r?.cancel(); r?.releaseLock(); } catch(_) {}
+            await port.close().catch(() => {});
+          }
+        } catch(_) {}
+      }
+    }
   </script>
 
 </body>
