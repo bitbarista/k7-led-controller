@@ -15,10 +15,11 @@ class K7Lamp {
 public:
     explicit K7Lamp(const char* host = LAMP_DEFAULT_IP,
                     uint16_t    port = LAMP_PORT,
-                    uint32_t    timeoutMs = 4000);
+                    uint32_t    timeoutMs = 500);
     ~K7Lamp() { close(); }
 
     bool connect();
+    bool connected() { return _client.connected(); }
     void close();
 
     bool readAll(LampState& out);
@@ -40,4 +41,5 @@ private:
     void   _sendPkt(uint8_t cmdHi, uint8_t cmdLo,
                     const uint8_t* data = nullptr, size_t len = 0);
     size_t _recv(uint8_t* buf, size_t maxLen, bool drain = false);
+    void   _recvAck();   // short-timeout drain for fire-and-forget commands
 };

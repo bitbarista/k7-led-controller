@@ -15,12 +15,6 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  # MicroPython firmware for XIAO ESP32-S3 (SPIRAM_OCT variant) — update when upgrading MicroPython
-  MP_FIRMWARE_URL: https://micropython.org/resources/firmware/ESP32_GENERIC_S3-SPIRAM_OCT-20260406-v1.28.0.bin
-  MICRODOT_VERSION: 2.6.0
-  # FAT filesystem offset and size (from device: Partition address=0x200000, size=0x600000)
-  VFS_OFFSET: 2097152
-  VFS_SIZE_BLOCKS: 1536   # 1536 × 4096 = 6 MB
 
 jobs:
   build:
@@ -36,8 +30,14 @@ jobs:
         python-version: '3.x'
 
     - name: Install tools
-      run: |
-        pip install esptool littlefs-python
+      run: pip install platformio esptool
+
+    - name: Cache PlatformIO
+      uses: actions/cache@v4
+      with:
+        path: ~/.platformio
+        key: pio-${{ hashFiles('arduino/platformio.ini') }}
+        restore-keys: pio-
 
     - name: Resolve version
       id: version
@@ -55,113 +55,87 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
 
-    - name: Download MicroPython firmware
+    - name: Build SuperMini firmware + filesystem
       run: |
-        curl -L "${{ env.MP_FIRMWARE_URL }}" -o micropython.bin
-        echo "MicroPython firmware size: $(wc -c < micropython.bin) bytes"
+        cd arduino
+        pio run -e supermini
+        pio run -e supermini -t buildfs
 
-    - name: Get microdot package files
+    - name: Build XIAO firmware + filesystem
       run: |
-        pip download "microdot==${{ env.MICRODOT_VERSION }}" --no-deps -d ./microdot_dl
-        python3 -m zipfile -e microdot_dl/microdot-*.whl ./microdot_extracted
-        # Locate the package directory (may be nested inside microdot/)
-        MICRODOT_SRC=$(find microdot_extracted -name "microdot.py" -path "*/microdot/*" | head -1 | xargs dirname)
-        echo "MICRODOT_SRC=$MICRODOT_SRC" >> $GITHUB_ENV
-        echo "microdot files: $(ls $MICRODOT_SRC)"
+        cd arduino
+        pio run -e xiao
+        pio run -e xiao -t buildfs
 
-    - name: Build LittleFS filesystem image
-      run: |
-        # MicroPython ESP32-S3 uses LittleFS with 4096-byte blocks
-        python3 - <<'PYEOF'
-        import littlefs, os, shutil
-
-        BLOCK_SIZE  = 4096
-        BLOCK_COUNT = int("${{ env.VFS_SIZE_BLOCKS }}")
-        MICRODOT    = os.environ["MICRODOT_SRC"]
-
-        fs = littlefs.LittleFS(block_size=BLOCK_SIZE, block_count=BLOCK_COUNT)
-
-        def add(src, dst):
-            parent = dst.rsplit("/", 1)[0]
-            if parent and parent != "/":
-                try: fs.makedirs(parent)
-                except FileExistsError: pass
-            with open(src, "rb") as f_in, fs.open(dst, "wb") as f_out:
-                f_out.write(f_in.read())
-            print(f"  {src} -> {dst}")
-
-        # Application files
-        add("esp32/main.py",    "/main.py")
-        add("esp32/server.py",  "/server.py")
-        add("esp32/k7mini.py",  "/k7mini.py")
-        add("esp32/presets.py", "/presets.py")
-        add("esp32/moon.py",    "/moon.py")
-        add("esp32/setup.py",   "/setup.py")
-
-        # Microdot
-        add(f"{MICRODOT}/__init__.py", "/lib/microdot/__init__.py")
-        add(f"{MICRODOT}/microdot.py", "/lib/microdot/microdot.py")
-
-        # Web UI
-        add("templates/index.html",                         "/static/index.html")
-        add("templates/mobile.html",                        "/static/mobile.html")
-        add("static/vendor/bootstrap.min.css",              "/static/vendor/bootstrap.min.css")
-        add("static/vendor/chart.umd.min.js",               "/static/vendor/chart.umd.min.js")
-        add("static/vendor/chartjs-plugin-dragdata.min.js", "/static/vendor/chartjs-plugin-dragdata.min.js")
-
-        with open("vfs.bin", "wb") as out:
-            out.write(fs.context.buffer)
-        print(f"LittleFS image: {os.path.getsize('vfs.bin')} bytes ({BLOCK_COUNT} x {BLOCK_SIZE})")
-        PYEOF
-
-    - name: Merge into single binary
+    - name: Merge SuperMini binary
       run: |
         VERSION=${{ steps.version.outputs.VERSION }}
-        OUT="k7controller-v${VERSION}.bin"
+        BOOT_APP=$(find ~/.platformio -name "boot_app0.bin" | head -1)
+        esptool --chip esp32s3 merge_bin \
+          --flash_mode qio --flash_freq 80m --flash_size 4MB \
+          -o k7controller-supermini-v${VERSION}.bin \
+          0x0      arduino/.pio/build/supermini/bootloader.bin \
+          0x8000   arduino/.pio/build/supermini/partitions.bin \
+          0xe000   $BOOT_APP \
+          0x10000  arduino/.pio/build/supermini/firmware.bin \
+          0x300000 arduino/.pio/build/supermini/littlefs.bin
+        echo "SuperMini binary: $(wc -c < k7controller-supermini-v${VERSION}.bin) bytes"
 
-        esptool.py --chip esp32s3 merge_bin \
-          --flash_mode qio \
-          --flash_freq 80m \
-          --flash_size 8MB \
-          -o "$OUT" \
-          0x0 micropython.bin \
-          ${{ env.VFS_OFFSET }} vfs.bin
-
-        echo "Merged binary: $OUT  ($(wc -c < $OUT) bytes)"
-        echo "BIN_NAME=$OUT" >> $GITHUB_ENV
-
-    - name: Generate manifest
+    - name: Merge XIAO binary
       run: |
         VERSION=${{ steps.version.outputs.VERSION }}
-        cat > manifest.json << EOF
+        BOOT_APP=$(find ~/.platformio -name "boot_app0.bin" | head -1)
+        esptool --chip esp32s3 merge_bin \
+          --flash_mode qio --flash_freq 80m --flash_size 8MB \
+          -o k7controller-xiao-v${VERSION}.bin \
+          0x0      arduino/.pio/build/xiao/bootloader.bin \
+          0x8000   arduino/.pio/build/xiao/partitions.bin \
+          0xe000   $BOOT_APP \
+          0x10000  arduino/.pio/build/xiao/firmware.bin \
+          0x300000 arduino/.pio/build/xiao/littlefs.bin
+        echo "XIAO binary: $(wc -c < k7controller-xiao-v${VERSION}.bin) bytes"
+
+    - name: Generate manifests
+      run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
+        cat > manifest-supermini.json << EOF
         {
-          "name": "K7 LED Controller",
+          "name": "K7 LED Controller (SuperMini)",
           "version": "${VERSION}",
           "new_install_prompt_erase": true,
           "funding_url": "https://github.com/bitbarista/k7-led-controller",
           "builds": [
             {
               "chipFamily": "ESP32-S3",
-              "parts": [
-                {
-                  "path": "k7controller-v${VERSION}.bin",
-                  "offset": 0
-                }
-              ]
+              "parts": [{ "path": "k7controller-supermini-v${VERSION}.bin", "offset": 0 }]
             }
           ]
         }
         EOF
-        echo "Manifest:"
-        cat manifest.json
+        cat > manifest-xiao.json << EOF
+        {
+          "name": "K7 LED Controller (XIAO)",
+          "version": "${VERSION}",
+          "new_install_prompt_erase": true,
+          "funding_url": "https://github.com/bitbarista/k7-led-controller",
+          "builds": [
+            {
+              "chipFamily": "ESP32-S3",
+              "parts": [{ "path": "k7controller-xiao-v${VERSION}.bin", "offset": 0 }]
+            }
+          ]
+        }
+        EOF
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: k7controller-v${{ steps.version.outputs.VERSION }}
         path: |
-          ${{ env.BIN_NAME }}
-          manifest.json
+          k7controller-supermini-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-xiao-v${{ steps.version.outputs.VERSION }}.bin
+          manifest-supermini.json
+          manifest-xiao.json
         retention-days: 90
 
   publish:
@@ -200,54 +174,62 @@ jobs:
           ### Installation
 
           **Easiest — browser-based flash (Chrome/Edge/Opera):**
-          Visit the [flash page](https://bitbarista.github.io/k7-led-controller/flash.html), connect your XIAO ESP32-S3 via USB, and click Install.
+          Visit the [flash page](https://bitbarista.github.io/k7-led-controller/flash.html), connect your board via USB, and click Install.
 
           **Manual — esptool:**
           ```
-          esptool.py --chip esp32s3 write_flash 0x0 k7controller-v${{ steps.version.outputs.VERSION }}.bin
-          ```
+          # ESP32-S3 SuperMini (4 MB flash)
+          esptool --chip esp32s3 write_flash 0x0 k7controller-supermini-v${{ steps.version.outputs.VERSION }}.bin
 
-          ### What's included
-          - MicroPython v1.28.0 firmware (ESP32-S3 SPIRAM_OCT)
-          - K7 controller application (main.py, server.py, k7mini.py, presets.py, moon.py, setup.py)
-          - Microdot web framework v${{ env.MICRODOT_VERSION }}
-          - Web UI (desktop + mobile) with vendor assets (Bootstrap, Chart.js)
+          # Seeed XIAO ESP32-S3 (8 MB flash)
+          esptool --chip esp32s3 write_flash 0x0 k7controller-xiao-v${{ steps.version.outputs.VERSION }}.bin
+          ```
 
           ### After flashing
           1. Connect to **K7-Setup** WiFi (open network)
           2. Browse to **http://192.168.5.1**
-          3. The device will scan for your K7 lamp — select it and save
+          3. Select your lamp and save
           4. Reconnect to **K7-Controller** WiFi (password: `12345678`)
           5. Browse to **http://192.168.5.1**
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Update website with latest binary and manifest
+    - name: Update website with latest binaries and manifests
       run: |
         VERSION=${{ steps.version.outputs.VERSION }}
 
-        # Remove stale binary from previous release
+        # Remove stale binaries
         rm -f website/releases/latest/k7controller-*.bin
 
-        # Copy new binary and manifest
-        cp "artifacts/k7controller-v${VERSION}.bin" "website/releases/latest/k7controller-v${VERSION}.bin"
+        # Copy new binaries and manifests
+        cp "artifacts/k7controller-supermini-v${VERSION}.bin" "website/releases/latest/k7controller-supermini-v${VERSION}.bin"
+        cp "artifacts/k7controller-xiao-v${VERSION}.bin"      "website/releases/latest/k7controller-xiao-v${VERSION}.bin"
 
-        # Write manifest with relative path (same-origin = no CORS issues)
-        cat > website/releases/latest/manifest.json << EOF
+        cat > website/releases/latest/manifest-supermini.json << EOF
         {
-          "name": "K7 LED Controller",
+          "name": "K7 LED Controller (SuperMini)",
           "version": "${VERSION}",
           "new_install_prompt_erase": true,
           "funding_url": "https://github.com/bitbarista/k7-led-controller",
           "builds": [
             {
               "chipFamily": "ESP32-S3",
-              "parts": [
-                {
-                  "path": "k7controller-v${VERSION}.bin",
-                  "offset": 0
-                }
-              ]
+              "parts": [{ "path": "k7controller-supermini-v${VERSION}.bin", "offset": 0 }]
+            }
+          ]
+        }
+        EOF
+
+        cat > website/releases/latest/manifest-xiao.json << EOF
+        {
+          "name": "K7 LED Controller (XIAO)",
+          "version": "${VERSION}",
+          "new_install_prompt_erase": true,
+          "funding_url": "https://github.com/bitbarista/k7-led-controller",
+          "builds": [
+            {
+              "chipFamily": "ESP32-S3",
+              "parts": [{ "path": "k7controller-xiao-v${VERSION}.bin", "offset": 0 }]
             }
           ]
         }
@@ -258,5 +240,5 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add website/releases/latest/
-        git commit -m "Update flash binary and manifest for v${{ steps.version.outputs.VERSION }}"
+        git commit -m "Update flash binaries and manifests for v${{ steps.version.outputs.VERSION }}"
         git push origin master

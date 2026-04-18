@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include <atomic>
 #include "Config.h"
 #include "K7Lamp.h"
 
@@ -12,17 +13,23 @@ extern char              gDevice[16];          // "k7mini" or "k7pro"
 extern int               gMasterBrightness;   // 0-200
 extern uint8_t           gLastSchedule[K7_SLOTS][8];
 extern uint8_t           gLastManual[K7_CHANNELS];
+extern char              gLampName[12];        // cached from boot read
+extern bool              gLampAutoMode;        // cached, updated on push
+extern char              gActivePreset[64];    // e.g. "preset:mixed" or "profile:My Tank"
 
 // ── Effect active flags ───────────────────────────────────────────────────────
-extern volatile bool gRampActive;
-extern volatile bool gLightningActive;
-extern volatile bool gLunarActive;
-extern volatile bool gCloudActive;
+// std::atomic<bool> ensures writes on core 1 (loop/web) are immediately
+// visible to tasks pinned to core 0 (lamp/effect tasks).  The Xtensa
+// architecture requires explicit memory barriers that volatile cannot provide.
+extern std::atomic<bool> gRampActive;
+extern std::atomic<bool> gLightningActive;
+extern std::atomic<bool> gLunarActive;
+extern std::atomic<bool> gCloudActive;
 
 // lightning: separate "user intent" vs scheduled
-extern volatile bool gLightningUserEnabled;
-extern volatile bool gLightningUserStopped;
-extern volatile bool gLunarStopped;
+extern std::atomic<bool> gLightningUserEnabled;
+extern std::atomic<bool> gLightningUserStopped;
+extern std::atomic<bool> gLunarStopped;
 
 // ── Schedule config (persisted in JSON files) ─────────────────────────────────
 struct LightningSchedule {
@@ -58,8 +65,27 @@ void applyLunarOverlay(uint8_t ch[K7_CHANNELS]);
 void applyMasterBrightness(uint8_t ch[K7_CHANNELS]);
 
 // Make one K7 TCP connection, run fn(lamp), close.
-// Returns false if lamp not reachable.
+// Must only be called from FreeRTOS tasks, NOT from HTTP handlers.
 bool withLamp(const std::function<void(K7Lamp&)>& fn);
+
+// ── Async lamp worker ─────────────────────────────────────────────────────────
+// All lamp TCP is handled by a background task so HTTP handlers never block.
+
+// Queue a full schedule push (non-blocking, latest wins).
+struct PushJob {
+    uint8_t manual[K7_CHANNELS];
+    uint8_t sched[K7_SLOTS][8];
+    bool    autoMode;
+};
+void queuePush(const uint8_t manual[K7_CHANNELS],
+               const uint8_t sched[K7_SLOTS][8],
+               bool autoMode);
+
+// Queue a manual-preview update (non-blocking, latest wins).
+void queuePreview(const uint8_t ch[K7_CHANNELS]);
+
+// Start the combined lamp worker task (call once at startup).
+void startLampWorker();
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 void loadEffectConfigs();
@@ -70,6 +96,8 @@ void saveEffectState();
 void loadEffectState();
 
 // ── Effect control ────────────────────────────────────────────────────────────
+// All start/stop functions are non-blocking — they set flags only.
+// Mode switching (manual/auto) is managed by each effect task internally.
 void startRamp();
 void stopRamp();
 

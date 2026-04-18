@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <DNSServer.h>
-#include <ESPAsyncWebServer.h>
+#include <WebServer.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <vector>
@@ -12,8 +12,9 @@ struct FoundLamp { String ssid; const char* device; };
 
 static std::vector<FoundLamp> scanLamps() {
     std::vector<FoundLamp> found;
-    WiFi.mode(WIFI_AP_STA);
+    // WiFi must already be in AP_STA mode — do not switch modes here
     int n = WiFi.scanNetworks(false, true);
+    if (n < 0) n = 0;
     for (int i = 0; i < n; i++) {
         String ssid = WiFi.SSID(i);
         if (ssid.startsWith("K7mini"))
@@ -102,38 +103,18 @@ static bool saveConfig(const String& lampSsid, const String& device) {
     return true;
 }
 
-static String parseParam(const String& body, const String& key) {
-    int idx = body.indexOf(key + "=");
-    if (idx < 0) return "";
-    int start = idx + key.length() + 1;
-    int end   = body.indexOf('&', start);
-    String val = (end < 0) ? body.substring(start) : body.substring(start, end);
-    val.replace("+", " ");
-    // URL decode %XX
-    String decoded;
-    for (int i = 0; i < (int)val.length(); i++) {
-        if (val[i] == '%' && i + 2 < (int)val.length()) {
-            char hex[3] = {val[i+1], val[i+2], 0};
-            decoded += (char)strtol(hex, nullptr, 16);
-            i += 2;
-        } else {
-            decoded += val[i];
-        }
-    }
-    return decoded;
-}
 
 void runSetupPortal() {
     Serial.println("Starting setup portal");
 
-    // AP only for scan, then AP+STA for operation
-    WiFi.mode(WIFI_AP);
+    // Use AP_STA mode throughout — never switch modes after this point
+    WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(AP_SSID_SETUP);
     WiFi.softAPConfig(
         IPAddress(192, 168, 5, 1),
         IPAddress(192, 168, 5, 1),
         IPAddress(255, 255, 255, 0));
-    delay(500);
+    delay(1000);   // allow AP + TCP stack to stabilise before scan
 
     Serial.println("Scanning for lamps...");
     std::vector<FoundLamp> lamps = scanLamps();
@@ -143,11 +124,12 @@ void runSetupPortal() {
     DNSServer dns;
     dns.start(53, "*", IPAddress(192, 168, 5, 1));
 
-    AsyncWebServer server(80);
+    WebServer server(80);
 
     // Captive portal probes → redirect
-    auto redirect = [](AsyncWebServerRequest* req) {
-        req->redirect("http://192.168.5.1/");
+    auto redirect = [&server]() {
+        server.sendHeader("Location", "http://192.168.5.1/");
+        server.send(302, "text/plain", "");
     };
     for (auto path : {"/hotspot-detect.html", "/library/test/success.html",
                       "/generate_204", "/gen_204",
@@ -156,61 +138,42 @@ void runSetupPortal() {
         server.on(path, HTTP_GET, redirect);
     }
 
-    server.on("/", HTTP_GET, [&lamps](AsyncWebServerRequest* req) {
-        req->send(200, "text/html", buildHtml(lamps));
+    server.on("/", HTTP_GET, [&server, &lamps]() {
+        server.send(200, "text/html", buildHtml(lamps));
     });
 
-    server.on("/scan", HTTP_POST, [&lamps](AsyncWebServerRequest* req) {
+    server.on("/scan", HTTP_POST, [&server, &lamps]() {
         lamps = scanLamps();
-        req->send(200, "text/html", buildHtml(lamps));
+        server.send(200, "text/html", buildHtml(lamps));
     });
 
-    // Body accumulation for POST /save
-    server.on("/save", HTTP_POST,
-        [](AsyncWebServerRequest* req) {},
-        nullptr,
-        [](AsyncWebServerRequest* req, uint8_t* data, size_t len,
-           size_t index, size_t total) {
-            // Accumulate body in _tempObject
-            if (index == 0) {
-                req->_tempObject = new String();
-            }
-            auto* body = (String*)req->_tempObject;
-            body->concat((char*)data, len);
+    server.on("/save", HTTP_POST, [&server]() {
+        String lampSsid = server.hasArg("lamp_ssid") ? server.arg("lamp_ssid") : "";
+        String device   = server.hasArg("device")    ? server.arg("device")    : "";
+        String lampSel  = server.hasArg("lamp_sel")  ? server.arg("lamp_sel")  : "";
 
-            if (index + len == total) {
-                String lampSsid = parseParam(*body, "lamp_ssid");
-                String device   = parseParam(*body, "device");
-                String lampSel  = parseParam(*body, "lamp_sel");
-
-                if (lampSsid.isEmpty() && !lampSel.isEmpty()) {
-                    int pipe = lampSel.indexOf('|');
-                    if (pipe >= 0) {
-                        lampSsid = lampSel.substring(0, pipe);
-                        device   = lampSel.substring(pipe + 1);
-                    }
-                }
-                if (device.isEmpty()) {
-                    device = lampSsid.startsWith("K7_Pro") ? "k7pro" : "k7mini";
-                }
-
-                delete body;
-                req->_tempObject = nullptr;
-
-                if (lampSsid.isEmpty()) {
-                    req->send(400, "text/html", "<p>No lamp selected.</p>");
-                    return;
-                }
-                saveConfig(lampSsid, device);
-                req->send(200, "text/html", savedHtml());
-                delay(3000);
-                ESP.restart();
+        if (lampSsid.isEmpty() && !lampSel.isEmpty()) {
+            int pipe = lampSel.indexOf('|');
+            if (pipe >= 0) {
+                lampSsid = lampSel.substring(0, pipe);
+                device   = lampSel.substring(pipe + 1);
             }
         }
-    );
+        if (device.isEmpty())
+            device = lampSsid.startsWith("K7_Pro") ? "k7pro" : "k7mini";
 
-    server.onNotFound([&lamps](AsyncWebServerRequest* req) {
-        req->send(200, "text/html", buildHtml(lamps));
+        if (lampSsid.isEmpty()) {
+            server.send(400, "text/html", "<p>No lamp selected.</p>");
+            return;
+        }
+        saveConfig(lampSsid, device);
+        server.send(200, "text/html", savedHtml());
+        delay(3000);
+        ESP.restart();
+    });
+
+    server.onNotFound([&server, &lamps]() {
+        server.send(200, "text/html", buildHtml(lamps));
     });
 
     server.begin();
@@ -218,6 +181,7 @@ void runSetupPortal() {
 
     for (;;) {
         dns.processNextRequest();
-        delay(10);
+        server.handleClient();
+        delay(2);
     }
 }

@@ -19,13 +19,22 @@ K7Lamp::K7Lamp(const char* host, uint16_t port, uint32_t timeoutMs)
 
 // ── connect / close ───────────────────────────────────────────────────────────
 bool K7Lamp::connect() {
-    _client.setTimeout(_timeoutMs / 1000);
-    if (!_client.connect(_host, _port)) return false;
+    uint32_t t0 = millis();
+    if (!_client.connect(_host, _port, (int32_t)_timeoutMs)) {
+        Serial.printf("[K7] TCP connect FAILED (%lu ms)\n", millis() - t0);
+        return false;
+    }
+    Serial.printf("[K7] TCP connected in %lu ms\n", millis() - t0);
 
-    // Drain any greeting the lamp sends on connect
-    _client.setTimeout(1);
+    // Drain any greeting the lamp sends on connect.
+    // Confirmed: K7 lamp sends 0 greeting bytes.  Cap at 10 ms so we don't
+    // waste time on the drain; real timeout stays in saved below.
+    uint32_t saved = _timeoutMs;
+    _timeoutMs = 10;
     uint8_t buf[64];
-    _recv(buf, sizeof(buf), false);
+    size_t greet = _recv(buf, sizeof(buf), false);
+    Serial.printf("[K7] greeting drain: %u bytes in %lu ms\n", (unsigned)greet, millis() - t0);
+    _timeoutMs = saved;
     _client.setTimeout(_timeoutMs / 1000);
     return true;
 }
@@ -112,30 +121,44 @@ bool K7Lamp::readAll(LampState& out) {
     return true;
 }
 
+// ── Short-timeout ACK drain ───────────────────────────────────────────────────
+// Control commands (hand, mode, preview, sync) may or may not send a response.
+// We wait at most 150 ms so a non-responding lamp doesn't stall the caller.
+void K7Lamp::_recvAck() {
+    uint32_t saved = _timeoutMs;
+    _timeoutMs = 150;
+    uint8_t buf[32];
+    _recv(buf, sizeof(buf), false);
+    _timeoutMs = saved;
+}
+
 // ── Lamp control commands ─────────────────────────────────────────────────────
 bool K7Lamp::handLuminance(const uint8_t ch[K7_CHANNELS]) {
     _sendPkt(CMD_HAND_LUMINANCE[0], CMD_HAND_LUMINANCE[1], ch, K7_CHANNELS);
-    uint8_t buf[32]; _recv(buf, sizeof(buf), false);
+    _recvAck();
     return true;
 }
 
 bool K7Lamp::previewBrightness(const uint8_t ch[K7_CHANNELS]) {
     _sendPkt(CMD_PREVIEW_LUMINANCE[0], CMD_PREVIEW_LUMINANCE[1], ch, K7_CHANNELS);
-    uint8_t buf[32]; _recv(buf, sizeof(buf), false);
+    // Fire-and-forget: no ack wait.  The connection closes right after this
+    // call so any unread response bytes are discarded harmlessly.  Skipping
+    // the 150 ms ack window makes each preview operation ~20-60 ms total
+    // instead of ~170-210 ms, keeping the mutex free for ramp / effects.
     return true;
 }
 
 bool K7Lamp::setModeAuto() {
     uint8_t d = 0x01;
     _sendPkt(CMD_CHANGE_MODE[0], CMD_CHANGE_MODE[1], &d, 1);
-    uint8_t buf[32]; _recv(buf, sizeof(buf), false);
+    _recvAck();
     return true;
 }
 
 bool K7Lamp::setModeManual() {
     uint8_t d = 0x00;
     _sendPkt(CMD_CHANGE_MODE[0], CMD_CHANGE_MODE[1], &d, 1);
-    uint8_t buf[32]; _recv(buf, sizeof(buf), false);
+    _recvAck();
     return true;
 }
 
@@ -144,7 +167,7 @@ bool K7Lamp::syncTime() {
     struct tm* t   = gmtime(&now);
     uint8_t    d[3] = {(uint8_t)t->tm_hour, (uint8_t)t->tm_min, (uint8_t)t->tm_sec};
     _sendPkt(CMD_SYNC_TIME[0], CMD_SYNC_TIME[1], d, 3);
-    uint8_t buf[32]; _recv(buf, sizeof(buf), false);
+    _recvAck();
     return true;
 }
 
@@ -168,6 +191,6 @@ bool K7Lamp::pushSchedule(const uint8_t manual[K7_CHANNELS],
     data[pos++] = (uint8_t)t->tm_sec;
 
     _sendPkt(CMD_ALL_SET[0], CMD_ALL_SET[1], data, pos);
-    uint8_t buf[32]; _recv(buf, sizeof(buf), false);
+    _recvAck();
     return true;
 }
