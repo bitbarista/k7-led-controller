@@ -6,6 +6,7 @@ __pycache__/
 !.github/**/*.yml
 .env
 profiles.json
+lightning_schedule.json
 
 # PC development server (kept locally for reference, not part of this project)
 server.py
