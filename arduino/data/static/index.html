@@ -277,12 +277,11 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
           <input type="time" id="lmEnd" class="time-input" onchange="onLmChange()" title="Lunar window end (can be next day)">
         </div>
         <div class="fx-flyout-row" style="margin-top:8px">
-          <span style="font-size:0.85rem;color:var(--muted)" title="Blue channel % at full moon — scales down as the moon wanes to new">Blue at full moon</span>
+          <span style="font-size:0.85rem;color:var(--muted)">Max blue brightness</span>
           <input type="number" id="lmMaxIntensity" class="lm-intensity" min="1" max="100" value="15" onchange="onLmChange()">
           <span style="font-size:0.85rem;color:var(--muted)">%</span>
         </div>
-        <div class="fx-phase" id="lunarPhase"></div>
-        <div id="lunarTonight" style="font-size:0.78rem;color:var(--muted);margin-top:4px"></div>
+        <div id="lunarTonight" style="font-size:0.78rem;color:var(--muted);margin-top:6px"></div>
       </div>
     </div>
 
@@ -992,11 +991,9 @@ async function pollEffectStates() {
     _setIfUnfocused('lmMaxIntensity', el => { el.value = lunar.max_intensity != null ? lunar.max_intensity : 15; });
     document.getElementById('lmTimeWrap').style.display = lunar.enabled ? '' : 'none';
     if (lunar.phase_name != null) {
-      document.getElementById('lunarPhase').textContent =
-        `${moonEmoji(lunar.phase||0)} ${lunar.phase_name} · ${lunar.illumination}% illuminated`;
       const tonight = Math.round((lunar.max_intensity || 15) * (lunar.illumination || 0) / 100);
       document.getElementById('lunarTonight').textContent =
-        `Tonight's blue channel: ${tonight}%`;
+        `${moonEmoji(lunar.phase||0)} ${lunar.phase_name} — blue tonight: ${tonight}%`;
     }
     applyCloudsUI(clouds);
   } catch(_) {}
@@ -1081,12 +1078,9 @@ function applyLunarUI(d) {
   _setIfUnfocused('lmMaxIntensity', el => { el.value = d.max_intensity != null ? d.max_intensity : 15; });
   document.getElementById('lmTimeWrap').style.display       = d.enabled ? '' : 'none';
   if (d.phase_name != null) {
-    const emoji = moonEmoji(d.phase || 0);
-    document.getElementById('lunarPhase').textContent =
-      `${emoji} ${d.phase_name} · ${d.illumination}% illuminated`;
     const tonight = Math.round((d.max_intensity || 15) * (d.illumination || 0) / 100);
     document.getElementById('lunarTonight').textContent =
-      `Tonight's blue channel: ${tonight}%`;
+      `${moonEmoji(d.phase||0)} ${d.phase_name} — blue tonight: ${tonight}%`;
   }
   if (chart) updateChart();
 }
