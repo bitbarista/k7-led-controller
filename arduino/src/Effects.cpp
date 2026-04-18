@@ -363,11 +363,10 @@ static void doLightningEvent() {
         applyLunarOverlay(ambient);
     applyMasterBrightness(ambient);
 
+    static const uint8_t FLASH_MINI[K7_CHANNELS] = {100, 60, 60, 0,   0,   0};
+    static const uint8_t FLASH_PRO [K7_CHANNELS] = { 40, 60, 60, 100, 100, 0};
     uint8_t flash[K7_CHANNELS];
-    if (strcmp(gDevice, "k7mini") == 0)
-        memcpy(flash, (uint8_t[]){100, 60, 60, 0, 0, 0}, K7_CHANNELS);
-    else
-        memcpy(flash, (uint8_t[]){40, 60, 60, 100, 100, 0}, K7_CHANNELS);
+    memcpy(flash, (strcmp(gDevice, "k7mini") == 0) ? FLASH_MINI : FLASH_PRO, K7_CHANNELS);
 
     bool burst      = (esp_random() % 5 == 0);
     int  numStrikes = burst ? (3 + esp_random() % 4) : 1;
