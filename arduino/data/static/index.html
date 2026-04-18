@@ -474,13 +474,13 @@ async function pushSchedule() {
   document.getElementById('pushBtn').disabled = true;
   try {
     const chs = DEVICES[cfg.device].channels;
-    // Zero out hidden channels so device matches the graph
-    const pushSched = schedule.map(row => {
+    // Send the unscaled base schedule; server applies MB when pushing to lamp
+    const pushBase = scheduleBase.map(row => {
       const r = [...row];
       chs.forEach((ch, ci) => { if (hiddenChannels.has(ch)) r[2 + ci] = 0; });
       return r;
     });
-    await api('POST','/api/push', { manual, schedule: pushSched, mode, active_preset: activePresetKey });
+    await api('POST','/api/push', { manual, schedule: pushBase, mode, active_preset: activePresetKey });
     setOk('Pushed successfully');
   } catch(e) {
     setErr(e.message);
@@ -493,7 +493,7 @@ async function pushSchedule() {
 async function saveManual() {
   setBusy('Saving…');
   try {
-    await api('POST','/api/push', { manual, schedule, mode:'manual' });
+    await api('POST','/api/push', { manual, schedule: scheduleBase, mode:'manual' });
     mode = 'manual';
     applyModeUI();
     setOk('Manual mode saved');
@@ -919,14 +919,14 @@ function onMasterChange() {
 async function _autoPushMaster() {
   try {
     const chs = DEVICES[cfg.device].channels;
-    const pushSched = schedule.map(row => {
+    const pushBase = scheduleBase.map(row => {
       const r = [...row];
       chs.forEach((ch, ci) => { if (hiddenChannels.has(ch)) r[2 + ci] = 0; });
       return r;
     });
     await Promise.all([
       api('POST', '/api/master', {value: masterBrightness}),
-      api('POST', '/api/push', {manual, schedule: pushSched, mode}),
+      api('POST', '/api/push', {manual, schedule: pushBase, mode}),
     ]);
   } catch(_) {}
 }

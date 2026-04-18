@@ -511,14 +511,10 @@ async function _autoPushMaster() {
   try {
     const man = Array(6).fill(0);
     chs().forEach((_,i) => { man[i] = manual[i]||0; });
-    const sched = schedule.map(row => {
-      const r = [...row];
-      for(let i=0;i<6;i++) r[2+i] = Math.min(100, Math.round((r[2+i]||0)*masterBrightness/100));
-      return r;
-    });
+    // Send unscaled schedule; server applies MB when pushing to lamp
     await Promise.all([
       api('POST', '/api/master', {value: masterBrightness}),
-      api('POST', '/api/push', {manual: man, schedule: sched, mode}),
+      api('POST', '/api/push', {manual: man, schedule: schedule.map(r => [...r]), mode}),
     ]);
   } catch(_) {}
 }
@@ -679,12 +675,8 @@ async function pushSchedule() {
   try {
     const man = Array(6).fill(0);
     chs().forEach((_,i) => { man[i] = manual[i]||0; });
-    const sched = schedule.map(row => {
-      const r = [...row];
-      for(let i=0;i<6;i++) r[2+i] = Math.min(100, Math.round((r[2+i]||0)*masterBrightness/100));
-      return r;
-    });
-    await api('POST', '/api/push', {manual: man, schedule: sched, mode, active_preset: activePresetKey});
+    // Send unscaled schedule; server applies MB when pushing to lamp
+    await api('POST', '/api/push', {manual: man, schedule: schedule.map(r => [...r]), mode, active_preset: activePresetKey});
     setOk('Pushed ✓');
   } catch(e) {
     setErr(e.message);

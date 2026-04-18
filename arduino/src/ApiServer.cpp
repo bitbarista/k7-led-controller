@@ -78,6 +78,26 @@ void setupApiServer(WebServer& server) {
         deserializeJson(doc, server.arg("plain"));
         if (doc["value"].is<int>())
             gMasterBrightness = max(0, min(200, doc["value"].as<int>()));
+        // Re-push lamp immediately so MB changes take effect without a separate push.
+        // This also eliminates any race with a simultaneous /api/push: whichever
+        // handler runs second will overwrite the first push in the queue, and the
+        // lamp worker always processes the latest queued job.
+        float   mb = gMasterBrightness / 100.0f;
+        uint8_t scaledManual[K7_CHANNELS];
+        uint8_t scaledSched[K7_SLOTS][8];
+        for (int i = 0; i < K7_CHANNELS; i++) {
+            int v = (int)roundf(gLastManual[i] * mb);
+            scaledManual[i] = (uint8_t)(v > 100 ? 100 : v);
+        }
+        for (int h = 0; h < K7_SLOTS; h++) {
+            scaledSched[h][0] = gLastSchedule[h][0];
+            scaledSched[h][1] = gLastSchedule[h][1];
+            for (int c = 0; c < K7_CHANNELS; c++) {
+                int v = (int)roundf(gLastSchedule[h][2 + c] * mb);
+                scaledSched[h][2 + c] = (uint8_t)(v > 100 ? 100 : v);
+            }
+        }
+        queuePush(scaledManual, scaledSched, gLampAutoMode);
         JsonDocument resp;
         resp["value"] = gMasterBrightness;
         sendJson(server, resp);
@@ -132,16 +152,13 @@ void setupApiServer(WebServer& server) {
         doc["name"]          = gLampName;
         doc["mode"]          = gLampAutoMode ? "auto" : "manual";
         doc["active_preset"] = gActivePreset;
-        float mb = gMasterBrightness > 0 ? gMasterBrightness / 100.0f : 1.0f;
         auto schedArr = doc["schedule"].to<JsonArray>();
         for (int h = 0; h < K7_SLOTS; h++) {
             auto row = schedArr.add<JsonArray>();
             row.add(gLastSchedule[h][0]);
             row.add(gLastSchedule[h][1]);
-            for (int c = 0; c < K7_CHANNELS; c++) {
-                int v = (int)roundf(gLastSchedule[h][2+c] / mb);
-                row.add(min(100, v));
-            }
+            for (int c = 0; c < K7_CHANNELS; c++)
+                row.add(gLastSchedule[h][2+c]);
         }
         auto manArr = doc["manual"].to<JsonArray>();
         for (int i = 0; i < K7_CHANNELS; i++) manArr.add(gLastManual[i]);
@@ -149,15 +166,20 @@ void setupApiServer(WebServer& server) {
     });
 
     // ── /api/push ─────────────────────────────────────────────────────────────
+    // The client sends the UNSCALED (base) schedule and raw manual values.
+    // MB scaling is applied here so gLastSchedule never holds MB-tainted values.
+    // This prevents data corruption at MB=0% and ensures rampTask always reads
+    // the correct base regardless of how many times MB has been changed.
     server.on("/api/push", HTTP_POST, [&server]() {
         JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain")) != DeserializationError::Ok) {
             sendError(server, "Bad JSON", 400); return;
         }
+
         uint8_t manual[K7_CHANNELS] = {};
         JsonArray manArr = doc["manual"];
         for (int i = 0; i < K7_CHANNELS && i < (int)manArr.size(); i++)
-            manual[i] = (uint8_t)manArr[i].as<int>();
+            manual[i] = (uint8_t)min(100, manArr[i].as<int>());
 
         uint8_t sched[K7_SLOTS][8] = {};
         JsonArray schedArr = doc["schedule"];
@@ -168,25 +190,9 @@ void setupApiServer(WebServer& server) {
         }
 
         String modeStr    = doc["mode"] | "auto";
-        bool userAutoMode = (modeStr != "manual");   // user's intent
-        bool autoMode     = userAutoMode && !gRampActive; // what lamp gets
+        bool userAutoMode = (modeStr != "manual");
 
-        uint8_t scaledManual[K7_CHANNELS];
-        uint8_t scaledSched[K7_SLOTS][8];
-        for (int i = 0; i < K7_CHANNELS; i++) {
-            int v = (int)roundf(manual[i] * gMasterBrightness / 100.0f);
-            scaledManual[i] = (uint8_t)min(100, v);
-        }
-        for (int h = 0; h < K7_SLOTS; h++) {
-            scaledSched[h][0] = sched[h][0];
-            scaledSched[h][1] = sched[h][1];
-            for (int c = 0; c < K7_CHANNELS; c++) {
-                int v = (int)roundf(sched[h][2+c] * gMasterBrightness / 100.0f);
-                scaledSched[h][2+c] = (uint8_t)min(100, v);
-            }
-        }
-
-        // Update cached state immediately (no TCP on the handler thread)
+        // Store unscaled base; do NOT apply MB here
         memcpy(gLastSchedule, sched,  sizeof(sched));
         memcpy(gLastManual,   manual, sizeof(manual));
         gLampAutoMode = userAutoMode;
@@ -194,10 +200,23 @@ void setupApiServer(WebServer& server) {
             strlcpy(gActivePreset, doc["active_preset"], sizeof(gActivePreset));
         saveEffectState();
 
-        // Queue the lamp push — the lamp worker task does TCP asynchronously
-        queuePush(scaledManual, scaledSched, autoMode);
-        // lunarApplyNow is called by the lamp worker after the push completes
-
+        // Scale by current MB for the lamp push
+        float   mb = gMasterBrightness / 100.0f;
+        uint8_t scaledManual[K7_CHANNELS];
+        uint8_t scaledSched[K7_SLOTS][8];
+        for (int i = 0; i < K7_CHANNELS; i++) {
+            int v = (int)roundf(manual[i] * mb);
+            scaledManual[i] = (uint8_t)(v > 100 ? 100 : v);
+        }
+        for (int h = 0; h < K7_SLOTS; h++) {
+            scaledSched[h][0] = sched[h][0];
+            scaledSched[h][1] = sched[h][1];
+            for (int c = 0; c < K7_CHANNELS; c++) {
+                int v = (int)roundf(sched[h][2 + c] * mb);
+                scaledSched[h][2 + c] = (uint8_t)(v > 100 ? 100 : v);
+            }
+        }
+        queuePush(scaledManual, scaledSched, userAutoMode);
         sendOk(server);
     });
 

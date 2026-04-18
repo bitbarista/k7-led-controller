@@ -198,6 +198,14 @@ void saveEffectState() {
     doc["clouds"]        = gCloudActive.load();
     doc["auto_mode"]     = gLampAutoMode;
     doc["active_preset"] = gActivePreset;
+    // Persist unscaled base schedule so it survives reboot intact
+    auto schedArr = doc["schedule"].to<JsonArray>();
+    for (int h = 0; h < K7_SLOTS; h++) {
+        auto row = schedArr.add<JsonArray>();
+        for (int c = 0; c < 8; c++) row.add(gLastSchedule[h][c]);
+    }
+    auto manArr = doc["manual"].to<JsonArray>();
+    for (int i = 0; i < K7_CHANNELS; i++) manArr.add(gLastManual[i]);
     serializeJson(doc, f);
     f.close();
 }
@@ -209,6 +217,20 @@ void loadEffectState() {
     JsonDocument doc;
     if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return; }
     f.close();
+    // Restore the unscaled base schedule (overrides the lamp-read which may have MB-scaled values)
+    if (doc["schedule"].is<JsonArray>()) {
+        JsonArray arr = doc["schedule"];
+        for (int h = 0; h < K7_SLOTS && h < (int)arr.size(); h++) {
+            JsonArray row = arr[h];
+            for (int c = 0; c < 8 && c < (int)row.size(); c++)
+                gLastSchedule[h][c] = (uint8_t)row[c].as<int>();
+        }
+    }
+    if (doc["manual"].is<JsonArray>()) {
+        JsonArray arr = doc["manual"];
+        for (int i = 0; i < K7_CHANNELS && i < (int)arr.size(); i++)
+            gLastManual[i] = (uint8_t)arr[i].as<int>();
+    }
     // Restore auto_mode before effects so the mode is correct even if ramp starts
     if (doc["auto_mode"].is<bool>())       gLampAutoMode = doc["auto_mode"];
     if (doc["active_preset"].is<const char*>())
@@ -233,28 +255,30 @@ static void lampWorkerTask(void*) {
     for (;;) {
         // ── Push (priority) ──────────────────────────────────────────────────
         if (hPushQueue && xQueueReceive(hPushQueue, &push, 0) == pdTRUE) {
-            Serial.printf("[lamp] push autoMode=%d ch0=%d ch1=%d ch2=%d rampActive=%d\n",
-                          push.autoMode, push.manual[0], push.manual[1], push.manual[2],
-                          (int)gRampActive);
-            // Push schedule and — if ramp is active — immediately drive the lamp
-            // to the current interpolated value, all in ONE connection.
-            // Using two separate withLamp() calls risks the second connect
-            // hitting the lamp's connection limit and being dropped by the backoff.
+            Serial.printf("[lamp] push autoMode=%d ch0=%d ch1=%d ch2=%d\n",
+                          push.autoMode, push.manual[0], push.manual[1], push.manual[2]);
+            // Always push in manual mode so handLuminance is persistent.
+            // Pushing autoMode=true hands control to the lamp's internal clock
+            // (UTC) which may differ from local time, and previewBrightness is
+            // transient — the lamp reverts to its internal schedule tick and can
+            // go dark.  Manual mode + handLuminance is immediate and stays put.
             bool pushed = withLamp([&](K7Lamp& lamp) {
-                lamp.pushSchedule(push.manual, push.sched, push.autoMode);
-                if (gRampActive.load()) {
-                    time_t     now = time(nullptr);
-                    struct tm* t   = localtime(&now);
-                    uint8_t    ch[K7_CHANNELS];
+                lamp.pushSchedule(push.manual, push.sched, false);
+                time_t     now = time(nullptr);
+                struct tm* t   = localtime(&now);
+                uint8_t    ch[K7_CHANNELS];
+                if (push.autoMode) {
                     interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
-                    if (gLunarActive.load() && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
-                        applyLunarOverlay(ch);
-                    applyMasterBrightness(ch);
-                    lamp.handLuminance(ch);
+                    bool lunarOn = (gLunarActive.load() ||
+                                    (gLunarConfig.enabled && !gLunarStopped.load()))
+                                   && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
+                    if (lunarOn) applyLunarOverlay(ch);
+                } else {
+                    memcpy(ch, push.manual, K7_CHANNELS);
                 }
+                lamp.handLuminance(ch);
             });
             Serial.printf("[lamp] push withLamp=%s\n", pushed ? "ok" : "FAIL");
-            lunarApplyNow();
 
         // ── Preview ──────────────────────────────────────────────────────────
         // Per-operation connection: mutex held only for the ~20-60 ms of the
@@ -294,49 +318,34 @@ void startLampWorker() {
 
 // ── Ramp ──────────────────────────────────────────────────────────────────────
 static void rampTask(void*) {
-    // Put lamp in manual mode so its internal schedule doesn't override us
-    withLamp([](K7Lamp& lamp) { lamp.setModeManual(); });
-
     while (gRampActive) {
         time_t     now = time(nullptr);
         struct tm* t   = localtime(&now);
-        uint8_t    ch[K7_CHANNELS];
-        interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
-        if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
-            applyLunarOverlay(ch);
-        applyMasterBrightness(ch);
+
+        // Scale base schedule by current master brightness each tick so MB
+        // changes take effect immediately without a separate push.
+        float   mbf = gMasterBrightness / 100.0f;
+        uint8_t sc[K7_SLOTS][8];
+        for (int h = 0; h < K7_SLOTS; h++) {
+            sc[h][0] = gLastSchedule[h][0];
+            sc[h][1] = gLastSchedule[h][1];
+            for (int c = 0; c < K7_CHANNELS; c++) {
+                int v = (int)roundf(gLastSchedule[h][2 + c] * mbf);
+                sc[h][2 + c] = (uint8_t)(v > 100 ? 100 : v);
+            }
+        }
+        uint8_t ch[K7_CHANNELS];
+        interpolateChannels(sc, t->tm_hour, t->tm_min, ch);
+        bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
+                       && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
+        if (lunarOn) applyLunarOverlay(ch);
         withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
 
         int sleepSecs = max(1, 60 - t->tm_sec);
         for (int i = 0; i < sleepSecs * 2 && gRampActive; i++)
             vTaskDelay(pdMS_TO_TICKS(500));
     }
-
-    // Re-push the current schedule (master-brightness-scaled) with autoMode=true.
-    // Async pushes can fail silently (backoff / connection limit), so the lamp's
-    // stored schedule may be stale.  A simple setModeAuto() would then make the
-    // lamp run those stale (possibly zero) values.  Pushing here guarantees the
-    // lamp has the correct schedule before it resumes auto mode.
-    Serial.println("[ramp] stopped — pushing scaled schedule with autoMode=true");
-    bool autoOk = withLamp([](K7Lamp& lamp) {
-        float    mb = gMasterBrightness / 100.0f;
-        uint8_t  scaledManual[K7_CHANNELS];
-        uint8_t  scaledSched[K7_SLOTS][8];
-        for (int i = 0; i < K7_CHANNELS; i++) {
-            int v = (int)roundf(gLastManual[i] * mb);
-            scaledManual[i] = (uint8_t)(v > 100 ? 100 : v);
-        }
-        for (int h = 0; h < K7_SLOTS; h++) {
-            scaledSched[h][0] = gLastSchedule[h][0];
-            scaledSched[h][1] = gLastSchedule[h][1];
-            for (int c = 0; c < K7_CHANNELS; c++) {
-                int v = (int)roundf(gLastSchedule[h][2+c] * mb);
-                scaledSched[h][2+c] = (uint8_t)(v > 100 ? 100 : v);
-            }
-        }
-        lamp.pushSchedule(scaledManual, scaledSched, true);
-    });
-    Serial.printf("[ramp] restore withLamp=%s\n", autoOk ? "ok" : "FAIL");
+    // Lamp stays at the last handLuminance value; next push will set final state.
     hRamp = nullptr;
     vTaskDelete(nullptr);
 }
@@ -431,9 +440,9 @@ static void lunarTask(void*) {
             time_t     now = time(nullptr);
             struct tm* t   = localtime(&now);
             uint8_t    ch[K7_CHANNELS];
-            memcpy(ch, gLastSchedule[t->tm_hour % K7_SLOTS] + 2, K7_CHANNELS);
-            applyLunarOverlay(ch);
+            interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
             applyMasterBrightness(ch);
+            applyLunarOverlay(ch);
             withLamp([&](K7Lamp& lamp) { lamp.previewBrightness(ch); });
         }
         time_t     now = time(nullptr);
@@ -470,8 +479,8 @@ void lunarApplyNow() {
     struct tm* t   = localtime(&now);
     uint8_t    ch[K7_CHANNELS];
     interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
-    applyLunarOverlay(ch);
     applyMasterBrightness(ch);
+    applyLunarOverlay(ch);
     withLamp([&](K7Lamp& lamp) {
         if (gRampActive) lamp.handLuminance(ch);
         else             lamp.previewBrightness(ch);
@@ -511,9 +520,9 @@ static void cloudTask(void*) {
         struct tm* t   = localtime(&now);
         uint8_t    full[K7_CHANNELS];
         interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, full);
+        applyMasterBrightness(full);
         if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
             applyLunarOverlay(full);
-        applyMasterBrightness(full);
         withLamp([&](K7Lamp& lamp) { lamp.setModeManual(); lamp.handLuminance(full); });
     }
 
@@ -534,9 +543,9 @@ static void cloudTask(void*) {
                 struct tm* t   = localtime(&now);
                 uint8_t    full[K7_CHANNELS];
                 interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, full);
+                applyMasterBrightness(full);
                 if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
                     applyLunarOverlay(full);
-                applyMasterBrightness(full);
                 withLamp([&](K7Lamp& lamp) { lamp.handLuminance(full); });
             }
         }
@@ -549,9 +558,9 @@ static void cloudTask(void*) {
             struct tm* t   = localtime(&now);
             uint8_t    base[K7_CHANNELS], dimmed[K7_CHANNELS];
             interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, base);
+            applyMasterBrightness(base);
             if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
                 applyLunarOverlay(base);
-            applyMasterBrightness(base);
             applyCloud(base, targetDim, shift, dimmed);
             withLamp([&](K7Lamp& lamp) { lamp.handLuminance(dimmed); });
         }
@@ -588,13 +597,26 @@ static void cloudTask(void*) {
         }
     }
 
-    // Restore auto mode
+    // Restore: re-push scaled schedule so lamp has the current base
     gCloudActive = false;
     if (!gRampActive) {
-        withLamp([](K7Lamp& lamp) {
-            lamp.pushSchedule(gLastManual,
-                              (const uint8_t(*)[8])gLastSchedule,
-                              true);
+        float   mb = gMasterBrightness / 100.0f;
+        uint8_t scaledManual[K7_CHANNELS];
+        uint8_t scaledSched[K7_SLOTS][8];
+        for (int i = 0; i < K7_CHANNELS; i++) {
+            int v = (int)roundf(gLastManual[i] * mb);
+            scaledManual[i] = (uint8_t)(v > 100 ? 100 : v);
+        }
+        for (int h = 0; h < K7_SLOTS; h++) {
+            scaledSched[h][0] = gLastSchedule[h][0];
+            scaledSched[h][1] = gLastSchedule[h][1];
+            for (int c = 0; c < K7_CHANNELS; c++) {
+                int v = (int)roundf(gLastSchedule[h][2 + c] * mb);
+                scaledSched[h][2 + c] = (uint8_t)(v > 100 ? 100 : v);
+            }
+        }
+        withLamp([&](K7Lamp& lamp) {
+            lamp.pushSchedule(scaledManual, scaledSched, false);
         });
     }
     hCloud = nullptr;
