@@ -18,44 +18,31 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 - **Smooth Ramp** — sends per-minute interpolated brightness values so transitions are smooth rather than stepped
 - **Lightning effect** — random white-dominant flashes with optional time-of-day schedule
 - **Lunar Cycle** — varies the royal blue channel over the 29.5-day synodic cycle, tracking the actual current moon phase
+- **Clouds effect** — random dimming events simulating passing cloud cover
 - Supports K7 Mini (3 channels) and K7 Pro (6 channels)
 
 ---
 
 ## Hardware
 
-A **XIAO ESP32-S3** sits between your lamp and your devices, creating its own WiFi network. No PC required — the controller runs 24/7 and is always accessible from any phone or browser.
+An ESP32-S3 board sits between your lamp and your devices, creating its own WiFi network. No PC required — the controller runs 24/7 and is always accessible from any phone or browser.
 
-| Item | Notes |
-|------|-------|
-| **Seeed XIAO ESP32-S3** | Available from Seeed Studio, Mouser, or similar. The standard (non-Sense) variant works; the Sense variant (with PSRAM) also works and gives more headroom. |
-| USB-C cable | For flashing and power |
+Two boards are supported:
 
-The board draws ~80 mA and can run from any USB phone charger.
+| Board | Flash | Notes |
+|-------|-------|-------|
+| **ESP32-S3 SuperMini** | 4 MB | Compact and inexpensive. Widely available from AliExpress and similar. |
+| **Seeed XIAO ESP32-S3** | 8 MB | More flash and PSRAM. Available from Seeed Studio, Mouser, or similar. The standard (non-Sense) variant works fine. |
+
+Either board draws ~80 mA and can run from any USB phone charger.
 
 ---
 
 ## Flashing
 
-### 1 — Flash MicroPython + firmware (easiest)
+Visit **[bitbarista.github.io/k7-led-controller/flash.html](https://bitbarista.github.io/k7-led-controller/flash.html)**, connect your board via USB, and click **Install** next to your board type. Works in Chrome, Edge, and Opera — no software required.
 
-Visit **[bitbarista.github.io/k7-led-controller/flash.html](https://bitbarista.github.io/k7-led-controller/flash.html)** — connect your XIAO ESP32-S3 via USB and click Install. Works in Chrome, Edge, and Opera. No software required.
-
-If the device is not detected, hold the **BOOT (B)** button while pressing **RST**, then click Install again.
-
-### 2 — Deploy the controller firmware
-
-```bash
-pip install mpremote
-cd esp32
-./deploy.sh            # auto-detects port
-./deploy.sh /dev/ttyACM1  # or specify port
-```
-
-Then reset the device:
-```bash
-mpremote reset
-```
+If the device is not detected, hold the **BOOT** button while pressing **RST**, then click Install again.
 
 ---
 
@@ -63,7 +50,7 @@ mpremote reset
 
 After flashing, the device starts a setup portal:
 
-1. On your phone or laptop, connect to the **K7-Setup** WiFi network (open, no password)
+1. Connect to the **K7-Setup** WiFi network (open, no password)
 2. Browse to **http://192.168.5.1** — the device scans for nearby K7 lamps automatically
 3. Select your lamp from the list and tap **Connect & Save**
 4. The device reboots. Connect to **K7-Controller** WiFi (password: `12345678`)
@@ -76,7 +63,7 @@ After flashing, the device starts a setup portal:
 ## Network architecture
 
 ```
-Your phone/browser ── K7-Controller WiFi (192.168.5.1) ── [XIAO ESP32-S3] ── K7 lamp AP (192.168.4.1)
+Your phone/browser ── K7-Controller WiFi (192.168.5.1) ── [ESP32-S3] ── K7 lamp AP (192.168.4.1)
 ```
 
 The ESP32-S3 bridges your devices to the lamp. Your home network is never involved — the lamp does not need to be on your router.
@@ -86,8 +73,8 @@ The ESP32-S3 bridges your devices to the lamp. Your home network is never involv
 ## Notes
 
 - Profiles and settings are saved to flash and survive power cycles
-- The lightning effect, smooth ramp, and lunar cycle run entirely on the device — no browser needed once configured
-- Reflashing MicroPython erases all saved profiles and config; run `deploy.sh` again afterwards
+- The lightning effect, smooth ramp, lunar cycle, and clouds run entirely on the device — no browser needed once configured
+- Reflashing erases all saved profiles and config
 
 ---
 
@@ -100,7 +87,17 @@ The ESP32-S3 bridges your devices to the lamp. Your home network is never involv
 
 ## Protocol
 
-The lamp communicates over TCP on port 8266 using a simple binary framing protocol (`AA A5 [CMD] [data] BB`). The full implementation is in `esp32/k7mini.py`.
+The lamp communicates over TCP on port 8266 using a simple binary framing protocol (`AA A5 [CMD] [data] BB`). The full implementation is in `arduino/src/K7Lamp.cpp`.
+
+## Building from source
+
+Requires [PlatformIO](https://platformio.org/).
+
+```bash
+cd arduino
+pio run -e supermini    # ESP32-S3 SuperMini (4 MB)
+pio run -e xiao         # Seeed XIAO ESP32-S3 (8 MB)
+```
 
 ## Licence
 
