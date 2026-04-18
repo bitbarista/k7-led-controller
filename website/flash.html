@@ -93,7 +93,8 @@
       transition: border-color 0.2s, transform 0.2s;
     }
     .flash-card:hover { border-color: #0369a1; transform: translateY(-2px); }
-    .board-img { width: 100%; max-width: 220px; border-radius: 8px; margin-bottom: 0.75rem; }
+    .board-img-wrap { height: 180px; display: flex; align-items: center; justify-content: center; margin-bottom: 0.75rem; }
+    .board-img { max-width: 220px; max-height: 180px; width: auto; height: auto; border-radius: 8px; object-fit: contain; }
     .flash-card h3 { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 0.25rem; }
     .flash-card .sub { font-size: 0.82rem; color: #94a3b8; margin-bottom: 1.25rem; }
 
@@ -215,7 +216,7 @@
 
       <!-- SuperMini -->
       <div class="flash-card">
-        <img src="./assets/supermini-board.jpg" alt="ESP32-S3 SuperMini board" class="board-img">
+        <div class="board-img-wrap"><img src="./assets/supermini-board.jpg" alt="ESP32-S3 SuperMini board" class="board-img"></div>
         <h3>ESP32-S3 SuperMini</h3>
         <p class="sub">4 MB flash · compact form factor</p>
         <esp-web-install-button id="btn-supermini" manifest="./releases/latest/manifest-supermini.json">
@@ -228,7 +229,7 @@
 
       <!-- XIAO -->
       <div class="flash-card">
-        <img src="./assets/xiao-board.jpg" alt="Seeed XIAO ESP32-S3 board" class="board-img">
+        <div class="board-img-wrap"><img src="./assets/xiao-board.jpg" alt="Seeed XIAO ESP32-S3 board" class="board-img"></div>
         <h3>Seeed XIAO ESP32-S3</h3>
         <p class="sub">8 MB flash · 8 MB PSRAM</p>
         <esp-web-install-button id="btn-xiao" manifest="./releases/latest/manifest-xiao.json">
