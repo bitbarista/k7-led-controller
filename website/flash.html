@@ -1,319 +1,247 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>K7 LED Controller — Flash Firmware</title>
-  <meta name="description" content="Flash K7 LED Controller firmware directly from your browser. No software required.">
-  <script type="module" src="https://unpkg.com/esp-web-tools@9/dist/web/install-button.js?module"></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f8fafc;
-      color: #1e293b;
-      line-height: 1.6;
-      min-height: 100vh;
-    }
-
-    a { color: #0369a1; }
-    a:hover { text-decoration: underline; }
-
-    header {
-      background: #fff;
-      border-bottom: 1px solid #e2e8f0;
-      padding: 1rem 1.5rem;
-    }
-    .header-inner {
-      max-width: 900px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-    }
-    .logo { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit; }
-    .logo-emoji { font-size: 2rem; }
-    .logo-title { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
-    .logo-sub   { font-size: 0.75rem; color: #64748b; }
-    .header-nav { display: flex; align-items: center; gap: 1rem; }
-    .nav-link   { font-size: 0.875rem; color: #0369a1; text-decoration: none; white-space: nowrap; }
-    .nav-link:hover { text-decoration: underline; }
-    .gh-link { color: #94a3b8; transition: color 0.2s; }
-    .gh-link:hover { color: #334155; }
-
-    main {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 3rem 1.5rem 4rem;
-    }
-
-    footer {
-      background: #fff;
-      border-top: 1px solid #e2e8f0;
-      text-align: center;
-      padding: 1.5rem;
-      font-size: 0.8rem;
-      color: #94a3b8;
-      margin-top: 3rem;
-    }
-
-    .hero { text-align: center; margin-bottom: 2.5rem; }
-    .hero h2 { font-size: 2rem; font-weight: 800; color: #0f172a; margin-bottom: 0.5rem; }
-    .hero p   { color: #475569; max-width: 560px; margin: 0 auto; }
-
-    .version-badge {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      border: 1px solid #f1f5f9;
-      padding: 1rem;
-      text-align: center;
-      margin-bottom: 2rem;
-    }
-    .version-label-sub { font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.25rem; }
-    #version-label { font-size: 1.6rem; font-weight: 800; color: #0369a1; }
-    #release-date  { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; }
-
-    .board-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 2.5rem;
-    }
-
-    .flash-card {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-      padding: 2rem;
-      text-align: center;
-      border: 2px solid transparent;
-      transition: border-color 0.2s, transform 0.2s;
-    }
-    .flash-card:hover { border-color: #0369a1; transform: translateY(-2px); }
-    .board-img-wrap { height: 180px; display: flex; align-items: center; justify-content: center; margin-bottom: 0.75rem; }
-    .board-img { max-width: 220px; max-height: 180px; width: auto; height: auto; border-radius: 8px; object-fit: contain; }
-    .flash-card h3 { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin-bottom: 0.25rem; }
-    .flash-card .sub { font-size: 0.82rem; color: #94a3b8; margin-bottom: 1.25rem; }
-
-    .flash-btn {
-      display: block;
-      width: 100%;
-      padding: 0.85rem 1.5rem;
-      background: linear-gradient(135deg, #0369a1, #0c4a6e);
-      color: #fff;
-      font-weight: 700;
-      font-size: 1rem;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .flash-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(3,105,161,0.35); }
-    .flash-note { font-size: 0.75rem; color: #94a3b8; margin-top: 0.75rem; }
-    .unsupported { display: block; color: #dc2626; font-size: 0.85rem; margin-top: 0.5rem; }
-    .not-allowed { display: block; color: #d97706; font-size: 0.85rem; margin-top: 0.5rem; }
-
-    .steps-panel {
-      background: #f0f9ff;
-      border-radius: 12px;
-      padding: 2rem;
-      margin-bottom: 2rem;
-    }
-    .steps-panel h3 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: #0f172a;
-      text-align: center;
-      margin-bottom: 1.5rem;
-    }
-    .step-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 1.25rem;
-      text-align: center;
-    }
-    .step-circle {
-      width: 2.5rem;
-      height: 2.5rem;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #0369a1, #0c4a6e);
-      color: #fff;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 0.6rem;
-    }
-    .step-item p { font-size: 0.85rem; color: #334155; }
-
-    .trouble-card {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      padding: 2rem;
-    }
-    .trouble-card h3 { font-size: 1rem; font-weight: 700; color: #0f172a; margin-bottom: 1rem; }
-    .trouble-item { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #f1f5f9; }
-    .trouble-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .trouble-q { font-weight: 600; font-size: 0.875rem; color: #0f172a; margin-bottom: 0.2rem; }
-    .trouble-a { font-size: 0.85rem; color: #475569; }
-    .more-help {
-      margin-top: 1.25rem;
-      padding-top: 1.25rem;
-      border-top: 1px solid #f1f5f9;
-      font-size: 0.85rem;
-      color: #64748b;
-    }
-
-    code {
-      background: #f1f5f9;
-      border-radius: 4px;
-      padding: 0.1em 0.4em;
-      font-size: 0.875em;
-      font-family: ui-monospace, monospace;
-    }
-  </style>
-</head>
-<body>
-
-  <header>
-    <div class="header-inner">
-      <a href="https://bitbarista.github.io/k7-led-controller/" class="logo">
-        <span class="logo-emoji">🪸</span>
-        <div>
-          <div class="logo-title">K7 LED Controller</div>
-          <div class="logo-sub">ESP32-S3 firmware for Noo-Psyche K7 aquarium lights</div>
-        </div>
-      </a>
-      <div class="header-nav">
-        <a href="guide.html" class="nav-link">Setup guide</a>
-        <a href="https://github.com/bitbarista/k7-led-controller" class="gh-link" title="GitHub">
-          <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-          </svg>
-        </a>
-      </div>
-    </div>
-  </header>
-
-  <main>
-
-    <div class="hero">
-      <h2>Flash Firmware</h2>
-      <p>Install everything in one click — the K7 controller app and web UI, ready to go. Use Chrome, Edge, or Opera with your board connected via USB.</p>
-    </div>
-
-    <div class="version-badge">
-      <div class="version-label-sub">Latest release</div>
-      <div id="version-label">Loading…</div>
-      <div id="release-date"></div>
-    </div>
-
-    <div class="board-grid">
-
-      <!-- SuperMini -->
-      <div class="flash-card">
-        <div class="board-img-wrap"><img src="./assets/supermini-board.jpg" alt="ESP32-S3 SuperMini board" class="board-img"></div>
-        <h3>ESP32-S3 SuperMini</h3>
-        <p class="sub">4 MB flash · compact form factor</p>
-        <esp-web-install-button id="btn-supermini" manifest="./releases/latest/manifest-supermini.json">
-          <button slot="activate" class="flash-btn">📥 Install Firmware</button>
-          <span slot="unsupported" class="unsupported">❌ Web Serial not supported. Use Chrome, Edge, or Opera.</span>
-          <span slot="not-allowed" class="not-allowed">⚠️ Page must be served over HTTPS to use Web Serial.</span>
-        </esp-web-install-button>
-        <p class="flash-note">⚠️ Flashing erases the device — saved config will be lost.</p>
-      </div>
-
-      <!-- XIAO -->
-      <div class="flash-card">
-        <div class="board-img-wrap"><img src="./assets/xiao-board.jpg" alt="Seeed XIAO ESP32-S3 board" class="board-img"></div>
-        <h3>Seeed XIAO ESP32-S3</h3>
-        <p class="sub">8 MB flash · 8 MB PSRAM</p>
-        <esp-web-install-button id="btn-xiao" manifest="./releases/latest/manifest-xiao.json">
-          <button slot="activate" class="flash-btn">📥 Install Firmware</button>
-          <span slot="unsupported" class="unsupported">❌ Web Serial not supported. Use Chrome, Edge, or Opera.</span>
-          <span slot="not-allowed" class="not-allowed">⚠️ Page must be served over HTTPS to use Web Serial.</span>
-        </esp-web-install-button>
-        <p class="flash-note">⚠️ Flashing erases the device — saved config will be lost.</p>
-      </div>
-
-    </div>
-
-    <div class="steps-panel">
-      <h3>After flashing</h3>
-      <div class="step-grid">
-        <div class="step-item">
-          <div class="step-circle">1</div>
-          <p>Connect to <strong>K7-Setup</strong> WiFi (open network, no password)</p>
-        </div>
-        <div class="step-item">
-          <div class="step-circle">2</div>
-          <p>Browse to <strong>http://192.168.5.1</strong> — the device scans for your lamp</p>
-        </div>
-        <div class="step-item">
-          <div class="step-circle">3</div>
-          <p>Select your lamp and tap <strong>Connect &amp; Save</strong></p>
-        </div>
-        <div class="step-item">
-          <div class="step-circle">4</div>
-          <p>Reconnect to <strong>K7-Controller</strong> (password: <code>12345678</code>) and browse to <strong>192.168.5.1</strong></p>
-        </div>
-      </div>
-    </div>
-
-    <div class="trouble-card">
-      <h3>Troubleshooting</h3>
-
-      <div class="trouble-item">
-        <div class="trouble-q">Device not detected</div>
-        <div class="trouble-a">Try a different USB cable (some are charge-only). Make sure no other app has the port open.</div>
-      </div>
-      <div class="trouble-item">
-        <div class="trouble-q">Flashing fails immediately</div>
-        <div class="trouble-a">Hold the BOOT button while pressing RST, then release when flashing begins. Or hold BOOT while plugging in the USB cable.</div>
-      </div>
-      <div class="trouble-item">
-        <div class="trouble-q">Lamp not found during setup</div>
-        <div class="trouble-a">Make sure your K7 lamp is powered on. Tap <em>Scan again</em>, or enter the SSID manually.</div>
-      </div>
-      <div class="trouble-item">
-        <div class="trouble-q">Browser not supported</div>
-        <div class="trouble-a">Web Serial is required. Use Chrome 89+, Edge 89+, or Opera 75+. Firefox and Safari are not supported.</div>
-      </div>
-
-      <div class="more-help">
-        Need more help? See the full <a href="guide.html">Setup Guide</a> or the
-        <a href="https://github.com/bitbarista/k7-led-controller">GitHub repository</a>.
-      </div>
-    </div>
-
-  </main>
-
-  <footer>
-    K7 LED Controller is open source software.
-    <a href="https://github.com/bitbarista/k7-led-controller">GitHub</a>
-  </footer>
-
-  <script>
-    async function loadVersion() {
-      try {
-        const r = await fetch('https://api.github.com/repos/bitbarista/k7-led-controller/releases/latest');
-        const rel = await r.json();
-        if (rel.tag_name) {
-          document.getElementById('version-label').textContent = rel.tag_name;
-          document.getElementById('release-date').textContent =
-            'Released ' + new Date(rel.published_at).toLocaleDateString();
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K7 LED Controller - Flash Firmware</title>
+    <meta name="description" content="Flash K7 LED Controller firmware directly from your browser. No software installation required!">
+    <script type="module" src="https://unpkg.com/esp-web-tools@9/dist/web/install-button.js?module"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .flash-button {
+            background: linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%);
+            transition: all 0.3s ease;
         }
-      } catch {
-        document.getElementById('version-label').textContent = '—';
-        document.getElementById('release-date').textContent = 'Could not fetch release info';
-      }
-    }
-    loadVersion();
-  </script>
+        .flash-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(3, 105, 161, 0.3);
+        }
+        .board-card {
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        .board-card:hover {
+            border-color: #0369a1;
+            transform: translateY(-4px);
+        }
+        .feature-icon {
+            background: linear-gradient(135deg, #0369a1 0%, #0c4a6e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <header class="bg-white shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <a href="https://github.com/bitbarista/k7-led-controller" class="flex items-center space-x-4 hover:opacity-80 transition-opacity">
+                    <span class="text-4xl">🪸</span>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">K7 LED Controller</h1>
+                        <p class="text-sm text-gray-600">ESP32-S3 firmware for Noo-Psyche K7 aquarium lights</p>
+                    </div>
+                </a>
+                <div class="flex items-center space-x-4">
+                    <a href="guide.html" class="text-sm text-blue-600 hover:underline">Setup guide</a>
+                    <a href="https://github.com/bitbarista/k7-led-controller" class="text-gray-600 hover:text-gray-900 transition-colors">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-12">
+
+        <div class="text-center mb-16">
+            <h2 class="text-4xl font-bold text-gray-900 mb-4">Flash Firmware</h2>
+            <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                Install the latest firmware directly from your browser. No software installation required!
+                Just connect your ESP32-S3 board and click install.
+            </p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-12 border border-gray-200">
+            <div class="text-center">
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Latest Version</h3>
+                <div id="version-info" class="text-2xl font-bold text-blue-600 mb-2">Loading…</div>
+                <div id="release-date" class="text-sm text-gray-600">Checking for updates…</div>
+            </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-8 mb-16">
+
+            <!-- SuperMini -->
+            <div class="board-card bg-white rounded-xl shadow-lg p-8 text-center">
+                <div class="mb-6">
+                    <img src="./assets/supermini-board.jpg" alt="ESP32-S3 SuperMini board" class="w-48 h-32 rounded-lg mx-auto mb-4 object-contain">
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">ESP32-S3 SuperMini</h3>
+                    <p class="text-gray-600 mb-6">
+                        Compact and inexpensive with 4 MB flash. The most popular choice for a DIY build.
+                    </p>
+                </div>
+                <esp-web-install-button manifest="./releases/latest/manifest-supermini.json">
+                    <button slot="activate" class="flash-button text-white font-bold py-4 px-8 rounded-lg text-lg w-full">
+                        📥 Install Firmware
+                    </button>
+                    <span slot="unsupported" class="text-red-600 text-sm">
+                        ❌ Your browser doesn't support Web Serial. Try Chrome, Edge, or Opera.
+                    </span>
+                    <span slot="not-allowed" class="text-yellow-600 text-sm">
+                        ⚠️ Please serve this page over HTTPS to use Web Serial.
+                    </span>
+                </esp-web-install-button>
+            </div>
+
+            <!-- XIAO -->
+            <div class="board-card bg-white rounded-xl shadow-lg p-8 text-center">
+                <div class="mb-6">
+                    <img src="./assets/xiao-board.jpg" alt="Seeed XIAO ESP32-S3 board" class="w-48 h-32 rounded-lg mx-auto mb-4 object-contain">
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">Seeed XIAO ESP32-S3</h3>
+                    <p class="text-gray-600 mb-6">
+                        8 MB flash and 8 MB PSRAM. Great if you want extra headroom for future features.
+                    </p>
+                </div>
+                <esp-web-install-button manifest="./releases/latest/manifest-xiao.json">
+                    <button slot="activate" class="flash-button text-white font-bold py-4 px-8 rounded-lg text-lg w-full">
+                        📥 Install Firmware
+                    </button>
+                    <span slot="unsupported" class="text-red-600 text-sm">
+                        ❌ Your browser doesn't support Web Serial. Try Chrome, Edge, or Opera.
+                    </span>
+                    <span slot="not-allowed" class="text-yellow-600 text-sm">
+                        ⚠️ Please serve this page over HTTPS to use Web Serial.
+                    </span>
+                </esp-web-install-button>
+            </div>
+
+        </div>
+
+        <div class="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-8 mb-12">
+            <h3 class="text-2xl font-bold text-gray-900 mb-6 text-center">After Flashing</h3>
+            <div class="grid md:grid-cols-4 gap-6">
+                <div class="text-center">
+                    <div class="w-12 h-12 bg-blue-700 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">1</div>
+                    <h4 class="font-semibold mb-2">Connect to K7-Setup</h4>
+                    <p class="text-sm text-gray-600">Join the open <strong>K7-Setup</strong> WiFi network on your phone or laptop</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-12 h-12 bg-blue-700 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">2</div>
+                    <h4 class="font-semibold mb-2">Open the Portal</h4>
+                    <p class="text-sm text-gray-600">Browse to <strong>http://192.168.5.1</strong> — the device scans for your lamp automatically</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-12 h-12 bg-blue-700 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">3</div>
+                    <h4 class="font-semibold mb-2">Select Your Lamp</h4>
+                    <p class="text-sm text-gray-600">Pick your lamp from the list and tap <strong>Connect &amp; Save</strong></p>
+                </div>
+                <div class="text-center">
+                    <div class="w-12 h-12 bg-blue-700 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">4</div>
+                    <h4 class="font-semibold mb-2">Start Controlling</h4>
+                    <p class="text-sm text-gray-600">Join <strong>K7-Controller</strong> WiFi (password: <code class="bg-gray-100 px-1 rounded">12345678</code>) and browse to 192.168.5.1</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-8 mb-16">
+            <div class="text-center p-6">
+                <div class="feature-icon text-4xl mb-4">🚀</div>
+                <h4 class="text-xl font-semibold mb-2">No Software Required</h4>
+                <p class="text-gray-600">Flash directly from your browser. No need to install PlatformIO or other tools.</p>
+            </div>
+            <div class="text-center p-6">
+                <div class="feature-icon text-4xl mb-4">🔄</div>
+                <h4 class="text-xl font-semibold mb-2">Always Latest</h4>
+                <p class="text-gray-600">Automatically gets the latest stable firmware with all recent improvements.</p>
+            </div>
+            <div class="text-center p-6">
+                <div class="feature-icon text-4xl mb-4">🛡️</div>
+                <h4 class="text-xl font-semibold mb-2">Safe &amp; Reliable</h4>
+                <p class="text-gray-600">Tested builds with complete firmware including web interface and bootloader.</p>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-8">
+            <h3 class="text-2xl font-bold text-gray-900 mb-6">Troubleshooting</h3>
+            <div class="space-y-6">
+                <div>
+                    <h4 class="font-semibold text-lg mb-2">Browser Not Supported</h4>
+                    <p class="text-gray-600 mb-2">Web Serial requires a compatible browser:</p>
+                    <ul class="list-disc list-inside text-gray-600 space-y-1">
+                        <li><strong>Supported:</strong> Chrome, Edge, Opera</li>
+                        <li><strong>Not Supported:</strong> Firefox, Safari</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-lg mb-2">Device Not Detected</h4>
+                    <ul class="list-disc list-inside text-gray-600 space-y-1">
+                        <li>Try a different USB cable — some cables are charge-only</li>
+                        <li>Make sure no other app has the serial port open</li>
+                        <li>Try a different USB port</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-lg mb-2">Flashing Failed</h4>
+                    <ul class="list-disc list-inside text-gray-600 space-y-1">
+                        <li>Hold the <strong>BOOT</strong> button while pressing <strong>RST</strong>, then click Install again</li>
+                        <li>Or hold BOOT while plugging in the USB cable</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-lg mb-2">Lamp Not Found During Setup</h4>
+                    <ul class="list-disc list-inside text-gray-600 space-y-1">
+                        <li>Make sure your K7 lamp is powered on</li>
+                        <li>Tap <em>Scan again</em>, or enter the lamp SSID manually</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="mt-8 p-6 bg-blue-50 rounded-lg">
+                <p class="text-gray-700">
+                    <strong>Need more help?</strong> See the full
+                    <a href="guide.html" class="text-blue-600 hover:underline">Setup Guide</a>
+                    or the
+                    <a href="https://github.com/bitbarista/k7-led-controller" class="text-blue-600 hover:underline">GitHub repository</a>.
+                </p>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-white border-t mt-16">
+        <div class="max-w-6xl mx-auto px-4 py-8">
+            <div class="text-center text-gray-600">
+                <p>K7 LED Controller is open source software licensed under <a href="https://github.com/bitbarista/k7-led-controller/blob/master/LICENSE" class="hover:text-gray-900 underline">MIT</a>.</p>
+                <p class="text-xs mt-2 text-gray-400">Board images are used for product identification only. XIAO ESP32-S3 image © <a href="https://www.seeedstudio.com" class="underline">Seeed Studio</a>. ESP32-S3 SuperMini image © <a href="https://artofcircuits.com" class="underline">Art of Circuits</a>.</p>
+                <div class="mt-4 space-x-6">
+                    <a href="https://github.com/bitbarista/k7-led-controller" class="hover:text-gray-900">GitHub</a>
+                    <a href="guide.html" class="hover:text-gray-900">Setup Guide</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        async function updateVersionInfo() {
+            try {
+                const r = await fetch('https://api.github.com/repos/bitbarista/k7-led-controller/releases/latest');
+                const rel = await r.json();
+                if (rel.tag_name) {
+                    document.getElementById('version-info').textContent = rel.tag_name;
+                    document.getElementById('release-date').textContent =
+                        'Released ' + new Date(rel.published_at).toLocaleDateString();
+                }
+            } catch {
+                document.getElementById('version-info').textContent = '—';
+                document.getElementById('release-date').textContent = 'Could not fetch release info';
+            }
+        }
+        updateVersionInfo();
+    </script>
 
 </body>
 </html>
