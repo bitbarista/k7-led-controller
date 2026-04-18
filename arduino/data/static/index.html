@@ -277,11 +277,12 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
           <input type="time" id="lmEnd" class="time-input" onchange="onLmChange()" title="Lunar window end (can be next day)">
         </div>
         <div class="fx-flyout-row" style="margin-top:8px">
-          <span style="font-size:0.85rem;color:var(--muted)">Max intensity</span>
-          <input type="number" id="lmMaxIntensity" class="lm-intensity" min="1" max="100" value="15" onchange="onLmChange()" title="Royal blue channel % at full moon">
+          <span style="font-size:0.85rem;color:var(--muted)" title="Blue channel brightness at full moon — scales down proportionally as the moon wanes">Full moon brightness</span>
+          <input type="number" id="lmMaxIntensity" class="lm-intensity" min="1" max="100" value="15" onchange="onLmChange()" title="Blue channel % at full moon — current contribution shown on graph">
           <span style="font-size:0.85rem;color:var(--muted)">%</span>
         </div>
         <div class="fx-phase" id="lunarPhase"></div>
+        <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;line-height:1.4">Actual brightness = full moon brightness × current illumination %</div>
       </div>
     </div>
 
