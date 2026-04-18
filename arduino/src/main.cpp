@@ -1,14 +1,17 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <LittleFS.h>
-#include <ESPAsyncWebServer.h>
+#include <WebServer.h>
+#include <DNSServer.h>
 #include <ArduinoJson.h>
 #include "Config.h"
 #include "Effects.h"
+#include "Presets.h"
 #include "SetupPortal.h"
 #include "ApiServer.h"
 
-static AsyncWebServer server(80);
+static WebServer server(80);
+static DNSServer dns;
 
 // ── Config loading ────────────────────────────────────────────────────────────
 static bool loadConfig(String& lampSsid, String& device) {
@@ -95,24 +98,54 @@ void setup() {
             if (lamp.readAll(state)) {
                 memcpy(gLastSchedule, state.schedule, sizeof(gLastSchedule));
                 memcpy(gLastManual,   state.manual,   sizeof(gLastManual));
+                strlcpy(gLampName, state.name, sizeof(gLampName));
+                // gLampAutoMode is NOT seeded from lamp — it reflects the user's
+                // last explicit choice, loaded from the state file by loadEffectState().
                 Serial.println("Seeded schedule from lamp");
             }
         }
     }
 
+    // On a fresh install (no state file), apply the Mixed Reef default schedule
+    // if the lamp had nothing, and record it as the active preset.
+    if (!LittleFS.exists(STATE_FILE)) {
+        bool blank = true;
+        for (int h = 0; h < K7_SLOTS && blank; h++)
+            for (int c = 0; c < K7_CHANNELS && blank; c++)
+                if (gLastSchedule[h][2+c]) blank = false;
+        if (blank) {
+            bool isPro = (strcmp(gDevice, "k7pro") == 0);
+            const Preset* list  = isPro ? PRO_PRESETS    : MINI_PRESETS;
+            int           count = isPro ? NUM_PRO_PRESETS : NUM_MINI_PRESETS;
+            for (int i = 0; i < count; i++) {
+                if (strcmp(list[i].id, "mixed") == 0) {
+                    buildSchedule(list[i], gLastSchedule);
+                    Serial.println("No schedule from lamp — using Mixed Reef default");
+                    break;
+                }
+            }
+        }
+        strlcpy(gActivePreset, "preset:mixed", sizeof(gActivePreset));
+    }
+
     setupApiServer(server);
     server.begin();
-    Serial.println("Web server started — http://192.168.5.1");
+    // DNS after server.begin() so redirected requests find the server ready
+    dns.start(53, "*", IPAddress(192, 168, 5, 1));
+    Serial.println("Web server + DNS started — http://192.168.5.1");
 
     // Restore previously active effects (after server is up)
     loadEffectState();
     startEffectSchedulers();
+    startLampWorker();
 }
 
 // ── Loop ──────────────────────────────────────────────────────────────────────
 void loop() {
-    // Everything runs in async tasks / web server callbacks.
-    // Reconnect STA if lamp AP drops.
+    dns.processNextRequest();
+    server.handleClient();
+
+    // Reconnect STA if lamp AP drops
     static uint32_t lastCheck = 0;
     if (millis() - lastCheck > 30000) {
         lastCheck = millis();
@@ -124,5 +157,4 @@ void loop() {
             }
         }
     }
-    delay(100);
 }

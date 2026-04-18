@@ -13,14 +13,17 @@ char              gDevice[16]    = "k7mini";
 int    gMasterBrightness = 100;
 uint8_t gLastSchedule[K7_SLOTS][8] = {};
 uint8_t gLastManual[K7_CHANNELS]   = {};
+char   gLampName[12]    = "K7";
+bool   gLampAutoMode    = true;
+char   gActivePreset[64] = "";
 
-volatile bool gRampActive          = false;
-volatile bool gLightningActive     = false;
-volatile bool gLunarActive         = false;
-volatile bool gCloudActive         = false;
-volatile bool gLightningUserEnabled = false;
-volatile bool gLightningUserStopped = false;
-volatile bool gLunarStopped         = false;
+std::atomic<bool> gRampActive{false};
+std::atomic<bool> gLightningActive{false};
+std::atomic<bool> gLunarActive{false};
+std::atomic<bool> gCloudActive{false};
+std::atomic<bool> gLightningUserEnabled{false};
+std::atomic<bool> gLightningUserStopped{false};
+std::atomic<bool> gLunarStopped{false};
 
 LightningSchedule gLightningSchedule;
 LunarConfig       gLunarConfig;
@@ -67,7 +70,7 @@ bool inTimeWindow(const char* start, const char* end) {
 
 void applyLunarOverlay(uint8_t ch[K7_CHANNELS]) {
     float raw = gLunarConfig.maxIntensity * Moon::illumination();
-    int   pct = (int)ceilf(raw);
+    int   pct = (int)roundf(raw);
     if (pct <= 0) return;
     // Royal blue channel 1 for both models; also blue ch2 for Pro
     ch[1] = max(ch[1], (uint8_t)min(pct, 100));
@@ -85,12 +88,31 @@ void applyMasterBrightness(uint8_t ch[K7_CHANNELS]) {
     }
 }
 
+// After a connect failure, back off for CONNECT_BACKOFF_MS before retrying.
+// This prevents lampWorkerTask (priority 4) from busy-blocking in connect()
+// and starving the web-server loop() task (priority 1).
+static uint32_t sLastConnectFail  = 0;
+static const uint32_t CONNECT_BACKOFF_MS = 1000;
+
 bool withLamp(const std::function<void(K7Lamp&)>& fn) {
-    if (xSemaphoreTake(gLampMutex, pdMS_TO_TICKS(5000)) != pdTRUE) return false;
+    if (sLastConnectFail && millis() - sLastConnectFail < CONNECT_BACKOFF_MS)
+        return false;   // back off — return immediately, don't block
+
+    if (xSemaphoreTake(gLampMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+        Serial.println("[lamp] withLamp: mutex timeout");
+        return false;
+    }
     bool ok = false;
     {
         K7Lamp lamp(gLampHost, LAMP_PORT);
-        if (lamp.connect()) { fn(lamp); ok = true; }
+        if (lamp.connect()) {
+            sLastConnectFail = 0;
+            fn(lamp);
+            ok = true;
+        } else {
+            sLastConnectFail = millis();
+            Serial.printf("[lamp] connect FAILED to %s:%u\n", gLampHost, (unsigned)LAMP_PORT);
+        }
     }
     xSemaphoreGive(gLampMutex);
     return ok;
@@ -170,10 +192,12 @@ void saveEffectState() {
     File f = LittleFS.open(STATE_FILE, "w");
     if (!f) return;
     JsonDocument doc;
-    doc["ramp"]      = gRampActive;
-    doc["lightning"] = gLightningUserEnabled;
-    doc["lunar"]     = gLunarActive && !gLunarStopped;
-    doc["clouds"]    = gCloudActive;
+    doc["ramp"]          = gRampActive.load();
+    doc["lightning"]     = gLightningUserEnabled.load();
+    doc["lunar"]         = gLunarActive.load() && !gLunarStopped.load();
+    doc["clouds"]        = gCloudActive.load();
+    doc["auto_mode"]     = gLampAutoMode;
+    doc["active_preset"] = gActivePreset;
     serializeJson(doc, f);
     f.close();
 }
@@ -185,14 +209,94 @@ void loadEffectState() {
     JsonDocument doc;
     if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return; }
     f.close();
+    // Restore auto_mode before effects so the mode is correct even if ramp starts
+    if (doc["auto_mode"].is<bool>())       gLampAutoMode = doc["auto_mode"];
+    if (doc["active_preset"].is<const char*>())
+        strlcpy(gActivePreset, doc["active_preset"], sizeof(gActivePreset));
     if (doc["ramp"].as<bool>())      startRamp();
     if (doc["lightning"].as<bool>()) { gLightningUserEnabled = true; gLightningUserStopped = false; startLightning(); }
     if (doc["lunar"].as<bool>())     { startLunar(); lunarApplyNow(); }
     if (doc["clouds"].as<bool>())    startCloud();
 }
 
+// ── Async lamp worker (push + preview) ───────────────────────────────────────
+// HTTP handlers MUST NOT call withLamp() directly — that blocks loop() and
+// freezes the web server.  Instead they queue work here and return immediately.
+
+static QueueHandle_t hPushQueue    = nullptr;
+static QueueHandle_t hPreviewQueue = nullptr;
+
+static void lampWorkerTask(void*) {
+    PushJob push;
+    uint8_t prev[K7_CHANNELS];
+
+    for (;;) {
+        // ── Push (priority) ──────────────────────────────────────────────────
+        if (hPushQueue && xQueueReceive(hPushQueue, &push, 0) == pdTRUE) {
+            Serial.printf("[lamp] push autoMode=%d ch0=%d ch1=%d ch2=%d rampActive=%d\n",
+                          push.autoMode, push.manual[0], push.manual[1], push.manual[2],
+                          (int)gRampActive);
+            // Push schedule and — if ramp is active — immediately drive the lamp
+            // to the current interpolated value, all in ONE connection.
+            // Using two separate withLamp() calls risks the second connect
+            // hitting the lamp's connection limit and being dropped by the backoff.
+            bool pushed = withLamp([&](K7Lamp& lamp) {
+                lamp.pushSchedule(push.manual, push.sched, push.autoMode);
+                if (gRampActive.load()) {
+                    time_t     now = time(nullptr);
+                    struct tm* t   = localtime(&now);
+                    uint8_t    ch[K7_CHANNELS];
+                    interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
+                    if (gLunarActive.load() && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
+                        applyLunarOverlay(ch);
+                    applyMasterBrightness(ch);
+                    lamp.handLuminance(ch);
+                }
+            });
+            Serial.printf("[lamp] push withLamp=%s\n", pushed ? "ok" : "FAIL");
+            lunarApplyNow();
+
+        // ── Preview ──────────────────────────────────────────────────────────
+        // Per-operation connection: mutex held only for the ~20-60 ms of the
+        // TCP round-trip, so ramp / effects can always interleave.
+        // preview_brightness is used regardless of ramp state — the Python
+        // reference does the same; it works in both auto and manual modes.
+        } else if (hPreviewQueue &&
+                   xQueueReceive(hPreviewQueue, prev, pdMS_TO_TICKS(10)) == pdTRUE) {
+            withLamp([&](K7Lamp& lamp) {
+                lamp.previewBrightness(prev);
+            });
+        }
+    }
+}
+
+void queuePush(const uint8_t manual[K7_CHANNELS],
+               const uint8_t sched[K7_SLOTS][8],
+               bool autoMode) {
+    if (!hPushQueue) return;
+    PushJob job;
+    memcpy(job.manual, manual, K7_CHANNELS);
+    memcpy(job.sched,  sched,  sizeof(job.sched));
+    job.autoMode = autoMode;
+    xQueueOverwrite(hPushQueue, &job);
+}
+
+void queuePreview(const uint8_t ch[K7_CHANNELS]) {
+    if (!hPreviewQueue) return;
+    xQueueOverwrite(hPreviewQueue, ch);
+}
+
+void startLampWorker() {
+    hPushQueue    = xQueueCreate(1, sizeof(PushJob));
+    hPreviewQueue = xQueueCreate(1, K7_CHANNELS * sizeof(uint8_t));
+    xTaskCreatePinnedToCore(lampWorkerTask, "lamp_w", 6144, nullptr, 4, nullptr, 0);
+}
+
 // ── Ramp ──────────────────────────────────────────────────────────────────────
 static void rampTask(void*) {
+    // Put lamp in manual mode so its internal schedule doesn't override us
+    withLamp([](K7Lamp& lamp) { lamp.setModeManual(); });
+
     while (gRampActive) {
         time_t     now = time(nullptr);
         struct tm* t   = localtime(&now);
@@ -207,23 +311,46 @@ static void rampTask(void*) {
         for (int i = 0; i < sleepSecs * 2 && gRampActive; i++)
             vTaskDelay(pdMS_TO_TICKS(500));
     }
+
+    // Re-push the current schedule (master-brightness-scaled) with autoMode=true.
+    // Async pushes can fail silently (backoff / connection limit), so the lamp's
+    // stored schedule may be stale.  A simple setModeAuto() would then make the
+    // lamp run those stale (possibly zero) values.  Pushing here guarantees the
+    // lamp has the correct schedule before it resumes auto mode.
+    Serial.println("[ramp] stopped — pushing scaled schedule with autoMode=true");
+    bool autoOk = withLamp([](K7Lamp& lamp) {
+        float    mb = gMasterBrightness / 100.0f;
+        uint8_t  scaledManual[K7_CHANNELS];
+        uint8_t  scaledSched[K7_SLOTS][8];
+        for (int i = 0; i < K7_CHANNELS; i++) {
+            int v = (int)roundf(gLastManual[i] * mb);
+            scaledManual[i] = (uint8_t)(v > 100 ? 100 : v);
+        }
+        for (int h = 0; h < K7_SLOTS; h++) {
+            scaledSched[h][0] = gLastSchedule[h][0];
+            scaledSched[h][1] = gLastSchedule[h][1];
+            for (int c = 0; c < K7_CHANNELS; c++) {
+                int v = (int)roundf(gLastSchedule[h][2+c] * mb);
+                scaledSched[h][2+c] = (uint8_t)(v > 100 ? 100 : v);
+            }
+        }
+        lamp.pushSchedule(scaledManual, scaledSched, true);
+    });
+    Serial.printf("[ramp] restore withLamp=%s\n", autoOk ? "ok" : "FAIL");
     hRamp = nullptr;
     vTaskDelete(nullptr);
 }
 
 void startRamp() {
     if (gRampActive && hRamp) return;
-    // Switch lamp to manual mode so its internal schedule can't override us
-    withLamp([](K7Lamp& lamp) { lamp.setModeManual(); });
     gRampActive = true;
-    xTaskCreate(rampTask, "ramp", 4096, nullptr, 3, &hRamp);
+    xTaskCreatePinnedToCore(rampTask, "ramp", 4096, nullptr, 3, &hRamp, 0);
+    // rampTask sets manual mode itself on its first iteration
 }
 
 void stopRamp() {
     gRampActive = false;
-    // Give task a moment to exit, then restore auto
-    vTaskDelay(pdMS_TO_TICKS(1200));
-    withLamp([](K7Lamp& lamp) { lamp.setModeAuto(); });
+    // rampTask sees the flag, exits, and restores auto mode — no blocking here
 }
 
 // ── Lightning ─────────────────────────────────────────────────────────────────
@@ -265,8 +392,14 @@ static void doLightningEvent() {
 
     // Restore
     withLamp([&](K7Lamp& lamp) {
-        if (gRampActive) lamp.handLuminance(ambient);
-        else { lamp.previewBrightness(ambient); lamp.setModeAuto(); }
+        if (gRampActive) {
+            lamp.handLuminance(ambient);
+        } else if (gLunarActive || gCloudActive) {
+            lamp.previewBrightness(ambient);   // lunar/cloud task will maintain from here
+        } else {
+            lamp.previewBrightness(ambient);
+            lamp.setModeAuto();
+        }
     });
 }
 
@@ -284,12 +417,12 @@ static void lightningTask(void*) {
 void startLightning() {
     if (gLightningActive && hLightning) return;
     gLightningActive = true;
-    xTaskCreate(lightningTask, "lightning", 4096, nullptr, 2, &hLightning);
+    xTaskCreatePinnedToCore(lightningTask, "lightning", 4096, nullptr, 2, &hLightning, 0);
 }
 
 void stopLightning() {
     gLightningActive = false;
-    vTaskDelay(pdMS_TO_TICKS(500));
+    // task exits on its next iteration — no blocking here
 }
 
 // ── Lunar ─────────────────────────────────────────────────────────────────────
@@ -321,13 +454,13 @@ void startLunar() {
     gLunarActive  = true;
     gLunarStopped = false;
     if (!gRampActive && !hLunar)
-        xTaskCreate(lunarTask, "lunar", 4096, nullptr, 2, &hLunar);
+        xTaskCreatePinnedToCore(lunarTask, "lunar", 4096, nullptr, 2, &hLunar, 0);
 }
 
 void stopLunar() {
     gLunarStopped = true;
     gLunarActive  = false;
-    vTaskDelay(pdMS_TO_TICKS(600));
+    // lunarTask exits on its next iteration — no blocking here
 }
 
 void lunarApplyNow() {
@@ -472,12 +605,12 @@ static void cloudTask(void*) {
 void startCloud() {
     if (gCloudActive && hCloud) return;
     gCloudActive = true;
-    xTaskCreate(cloudTask, "cloud", 6144, nullptr, 2, &hCloud);
+    xTaskCreatePinnedToCore(cloudTask, "cloud", 6144, nullptr, 2, &hCloud, 0);
 }
 
 void stopCloud() {
     gCloudActive = false;
-    vTaskDelay(pdMS_TO_TICKS(600));
+    // cloudTask exits on its next iteration — no blocking here
 }
 
 // ── Scheduler tasks ───────────────────────────────────────────────────────────
@@ -506,6 +639,6 @@ static void lunarSchedulerTask(void*) {
 }
 
 void startEffectSchedulers() {
-    xTaskCreate(lightningSchedulerTask, "ls_sched",  2048, nullptr, 1, nullptr);
-    xTaskCreate(lunarSchedulerTask,     "lun_sched", 2048, nullptr, 1, nullptr);
+    xTaskCreatePinnedToCore(lightningSchedulerTask, "ls_sched",  2048, nullptr, 1, nullptr, 0);
+    xTaskCreatePinnedToCore(lunarSchedulerTask,     "lun_sched", 2048, nullptr, 1, nullptr, 0);
 }
