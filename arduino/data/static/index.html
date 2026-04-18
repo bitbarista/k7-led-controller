@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K7 LED Controller</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪸</text></svg>">
+<link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/vendor/chartjs-plugin-dragdata.min.js"></script>
+<style>
+:root {
+  --bg:              #0d1117;
+  --surface:         #161b22;
+  --surface2:        #1f2937;
+  --border:          rgba(255,255,255,0.1);
+  --text:            #c9d1d9;
+  --muted:           #6e7681;
+  --hover:           #2d3748;
+  --chart-grid:      rgba(255,255,255,0.05);
+  --tooltip-bg:      rgba(15,20,30,0.95);
+  --tooltip-border:  rgba(255,255,255,0.1);
+  --tooltip-text:    #c9d1d9;
+  --nowline:         rgba(220,160,20,0.85);
+  --nowline-label:   rgba(220,160,20,1);
+}
+[data-theme="light"] {
+  --bg:              #f6f8fa;
+  --surface:         #ffffff;
+  --surface2:        #eaeef2;
+  --border:          rgba(0,0,0,0.12);
+  --text:            #1c2128;
+  --muted:           #57606a;
+  --hover:           #d0d7de;
+  --chart-grid:      rgba(0,0,0,0.07);
+  --tooltip-bg:      rgba(255,255,255,0.97);
+  --tooltip-border:  rgba(0,0,0,0.15);
+  --tooltip-text:    #1c2128;
+  --nowline:         rgba(180,110,0,0.8);
+  --nowline-label:   rgba(180,110,0,1);
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; margin: 0; }
+
+/* ── top bar ── */
+.topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.topbar h1 { font-size: 1.1rem; font-weight: 600; margin: 0; letter-spacing: 0.02em; white-space: nowrap; }
+.topbar input[type=text], .topbar select { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 5px 10px; font-size: 0.85rem; }
+.topbar input[type=text] { width: 140px; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.ok      { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+.status-dot.error   { background: #f85149; box-shadow: 0 0 6px #f85149; }
+.status-dot.busy    { background: #d29922; box-shadow: 0 0 6px #d29922; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+#statusMsg { font-size: 0.8rem; color: var(--muted); }
+
+/* ── mode toggle ── */
+.mode-bar { display: flex; align-items: center; gap: 16px; padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.mode-label { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.mode-label.active { color: var(--text); }
+.toggle-switch { position: relative; width: 52px; height: 28px; cursor: pointer; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track { position: absolute; inset: 0; border-radius: 14px; background: #4169e1; transition: background 0.2s; }
+.toggle-track.manual { background: #e1a141; }
+.toggle-thumb { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+.toggle-switch input:checked ~ .toggle-thumb { transform: translateX(24px); }
+
+/* ── panels ── */
+.panel { padding: 20px; }
+
+/* ── manual sliders ── */
+.ch-slider-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.ch-slider-row:last-child { border-bottom: none; }
+.ch-label { width: 110px; font-size: 0.9rem; font-weight: 500; flex-shrink: 0; }
+.ch-slider { flex: 1; height: 6px; -webkit-appearance: none; appearance: none; border-radius: 3px; outline: none; cursor: pointer; background: var(--surface2); }
+.ch-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(255,255,255,0.3); }
+.ch-value { width: 44px; text-align: right; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+
+/* ── day shift control ── */
+.shift-inner { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.shift-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 2px 8px; font-size: 0.8rem; cursor: pointer; line-height: 1.6; }
+.shift-btn:hover { background: var(--hover); }
+.shift-val { min-width: 38px; text-align: center; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+/* ── controls bar (master + channel toggles, single row) ── */
+.controls-bar { display: flex; align-items: center; gap: 16px; padding: 8px 20px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.master-inner { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 220px; }
+.master-label { font-size:0.82rem; font-weight:600; color:var(--muted); white-space: nowrap; flex-shrink: 0; }
+.master-slider { flex:1; height:6px; -webkit-appearance:none; appearance:none; border-radius:3px; outline:none; cursor:pointer; background:var(--surface2); accent-color:#c9d1d9; }
+.master-slider::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:#c9d1d9; cursor:pointer; border:2px solid rgba(255,255,255,0.3); }
+.master-value { width:40px; text-align:right; font-size:0.85rem; font-variant-numeric:tabular-nums; flex-shrink: 0; }
+.ch-toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+.ch-toggle { padding: 3px 12px; border-radius: 99px; border: 1px solid; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s, background 0.15s; user-select: none; }
+.ch-toggle.off { opacity: 0.3; background: transparent !important; }
+
+/* ── per-channel scale bar ── */
+.ch-scale-bar { display: flex; gap: 12px; padding: 6px 20px; flex-wrap: wrap; border-bottom: 1px solid var(--border); align-items: center; }
+.ch-scale-item { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 150px; }
+.ch-scale-label { font-size: 0.78rem; font-weight: 600; width: 82px; flex-shrink: 0; }
+.ch-scale-val { width: 36px; text-align: right; font-size: 0.78rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* ── schedule chart ── */
+.chart-wrap { padding: 6px 20px 4px; height: calc(100vh - 285px); min-height: 300px; }
+#schedChart { width: 100%; height: 100%; }
+
+/* ── colour preview strip ── */
+.color-strip { display: flex; height: 16px; margin: 0 20px 10px; border-radius: 5px; overflow: hidden; gap: 1px; }
+.color-strip > div { flex: 1; }
+
+/* ── action bar ── */
+.action-bar { display:flex; gap:8px; padding:10px 20px; background:var(--surface); border-top:1px solid var(--border); align-items:center; flex-wrap:wrap; }
+.btn-primary-custom { background: #238636; border: 1px solid #2ea043; color: #fff; border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s; }
+.btn-primary-custom:hover { background: #2ea043; }
+.btn-secondary-custom { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s; }
+.btn-secondary-custom:hover { background: var(--hover); }
+.btn-danger-custom { background: #b91c1c; border: 1px solid #f85149; color: #fff; border-radius: 6px; padding: 7px 18px; font-size: 0.9rem; cursor: pointer; transition: background 0.15s; }
+.btn-danger-custom:hover { background: #dc2626; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+.bar-zone  { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.bar-sep   { width:1px; height:28px; background:var(--border); flex-shrink:0; margin:0 4px; }
+.fx-pill   { position:relative; display:inline-flex; align-items:stretch; border:1px solid var(--border); border-radius:6px; flex-shrink:0; }
+.fx-btn    { background:transparent; border:none; color:var(--text); padding:6px 14px; font-size:0.9rem; cursor:pointer; transition:background 0.15s,color 0.15s; border-radius:5px 0 0 5px; white-space:nowrap; }
+.fx-btn:hover { background:var(--hover); }
+.fx-cfg    { background:transparent; border:none; border-left:1px solid var(--border); color:var(--muted); padding:6px 8px; font-size:0.78rem; cursor:pointer; transition:background 0.15s,color 0.15s; border-radius:0 5px 5px 0; line-height:1; }
+.fx-cfg:hover,.fx-cfg.open { background:var(--hover); color:var(--text); }
+.fx-pill[data-fx="ramp"].active      { border-color:rgba(56,189,248,0.5); }
+.fx-pill[data-fx="ramp"].active .fx-btn      { color:#38bdf8; background:rgba(56,189,248,0.12); }
+.fx-pill[data-fx="lightning"].active { border-color:rgba(227,173,14,0.5); }
+.fx-pill[data-fx="lightning"].active .fx-btn { color:#e3ad0e; background:rgba(227,173,14,0.12); }
+.fx-pill[data-fx="lunar"].active     { border-color:rgba(99,102,241,0.5); }
+.fx-pill[data-fx="lunar"].active .fx-btn     { color:#818cf8; background:rgba(99,102,241,0.12); }
+.fx-pill[data-fx="clouds"].active   { border-color:rgba(148,163,184,0.5); }
+.fx-pill[data-fx="clouds"].active .fx-btn   { color:#94a3b8; background:rgba(148,163,184,0.12); }
+.cloud-num { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 4px; font-size:0.82rem; width:3.2rem; text-align:center; }
+.fx-flyout { display:none; position:absolute; bottom:calc(100% + 8px); left:0; min-width:215px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 14px; box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:200; }
+.fx-flyout.open { display:block; }
+.fx-flyout-title { font-size:0.75rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px; }
+.fx-flyout-row { display:flex; align-items:center; gap:8px; margin-top:5px; font-size:0.85rem; }
+.fx-time-row { display:flex; align-items:center; gap:6px; margin-top:6px; font-size:0.82rem; color:var(--muted); }
+.fx-phase  { font-size:0.85rem; color:var(--muted); margin-top:8px; padding-top:8px; border-top:1px solid var(--border); white-space:nowrap; }
+.fx-tick   { font-size:0.82rem; color:var(--muted); }
+.lm-intensity { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 4px; font-size:0.82rem; width:3.2rem; text-align:center; }
+.ls-label  { display:flex; align-items:center; gap:6px; font-size:0.85rem; color:var(--text); cursor:pointer; user-select:none; }
+.ls-label input[type=checkbox] { cursor:pointer; accent-color:#6366f1; }
+.ls-time-wrap { display:flex; align-items:center; gap:6px; margin-top:6px; font-size:0.82rem; color:var(--muted); }
+.time-input { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:4px 6px; font-size:0.82rem; width:92px; }
+.time-input::-webkit-calendar-picker-indicator { filter:invert(0.6); cursor:pointer; }
+[data-theme="light"] .time-input::-webkit-calendar-picker-indicator { filter:none; opacity:0.5; }
+[data-theme="light"] .ch-slider::-webkit-slider-thumb { border-color: rgba(0,0,0,0.2); }
+[data-theme="light"] .master-slider::-webkit-slider-thumb { background: #57606a; border-color: rgba(0,0,0,0.2); }
+#presetSel { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: 0.85rem; max-width: 210px; cursor: pointer; }
+#presetDesc { font-size: 0.78rem; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────────── -->
+<div class="topbar">
+  <h1>🪸 K7 LED Controller</h1>
+  <div class="status-dot busy" id="dot"></div>
+  <span id="statusMsg">Connecting…</span>
+  <div style="flex:1"></div>
+  <button id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark theme"
+          style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 10px;font-size:1rem;cursor:pointer;line-height:1">☀</button>
+  <select id="deviceSel" onchange="onDeviceChange()" title="Device type">
+    <option value="k7mini">K7 Mini</option>
+    <option value="k7pro">K7 Pro</option>
+  </select>
+  <input type="text" id="hostInput" value="192.168.4.1" placeholder="IP address"
+         title="Device IP address" onchange="onHostChange()">
+  <button class="btn-secondary-custom" onclick="readFromDevice()" id="readBtn">↻ Read</button>
+</div>
+
+<!-- ── Mode bar ─────────────────────────────────────────────────── -->
+<div class="mode-bar">
+  <span class="mode-label" id="lblManual">Manual</span>
+  <label class="toggle-switch" title="Switch between Manual and Auto mode">
+    <input type="checkbox" id="modeToggle" onchange="onModeToggle()">
+    <div class="toggle-track" id="toggleTrack"></div>
+    <div class="toggle-thumb"></div>
+  </label>
+  <span class="mode-label active" id="lblAuto">Auto (Schedule)</span>
+</div>
+
+<!-- ── Manual panel ─────────────────────────────────────────────── -->
+<div id="manualPanel" class="panel" style="max-width:600px; display:none">
+  <div id="sliderRows"></div>
+  <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
+    <button class="btn-primary-custom" onclick="saveManual()">Apply to Device</button>
+    <span style="font-size:0.8rem; color:var(--muted)">Preview updates live as you move sliders</span>
+  </div>
+</div>
+
+<!-- ── Auto panel ───────────────────────────────────────────────── -->
+<div id="autoPanel" style="padding-bottom:0">
+  <div class="controls-bar">
+    <div class="master-inner">
+      <span class="master-label">Master</span>
+      <input type="range" id="masterSlider" class="master-slider" min="0" max="200" value="100" oninput="onMasterChange()">
+      <span class="master-value" id="masterVal">100%</span>
+    </div>
+    <div class="shift-inner">
+      <span class="master-label">Shift</span>
+      <button class="shift-btn" onclick="changeShift(-1)">◀</button>
+      <span class="shift-val" id="shiftVal">+0h</span>
+      <button class="shift-btn" onclick="changeShift(+1)">▶</button>
+    </div>
+    <div class="ch-toggles" id="chToggles"></div>
+  </div>
+  <div class="ch-scale-bar" id="chScaleBar"></div>
+  <div class="chart-wrap">
+    <canvas id="schedChart"></canvas>
+  </div>
+  <div class="color-strip" id="colorStrip"></div>
+</div>
+
+<!-- ── Action bar (schedule) ────────────────────────────────────── -->
+<div class="action-bar" id="schedActions" style="display:none">
+
+  <!-- Device actions -->
+  <div class="bar-zone">
+    <button class="btn-primary-custom" onclick="pushSchedule()" id="pushBtn">⬆ Push</button>
+    <button class="btn-secondary-custom" onclick="readFromDevice()">↻ Read</button>
+    <button class="btn-danger-custom" onclick="clearSchedule()">✕ Clear</button>
+  </div>
+
+  <div class="bar-sep"></div>
+
+  <!-- Effects -->
+  <div class="bar-zone">
+
+    <!-- Smooth Ramp -->
+    <div class="fx-pill" data-fx="ramp" id="rampPill">
+      <button class="fx-btn" id="rampBtn" onclick="toggleRamp()" title="Enable smooth per-minute ramping">≈ Ramp</button>
+      <button class="fx-cfg" id="rampCfgBtn" onclick="toggleFlyout('ramp')" title="Ramp status">⚙</button>
+      <div class="fx-flyout" id="rampFlyout">
+        <div class="fx-flyout-title">Smooth Ramp</div>
+        <div class="fx-flyout-row fx-tick" id="rampTick">Inactive</div>
+      </div>
+    </div>
+
+    <!-- Lightning -->
+    <div class="fx-pill" data-fx="lightning" id="lightningPill">
+      <button class="fx-btn" id="lightningBtn" onclick="toggleLightning()" title="Simulate lightning flashes">⚡ Lightning</button>
+      <button class="fx-cfg" id="lightningCfgBtn" onclick="toggleFlyout('lightning')" title="Lightning schedule">⚙</button>
+      <div class="fx-flyout" id="lightningFlyout">
+        <div class="fx-flyout-title">Lightning Schedule</div>
+        <div class="fx-flyout-row">
+          <label class="ls-label" title="Auto-start/stop lightning on a daily schedule">
+            <input type="checkbox" id="lsEnabled" onchange="onLsChange()"> Auto-schedule
+          </label>
+        </div>
+        <div class="ls-time-wrap" id="lsTimeWrap" style="display:none">
+          <input type="time" id="lsStart" class="time-input" onchange="onLsChange()" title="Lightning start time">
+          <span>–</span>
+          <input type="time" id="lsEnd" class="time-input" onchange="onLsChange()" title="Lightning end time">
+        </div>
+      </div>
+    </div>
+
+    <!-- Lunar Cycle -->
+    <div class="fx-pill" data-fx="lunar" id="lunarPill">
+      <button class="fx-btn" id="lunarBtn" onclick="toggleLunar()" title="Vary royal blue channel intensity with the lunar cycle">🌕 Lunar</button>
+      <button class="fx-cfg" id="lunarCfgBtn" onclick="toggleFlyout('lunar')" title="Lunar cycle settings">⚙</button>
+      <div class="fx-flyout" id="lunarFlyout">
+        <div class="fx-flyout-title">Lunar Cycle</div>
+        <div class="fx-flyout-row">
+          <label class="ls-label" title="Auto-run lunar effect on a nightly schedule">
+            <input type="checkbox" id="lmEnabled" onchange="onLmChange()"> Auto-schedule
+          </label>
+        </div>
+        <div class="ls-time-wrap" id="lmTimeWrap" style="display:none">
+          <input type="time" id="lmStart" class="time-input" onchange="onLmChange()" title="Lunar window start">
+          <span>–</span>
+          <input type="time" id="lmEnd" class="time-input" onchange="onLmChange()" title="Lunar window end (can be next day)">
+        </div>
+        <div class="fx-flyout-row" style="margin-top:8px">
+          <span style="font-size:0.85rem;color:var(--muted)">Max intensity</span>
+          <input type="number" id="lmMaxIntensity" class="lm-intensity" min="1" max="100" value="15" onchange="onLmChange()" title="Royal blue channel % at full moon">
+          <span style="font-size:0.85rem;color:var(--muted)">%</span>
+        </div>
+        <div class="fx-phase" id="lunarPhase"></div>
+      </div>
+    </div>
+
+    <!-- Clouds -->
+    <div class="fx-pill" data-fx="clouds" id="cloudsPill">
+      <button class="fx-btn" id="cloudsBtn" onclick="toggleClouds()" title="Simulate passing clouds — random dimming events">☁ Clouds</button>
+      <button class="fx-cfg" id="cloudsCfgBtn" onclick="toggleFlyout('clouds')" title="Cloud settings">⚙</button>
+      <div class="fx-flyout" id="cloudsFlyout">
+        <div class="fx-flyout-title">Clouds</div>
+        <div class="fx-flyout-row">
+          <span style="font-size:0.85rem;color:var(--muted)">Density</span>
+          <input type="number" id="cloudDensity" class="cloud-num" min="1" max="100" value="30" onchange="onCloudsChange()" title="How often clouds pass (%)">
+          <span style="font-size:0.85rem;color:var(--muted)">%</span>
+        </div>
+        <div class="fx-flyout-row">
+          <span style="font-size:0.85rem;color:var(--muted)">Max depth</span>
+          <input type="number" id="cloudDepth" class="cloud-num" min="1" max="100" value="60" onchange="onCloudsChange()" title="Maximum dimming depth (%)">
+          <span style="font-size:0.85rem;color:var(--muted)">%</span>
+        </div>
+        <div class="fx-flyout-row" style="margin-top:4px">
+          <label class="ls-label" title="Dim blue channels more than white to simulate overcast warmth">
+            <input type="checkbox" id="cloudShift" checked onchange="onCloudsChange()"> Colour shift
+          </label>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="bar-sep"></div>
+
+  <!-- Presets -->
+  <div class="bar-zone" style="flex:1;min-width:0">
+    <select id="presetSel" onchange="onPresetChange()" title="Load a preset or saved profile">
+      <option value="">— Preset —</option>
+    </select>
+    <button class="btn-secondary-custom" onclick="saveProfile()" title="Save current schedule as a profile">💾</button>
+    <button class="btn-danger-custom" id="deleteProfileBtn" onclick="deleteProfile()" title="Delete selected profile" style="display:none">🗑</button>
+    <span id="presetDesc"></span>
+  </div>
+
+</div>
+
+<script>
+// ── Channel metadata ─────────────────────────────────────────────────────────
+const CH = {
+  uv:         { label:'UV',         rgb:[138,43,226],  css:'#8b2be2' },
+  royal_blue: { label:'Royal Blue', rgb:[65,105,225],  css:'#4169e1' },
+  blue:       { label:'Blue',       rgb:[30,144,255],  css:'#1e90ff' },
+  white:      { label:'White',      rgb:[210,210,210], css:'#d2d2d2' },
+  warm_white: { label:'Warm White', rgb:[255,200,80],  css:'#ffc850' },
+  red:        { label:'Red',        rgb:[220,50,50],   css:'#dc3232' },
+};
+// Physical light emission colours for additive colour strip blending
+const LIGHT_RGB = {
+  uv:         [180, 0,   255],
+  royal_blue: [0,   30,  255],
+  blue:       [0,   100, 255],
+  white:      [255, 255, 220],
+  warm_white: [255, 200, 100],
+  red:        [255, 0,   0  ],
+};
+const ALL_CH = ['uv','royal_blue','blue','white','warm_white','red'];
+const DEVICES = {
+  k7mini: { label:'K7 Mini', channels:['white','royal_blue','blue'] },
+  k7pro:  { label:'K7 Pro',  channels:['uv','royal_blue','blue','white','warm_white','red'] },
+};
+
+// ── App state ─────────────────────────────────────────────────────────────────
+let cfg      = { host:'192.168.4.1', port:8266, device:'k7mini' };
+let mode     = 'auto';   // 'auto' | 'manual'
+// schedule: 24 entries, each [h, 0, c0, c1, c2, c3, c4, c5]
+let schedule     = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
+let scheduleBase = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
+let masterBrightness = 100;
+let dayShift = 0;          // hours to rotate schedule (-12..+12, stored as 0..23)
+let channelBrightness = {}; // ch key → 0..100 multiplier, default 100
+let manual   = [0,0,0,0,0,0];
+let chart    = null;
+let lunarState = null;   // last data from /api/lunar/status — used by updateChart()
+let previewTimer = null;
+let presets       = {};   // key → {name, desc, manual, schedule}
+let savedProfiles = {};   // name → saved profile object
+let activePresetKey = ''; // e.g. "preset:mixed" or "saved:My Tank"
+const hiddenChannels = new Set();  // channel keys currently hidden in chart
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+function setStatus(state, msg) {
+  const dot = document.getElementById('dot');
+  dot.className = `status-dot ${state}`;
+  document.getElementById('statusMsg').textContent = msg;
+}
+function setBusy(msg='Working…') { setStatus('busy', msg); }
+function setOk(msg)   { setStatus('ok',    msg); }
+function setErr(msg)  { setStatus('error', msg); }
+
+async function api(method, url, body) {
+  const opts = { method, headers:{'Content-Type':'application/json'} };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  const d = await r.json();
+  if (!r.ok || d.error) throw new Error(d.error || r.statusText);
+  return d;
+}
+
+// ── Config sync ───────────────────────────────────────────────────────────────
+function onHostChange() {
+  cfg.host = document.getElementById('hostInput').value.trim();
+  api('POST','/api/config', cfg).catch(()=>{});
+}
+function onDeviceChange() {
+  cfg.device = document.getElementById('deviceSel').value;
+  api('POST','/api/config', cfg).catch(()=>{});
+  hiddenChannels.clear();
+  DEVICES[cfg.device].channels.forEach(ch => { channelBrightness[ch] = 100; });
+  renderSliders();
+  renderChannelToggles();
+  renderChannelScales();
+  updateChart();
+  updateColorStrip();
+  loadPresets();
+}
+
+// ── Mode toggle ───────────────────────────────────────────────────────────────
+function onModeToggle() {
+  const isAuto = document.getElementById('modeToggle').checked;
+  mode = isAuto ? 'auto' : 'manual';
+  applyModeUI();
+}
+
+function applyModeUI() {
+  const isAuto = (mode === 'auto');
+  document.getElementById('autoPanel').style.display   = isAuto ? ''       : 'none';
+  document.getElementById('schedActions').style.display = isAuto ? 'flex'   : 'none';
+  document.getElementById('manualPanel').style.display = isAuto ? 'none'   : '';
+  document.getElementById('lblAuto').classList.toggle('active', isAuto);
+  document.getElementById('lblManual').classList.toggle('active', !isAuto);
+  document.getElementById('toggleTrack').className = `toggle-track${isAuto ? '' : ' manual'}`;
+  document.getElementById('modeToggle').checked = isAuto;
+}
+
+// ── Read from device ──────────────────────────────────────────────────────────
+async function readFromDevice() {
+  setBusy('Reading…');
+  document.getElementById('readBtn').disabled = true;
+  try {
+    const [s, rampStatus, masterData] = await Promise.all([
+      api('GET', '/api/state'),
+      api('GET', '/api/ramp/status'),
+      api('GET', '/api/master'),
+    ]);
+    mode            = s.mode;
+    activePresetKey = s.active_preset || '';
+    // Ramp drives the lamp via hardware-manual commands but the controller is
+    // operating in schedule mode — keep the auto panel when ramp is active.
+    if (rampStatus.active && mode === 'manual') mode = 'auto';
+    setRampBtn(rampStatus.active, rampStatus.last_tick);
+    applyModeUI();
+    if (s.schedule && s.schedule.length === 24) {
+      schedule     = s.schedule;
+      scheduleBase = s.schedule.map(row => [...row]);
+      resetMaster();
+      // Restore master from server (overrides resetMaster's 100% default)
+      const mv = masterData?.value ?? 100;
+      if (mv !== 100) {
+        masterBrightness = mv;
+        const sl = document.getElementById('masterSlider');
+        if (sl) sl.value = mv;
+        const mval = document.getElementById('masterVal');
+        if (mval) mval.textContent = mv + '%';
+        applyMaster(); syncChannelSliders();
+      }
+    }
+    if (s.manual) manual = s.manual;
+    updateChart();
+    updateColorStrip();
+    renderSliders();
+    setOk(`${s.name}  ·  ${mode.toUpperCase()}`);
+    await loadPresets();
+  } catch(e) {
+    setErr(e.message);
+  } finally {
+    document.getElementById('readBtn').disabled = false;
+  }
+}
+
+// ── Push schedule ─────────────────────────────────────────────────────────────
+async function pushSchedule() {
+  setBusy('Pushing…');
+  document.getElementById('pushBtn').disabled = true;
+  try {
+    const chs = DEVICES[cfg.device].channels;
+    // Zero out hidden channels so device matches the graph
+    const pushSched = schedule.map(row => {
+      const r = [...row];
+      chs.forEach((ch, ci) => { if (hiddenChannels.has(ch)) r[2 + ci] = 0; });
+      return r;
+    });
+    await api('POST','/api/push', { manual, schedule: pushSched, mode, active_preset: activePresetKey });
+    setOk('Pushed successfully');
+  } catch(e) {
+    setErr(e.message);
+  } finally {
+    document.getElementById('pushBtn').disabled = false;
+  }
+}
+
+// ── Manual: save ─────────────────────────────────────────────────────────────
+async function saveManual() {
+  setBusy('Saving…');
+  try {
+    await api('POST','/api/push', { manual, schedule, mode:'manual' });
+    mode = 'manual';
+    applyModeUI();
+    setOk('Manual mode saved');
+  } catch(e) {
+    setErr(e.message);
+  }
+}
+
+// ── Manual: live preview ──────────────────────────────────────────────────────
+function triggerPreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(async () => {
+    try { await api('POST','/api/preview', { channels: manual }); } catch(_){}
+  }, 280);
+}
+
+// ── Clear schedule ────────────────────────────────────────────────────────────
+function clearSchedule() {
+  if (!confirm('Clear all schedule values?')) return;
+  schedule     = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
+  scheduleBase = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
+  resetMaster();
+  updateChart();
+  updateColorStrip();
+}
+
+// ── Colour preview strip ──────────────────────────────────────────────────────
+function getHourColor(h) {
+  let r = 0, g = 0, b = 0;
+  const chs = DEVICES[cfg.device].channels;
+  chs.forEach((ch, ci) => {
+    const pct = schedule[h][2 + ci] / 100;
+    const [lr, lg, lb] = LIGHT_RGB[ch];
+    r += lr * pct;
+    g += lg * pct;
+    b += lb * pct;
+  });
+  return `rgb(${Math.min(255,Math.round(r))},${Math.min(255,Math.round(g))},${Math.min(255,Math.round(b))})`;
+}
+
+function updateColorStrip() {
+  const strip = document.getElementById('colorStrip');
+  strip.innerHTML = '';
+  const currentHour = new Date().getHours();
+  for (let h = 0; h < 24; h++) {
+    const seg = document.createElement('div');
+    seg.style.background = getHourColor(h);
+    seg.title = `${String(h).padStart(2,'0')}:00`;
+    if (h === currentHour) {
+      seg.style.outline      = '2px solid rgba(255,255,255,0.7)';
+      seg.style.outlineOffset = '-2px';
+    }
+    strip.appendChild(seg);
+  }
+}
+
+// ── Channel toggle pills ──────────────────────────────────────────────────────
+function renderChannelToggles() {
+  const chs = DEVICES[cfg.device].channels;
+  const container = document.getElementById('chToggles');
+  container.innerHTML = '';
+  chs.forEach(ch => {
+    const pill = document.createElement('span');
+    const hidden = hiddenChannels.has(ch);
+    pill.className = `ch-toggle${hidden ? ' off' : ''}`;
+    pill.textContent = CH[ch].label;
+    pill.style.borderColor = CH[ch].css;
+    pill.style.color = CH[ch].css;
+    if (!hidden) {
+      pill.style.background = `rgba(${CH[ch].rgb.join(',')},0.18)`;
+    }
+    pill.onclick = () => {
+      if (hiddenChannels.has(ch)) hiddenChannels.delete(ch);
+      else hiddenChannels.add(ch);
+      localStorage.setItem('k7-hiddenChannels', JSON.stringify([...hiddenChannels]));
+      renderChannelToggles();
+      updateChart();
+    };
+    container.appendChild(pill);
+  });
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
+const nowLinePlugin = {
+  id: 'nowLine',
+  afterDraw(chart) {
+    const now   = new Date();
+    const hours = now.getHours() + now.getMinutes() / 60;
+    const xs    = chart.scales.x;
+    const ys    = chart.scales.y;
+    // Interpolate pixel position between the two surrounding hour ticks
+    const h  = Math.floor(hours);
+    const x1 = xs.getPixelForValue(h);
+    const x2 = h < 23 ? xs.getPixelForValue(h + 1) : x1;
+    const x  = x1 + (hours - h) * (x2 - x1);
+    const label = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, ys.top);
+    ctx.lineTo(x, ys.bottom);
+    ctx.strokeStyle = cssVar('--nowline');
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font      = '600 11px system-ui,sans-serif';
+    ctx.fillStyle = cssVar('--nowline-label');
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x, ys.top - 5);
+    ctx.restore();
+  }
+};
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function applyThemeToChart() {
+  if (!chart) return;
+  chart.options.plugins.legend.labels.color          = cssVar('--text');
+  chart.options.plugins.tooltip.backgroundColor      = cssVar('--tooltip-bg');
+  chart.options.plugins.tooltip.borderColor          = cssVar('--tooltip-border');
+  chart.options.plugins.tooltip.titleColor           = cssVar('--tooltip-text');
+  chart.options.plugins.tooltip.bodyColor            = cssVar('--tooltip-text');
+  chart.options.scales.x.ticks.color                 = cssVar('--muted');
+  chart.options.scales.x.grid.color                  = cssVar('--chart-grid');
+  chart.options.scales.y.ticks.color                 = cssVar('--muted');
+  chart.options.scales.y.grid.color                  = cssVar('--chart-grid');
+  chart.update('none');
+}
+
+function toggleTheme() {
+  const light = document.documentElement.getAttribute('data-theme') === 'light';
+  const next  = light ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  document.getElementById('themeBtn').textContent = next === 'light' ? '🌙' : '☀';
+  localStorage.setItem('k7-theme', next);
+  applyThemeToChart();
+  updateChart();
+}
+
+function initChart() {
+  const ctx = document.getElementById('schedChart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array.from({length:24}, (_,h) => `${String(h).padStart(2,'0')}:00`),
+      datasets: []
+    },
+    plugins: [nowLinePlugin],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: true },
+      plugins: {
+        legend: { position:'bottom', labels:{ color:cssVar('--text'), boxWidth:12, font:{size:12} } },
+        tooltip: {
+          backgroundColor: cssVar('--tooltip-bg'),
+          borderColor:     cssVar('--tooltip-border'),
+          titleColor:      cssVar('--tooltip-text'),
+          bodyColor:       cssVar('--tooltip-text'),
+          borderWidth: 1,
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%` }
+        },
+        dragData: {
+          round: 0,
+          showTooltip: true,
+          dragX: false,
+          onDrag: function(e, datasetIndex, index, value) {
+            const ds  = chart.data.datasets[datasetIndex];
+            if (!ds || !ds.channelKey) return value;
+            const ch   = ds.channelKey;
+            const chs  = DEVICES[cfg.device].channels;
+            const ci   = chs.indexOf(ch);
+            const cap  = channelBrightness[ch] ?? 100;
+            const m    = masterBrightness / 100;
+            const vmax = Math.min(100, Math.round(cap * m));
+            const v    = Math.max(0, Math.min(vmax, Math.round(value)));
+            schedule[index][2 + ci] = v;
+            // Back-calculate scheduleBase value, excluding this index from peak
+            const peak = Math.max(1, ...scheduleBase
+              .filter((_, i) => i !== index).map(row => row[2 + ci]));
+            scheduleBase[index][2 + ci] = (cap * m > 0)
+              ? Math.min(100, Math.round(v * peak / (cap * m)))
+              : 0;
+            updateColorStrip();
+            return v;
+          },
+        },
+      },
+      scales: {
+        x: { ticks:{ color:cssVar('--muted'), font:{size:11} }, grid:{ color:cssVar('--chart-grid') } },
+        y: {
+          min: 0, max: 100,
+          ticks:{ color:cssVar('--muted'), font:{size:11}, callback: v => v+'%' },
+          grid:{ color:cssVar('--chart-grid') }
+        }
+      },
+      elements: {
+        point:{ radius: 4, hoverRadius: 6, hitRadius: 20 },
+        line:{ borderWidth: 2 }
+      },
+    }
+  });
+}
+
+function _hourInLunarWindow(h, start, end) {
+  const sH = parseInt(start.split(':')[0]);
+  const eH = parseInt(end.split(':')[0]);
+  if (sH <= eH) return h >= sH && h < eH;
+  return h >= sH || h < eH;   // overnight window e.g. 21:00–06:00
+}
+
+function updateChart() {
+  const chs   = DEVICES[cfg.device].channels;
+  const light = document.documentElement.getAttribute('data-theme') === 'light';
+
+  // Lunar overlay: floor value applied to moonlight channels during the window.
+  // Show whenever lunar is scheduled or manually active.
+  let lunarFloor = 0, lunarFullMoon = 0, lunarWin = null;
+  if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
+    lunarFloor    = lunarState.max_intensity * lunarState.illumination / 100;
+    lunarFullMoon = lunarState.max_intensity;   // dashed reference at full moon
+    lunarWin      = { start: lunarState.start, end: lunarState.end };
+  }
+
+  chart.data.datasets = chs
+    .filter(ch => !hiddenChannels.has(ch))
+    .map(ch => {
+      const ci  = chs.indexOf(ch);
+      const [r,g,b] = CH[ch].rgb;
+      const lineColor = (ch === 'white' && light) ? '#888888' : CH[ch].css;
+
+      // Determine lunar contribution for this channel
+      let lunarContrib = 0;
+      if (lunarWin && lunarFloor > 0) {
+        if (ch === 'royal_blue') lunarContrib = lunarFloor;
+        else if (ch === 'blue' && cfg.device !== 'k7mini') lunarContrib = lunarFloor * 0.7;
+      }
+
+      const datasets = [{
+        label:           CH[ch].label,
+        channelKey:      ch,
+        data: schedule.map((row, h) => {
+          const v = row[2 + ci];
+          if (lunarContrib > 0 && _hourInLunarWindow(h, lunarWin.start, lunarWin.end))
+            return Math.max(v, Math.round(lunarContrib));
+          return v;
+        }),
+        borderColor:     lineColor,
+        backgroundColor: `rgba(${r},${g},${b},0.18)`,
+        fill:            true,
+        tension:         0.35,
+      }];
+
+      // Dashed full-moon reference line — shown whenever lunar is enabled for
+      // this channel, regardless of current moon phase (illumination may be 0).
+      const hasLunarCh = lunarWin && lunarFullMoon > 0 &&
+        (ch === 'royal_blue' || (ch === 'blue' && cfg.device !== 'k7mini'));
+      if (hasLunarCh) {
+        const fmVal = ch === 'royal_blue' ? lunarFullMoon : Math.round(lunarFullMoon * 0.7);
+        datasets.push({
+          label:           CH[ch].label + ' (full moon)',
+          channelKey:      ch,
+          data: schedule.map((_, h) =>
+            _hourInLunarWindow(h, lunarWin.start, lunarWin.end) ? fmVal : null),
+          borderColor:     lineColor,
+          borderDash:      [4, 4],
+          borderWidth:     1,
+          backgroundColor: 'transparent',
+          fill:            false,
+          tension:         0,
+          pointRadius:     0,
+          spanGaps:        false,
+        });
+      }
+
+      return datasets;
+    }).flat();
+  chart.update('none');
+}
+
+// ── Manual sliders ────────────────────────────────────────────────────────────
+function renderSliders() {
+  const chs = DEVICES[cfg.device].channels;
+  const container = document.getElementById('sliderRows');
+  container.innerHTML = '';
+  chs.forEach((ch, ci) => {
+    const val = manual[ci] || 0;
+    const row = document.createElement('div');
+    row.className = 'ch-slider-row';
+    row.innerHTML = `
+      <span class="ch-label" style="color:${CH[ch].css}">${CH[ch].label}</span>
+      <input type="range" class="ch-slider" min="0" max="100" value="${val}"
+             data-ci="${ci}" data-ch="${ch}"
+             style="accent-color:${CH[ch].css}">
+      <span class="ch-value" id="val_${ch}">${val}%</span>`;
+    container.appendChild(row);
+    row.querySelector('input').addEventListener('input', onSliderChange);
+  });
+}
+
+function onSliderChange(e) {
+  const ci = parseInt(e.target.dataset.ci);
+  const ch = e.target.dataset.ch;
+  const v  = parseInt(e.target.value);
+  manual[ci] = v;
+  document.getElementById(`val_${ch}`).textContent = v + '%';
+  triggerPreview();
+}
+
+// ── Per-channel scale sliders ─────────────────────────────────────────────────
+function renderChannelScales() {
+  const chs = DEVICES[cfg.device].channels;
+  const bar = document.getElementById('chScaleBar');
+  bar.innerHTML = '';
+  chs.forEach(ch => {
+    const cap = channelBrightness[ch] ?? 100;
+    const effective = Math.min(100, Math.round(cap * masterBrightness / 100));
+    const item = document.createElement('div');
+    item.className = 'ch-scale-item';
+    item.innerHTML = `
+      <span class="ch-scale-label" style="color:${CH[ch].css}">${CH[ch].label}</span>
+      <input type="range" id="chslider_${ch}" class="ch-slider" min="0" max="100" value="${effective}"
+             style="flex:1; accent-color:${CH[ch].css}" data-ch="${ch}">
+      <span class="ch-scale-val" id="chscale_${ch}">${effective}%</span>`;
+    item.querySelector('input').addEventListener('input', e => {
+      const ch = e.target.dataset.ch;
+      const v = parseInt(e.target.value);
+      // Back-calculate cap so effective output = slider value
+      channelBrightness[ch] = masterBrightness > 0
+        ? Math.min(100, Math.round(v * 100 / masterBrightness))
+        : v;
+      document.getElementById(`chscale_${ch}`).textContent = v + '%';
+      applyMaster();
+      updateChart();
+      updateColorStrip();
+    });
+    bar.appendChild(item);
+  });
+}
+
+function syncChannelSliders() {
+  DEVICES[cfg.device].channels.forEach(ch => {
+    const effective = Math.min(100, Math.round((channelBrightness[ch] ?? 100) * masterBrightness / 100));
+    const sl = document.getElementById(`chslider_${ch}`);
+    if (sl) sl.value = effective;
+    const lbl = document.getElementById(`chscale_${ch}`);
+    if (lbl) lbl.textContent = effective + '%';
+  });
+}
+
+// ── Master brightness ─────────────────────────────────────────────────────────
+function applyMaster() {
+  const m   = masterBrightness / 100;
+  const chs = DEVICES[cfg.device].channels;
+  // Normalise each channel by its own peak so the slider is an absolute output target
+  const peaks = chs.map((_, ci) =>
+    Math.max(1, ...scheduleBase.map(row => row[2 + ci]))
+  );
+  for (let h = 0; h < 24; h++) {
+    const srcH = ((h - dayShift) % 24 + 24) % 24;
+    for (let ci = 0; ci < 6; ci++) {
+      if (ci < chs.length) {
+        const ch  = chs[ci];
+        const cap = channelBrightness[ch] ?? 100;
+        schedule[h][2 + ci] = Math.min(100,
+          Math.round((scheduleBase[srcH][2 + ci] / peaks[ci]) * cap * m)
+        );
+      } else {
+        schedule[h][2 + ci] = 0;
+      }
+    }
+  }
+}
+
+function resetMaster() {
+  masterBrightness = 100;
+  // dayShift intentionally NOT reset here — it is controlled by the shift
+  // arrows and persisted in localStorage independently of the schedule state.
+  // Initialise each channel slider to the profile's actual peak for that channel
+  const chs = DEVICES[cfg.device].channels;
+  chs.forEach((ch, ci) => {
+    const peak = Math.max(0, ...scheduleBase.map(row => row[2 + ci]));
+    channelBrightness[ch] = peak > 0 ? peak : 100;
+  });
+  const sl = document.getElementById('masterSlider');
+  if (sl) sl.value = 100;
+  const mv = document.getElementById('masterVal');
+  if (mv) mv.textContent = '100%';
+  renderChannelScales();
+  applyMaster();
+}
+
+function changeShift(delta) {
+  dayShift = ((dayShift + delta) % 24 + 24) % 24;
+  const display = dayShift === 0 ? '+0h'
+    : dayShift <= 12 ? `+${dayShift}h`
+    : `-${24 - dayShift}h`;
+  document.getElementById('shiftVal').textContent = display;
+  localStorage.setItem('k7-dayShift', dayShift);
+  applyMaster();
+  updateChart();
+  updateColorStrip();
+  clearTimeout(_masterTimer);
+  _masterTimer = setTimeout(_autoPushMaster, 400);
+}
+
+let _masterTimer = null;
+function onMasterChange() {
+  masterBrightness = parseInt(document.getElementById('masterSlider').value);
+  document.getElementById('masterVal').textContent = masterBrightness + '%';
+  applyMaster();
+  syncChannelSliders();
+  updateChart();
+  updateColorStrip();
+  clearTimeout(_masterTimer);
+  _masterTimer = setTimeout(_autoPushMaster, 400);
+}
+
+async function _autoPushMaster() {
+  try {
+    const chs = DEVICES[cfg.device].channels;
+    const pushSched = schedule.map(row => {
+      const r = [...row];
+      chs.forEach((ch, ci) => { if (hiddenChannels.has(ch)) r[2 + ci] = 0; });
+      return r;
+    });
+    await Promise.all([
+      api('POST', '/api/master', {value: masterBrightness}),
+      api('POST', '/api/push', {manual, schedule: pushSched, mode}),
+    ]);
+  } catch(_) {}
+}
+
+// ── Smooth ramp ───────────────────────────────────────────────────────────────
+function setRampBtn(active, lastTick) {
+  const pill = document.getElementById('rampPill');
+  const btn  = document.getElementById('rampBtn');
+  const tick = document.getElementById('rampTick');
+  pill.classList.toggle('active', active);
+  btn.title = active
+    ? 'Smooth ramp active — click to stop'
+    : 'Enable smooth per-minute ramping — controller sends brightness directly to lamp every minute';
+  if (active && lastTick) {
+    const ago = Math.round((Date.now() / 1000) - lastTick);
+    tick.textContent = 'Last tick: ' + (ago < 5 ? 'just now' : `${ago}s ago`);
+  } else {
+    tick.textContent = active ? 'Running…' : 'Inactive';
+  }
+}
+
+async function pollRampStatus() {
+  try {
+    const s = await api('GET', '/api/ramp/status');
+    setRampBtn(s.active, s.last_tick);
+  } catch {}
+}
+
+function _setIfUnfocused(id, setter) {
+  const el = document.getElementById(id);
+  if (el && document.activeElement !== el) setter(el);
+}
+
+async function pollEffectStates() {
+  try {
+    const [ramp, light, lunar, master, clouds] = await Promise.all([
+      api('GET', '/api/ramp/status'),
+      api('GET', '/api/lightning/status'),
+      api('GET', '/api/lunar/status'),
+      api('GET', '/api/master'),
+      api('GET', '/api/clouds/status'),
+    ]);
+    const masterSlider = document.getElementById('masterSlider');
+    if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
+      masterBrightness = master.value;
+      masterSlider.value = master.value;
+      document.getElementById('masterVal').textContent = master.value + '%';
+      applyMaster(); syncChannelSliders(); updateChart(); updateColorStrip();
+    }
+    setRampBtn(ramp.active, ramp.last_tick);
+    setLightningBtn(light.active);
+    _setIfUnfocused('lsEnabled', el => { el.checked = !!light.enabled; });
+    _setIfUnfocused('lsStart',   el => { el.value = light.start || '20:00'; });
+    _setIfUnfocused('lsEnd',     el => { el.value = light.end   || '23:00'; });
+    document.getElementById('lsTimeWrap').style.display = light.enabled ? '' : 'none';
+    // Lunar: sync settings but skip updateChart() — that runs in loadLunarStatus (60 s)
+    lunarState = lunar;
+    setLunarBtn(lunar.active);
+    _setIfUnfocused('lmEnabled',      el => { el.checked = !!lunar.enabled; });
+    _setIfUnfocused('lmStart',        el => { el.value = lunar.start || '21:00'; });
+    _setIfUnfocused('lmEnd',          el => { el.value = lunar.end   || '06:00'; });
+    _setIfUnfocused('lmMaxIntensity', el => { el.value = lunar.max_intensity != null ? lunar.max_intensity : 15; });
+    document.getElementById('lmTimeWrap').style.display = lunar.enabled ? '' : 'none';
+    if (lunar.phase_name != null)
+      document.getElementById('lunarPhase').textContent =
+        `${moonEmoji(lunar.phase||0)} ${lunar.phase_name} · ${lunar.illumination}%`;
+    applyCloudsUI(clouds);
+  } catch(_) {}
+}
+
+async function toggleRamp() {
+  const active = document.getElementById('rampPill').classList.contains('active');
+  setRampBtn(!active, null);
+  try {
+    await api('POST', active ? '/api/ramp/stop' : '/api/ramp/start');
+  } catch(e) {
+    setRampBtn(active, null);
+    setErr(e.message);
+  }
+}
+
+// ── Lightning effect ──────────────────────────────────────────────────────────
+function setLightningBtn(active) {
+  const pill = document.getElementById('lightningPill');
+  const btn  = document.getElementById('lightningBtn');
+  pill.classList.toggle('active', active);
+  btn.title = active ? 'Lightning active — click to stop' : 'Simulate lightning flashes';
+}
+
+async function toggleLightning() {
+  const active = document.getElementById('lightningPill').classList.contains('active');
+  setLightningBtn(!active);
+  try {
+    await api('POST', active ? '/api/lightning/stop' : '/api/lightning/start');
+  } catch(e) {
+    setLightningBtn(active);
+    setErr(e.message);
+  }
+}
+
+// ── Lightning schedule ────────────────────────────────────────────────────────
+function applyLsUI(ls) {
+  document.getElementById('lsEnabled').checked = !!ls.enabled;
+  document.getElementById('lsStart').value     = ls.start || '20:00';
+  document.getElementById('lsEnd').value       = ls.end   || '23:00';
+  document.getElementById('lsTimeWrap').style.display = ls.enabled ? '' : 'none';
+}
+
+async function loadLightningSchedule() {
+  try {
+    const ls = await api('GET', '/api/lightning/schedule');
+    applyLsUI(ls);
+  } catch(_) {}
+}
+
+async function onLsChange() {
+  const ls = {
+    enabled: document.getElementById('lsEnabled').checked,
+    start:   document.getElementById('lsStart').value,
+    end:     document.getElementById('lsEnd').value,
+  };
+  document.getElementById('lsTimeWrap').style.display = ls.enabled ? '' : 'none';
+  try { await api('POST', '/api/lightning/schedule', ls); } catch(_) {}
+}
+
+// ── Lunar cycle ───────────────────────────────────────────────────────────────
+const MOON_EMOJIS = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
+
+function moonEmoji(phase) {
+  return MOON_EMOJIS[Math.round(phase * 8) % 8];
+}
+
+function setLunarBtn(active) {
+  const pill = document.getElementById('lunarPill');
+  const btn  = document.getElementById('lunarBtn');
+  pill.classList.toggle('active', active);
+  btn.title = active ? 'Lunar cycle active — click to stop'
+                     : 'Vary royal blue channel intensity with the lunar cycle';
+}
+
+function applyLunarUI(d) {
+  lunarState = d;
+  setLunarBtn(d.active);
+  document.getElementById('lmEnabled').checked              = !!d.enabled;
+  document.getElementById('lmStart').value                  = d.start         || '21:00';
+  document.getElementById('lmEnd').value                    = d.end           || '06:00';
+  _setIfUnfocused('lmMaxIntensity', el => { el.value = d.max_intensity != null ? d.max_intensity : 15; });
+  document.getElementById('lmTimeWrap').style.display       = d.enabled ? '' : 'none';
+  if (d.phase_name != null) {
+    const emoji = moonEmoji(d.phase || 0);
+    document.getElementById('lunarPhase').textContent =
+      `${emoji} ${d.phase_name} · ${d.illumination}%`;
+  }
+  if (chart) updateChart();
+}
+
+async function loadLunarStatus() {
+  try { applyLunarUI(await api('GET', '/api/lunar/status')); } catch(_) {}
+}
+
+async function toggleLunar() {
+  const active = document.getElementById('lunarPill').classList.contains('active');
+  setLunarBtn(!active);
+  try {
+    await api('POST', active ? '/api/lunar/stop' : '/api/lunar/start');
+  } catch(e) {
+    setLunarBtn(active);
+    setErr(e.message);
+  }
+}
+
+async function onLmChange() {
+  const lm = {
+    enabled:       document.getElementById('lmEnabled').checked,
+    start:         document.getElementById('lmStart').value,
+    end:           document.getElementById('lmEnd').value,
+    max_intensity: parseInt(document.getElementById('lmMaxIntensity').value) || 15,
+  };
+  document.getElementById('lmTimeWrap').style.display = lm.enabled ? '' : 'none';
+  try { await api('POST', '/api/lunar/schedule', lm); } catch(_) {}
+  await loadLunarStatus();
+}
+
+// ── Clouds effect ─────────────────────────────────────────────────────────────
+function setCloudsBtn(active) {
+  const pill = document.getElementById('cloudsPill');
+  const btn  = document.getElementById('cloudsBtn');
+  pill.classList.toggle('active', active);
+  btn.title = active ? 'Clouds active — click to stop' : 'Simulate passing clouds — random dimming events';
+}
+
+async function toggleClouds() {
+  const active = document.getElementById('cloudsPill').classList.contains('active');
+  setCloudsBtn(!active);
+  try {
+    await api('POST', active ? '/api/clouds/stop' : '/api/clouds/start');
+  } catch(e) {
+    setCloudsBtn(active);
+    setErr(e.message);
+  }
+}
+
+function applyCloudsUI(d) {
+  setCloudsBtn(d.active);
+  _setIfUnfocused('cloudDensity', el => { el.value = d.density ?? 30; });
+  _setIfUnfocused('cloudDepth',   el => { el.value = d.depth   ?? 60; });
+  _setIfUnfocused('cloudShift',   el => { el.checked = d.colour_shift !== false; });
+}
+
+async function onCloudsChange() {
+  try {
+    await api('POST', '/api/clouds/settings', {
+      density:      parseInt(document.getElementById('cloudDensity').value) || 30,
+      depth:        parseInt(document.getElementById('cloudDepth').value)   || 60,
+      colour_shift: document.getElementById('cloudShift').checked,
+    });
+  } catch(_) {}
+}
+
+// ── Flyout panels ─────────────────────────────────────────────────────────────
+function toggleFlyout(name) {
+  const flyout = document.getElementById(name + 'Flyout');
+  const cfgBtn = document.getElementById(name + 'CfgBtn');
+  const isOpen = flyout.classList.contains('open');
+  document.querySelectorAll('.fx-flyout').forEach(f => f.classList.remove('open'));
+  document.querySelectorAll('.fx-cfg').forEach(b => b.classList.remove('open'));
+  if (!isOpen) {
+    flyout.classList.add('open');
+    cfgBtn.classList.add('open');
+  }
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.fx-pill')) {
+    document.querySelectorAll('.fx-flyout').forEach(f => f.classList.remove('open'));
+    document.querySelectorAll('.fx-cfg').forEach(b => b.classList.remove('open'));
+  }
+});
+
+// ── Presets ───────────────────────────────────────────────────────────────────
+async function loadPresets() {
+  try {
+    presets = await api('GET', '/api/presets');
+    savedProfiles = await api('GET', '/api/profiles');
+  } catch(_) {}
+  rebuildPresetDropdown();
+}
+
+function rebuildPresetDropdown() {
+  const sel = document.getElementById('presetSel');
+  sel.innerHTML = '<option value="">— Load Preset —</option>';
+
+  // Built-in presets
+  for (const [key, p] of Object.entries(presets)) {
+    const opt = document.createElement('option');
+    opt.value       = `preset:${key}`;
+    opt.textContent = p.name;
+    if (`preset:${key}` === activePresetKey) opt.selected = true;
+    sel.appendChild(opt);
+  }
+
+  // Saved profiles
+  const names = Object.keys(savedProfiles);
+  if (names.length) {
+    const sep = document.createElement('option');
+    sep.disabled = true;
+    sep.textContent = '── Saved Profiles ──';
+    sel.appendChild(sep);
+    for (const name of names) {
+      const opt = document.createElement('option');
+      opt.value       = `saved:${name}`;
+      opt.textContent = name;
+      if (savedProfiles[name].device !== cfg.device) opt.textContent += ' ⚠';
+      if (`saved:${name}` === activePresetKey) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
+  // Show description for the active preset
+  if (activePresetKey) {
+    if (activePresetKey.startsWith('preset:')) {
+      const p = presets[activePresetKey.slice(7)];
+      if (p) document.getElementById('presetDesc').textContent = p.desc || '';
+    }
+  } else {
+    document.getElementById('presetDesc').textContent = '';
+  }
+  document.getElementById('deleteProfileBtn').style.display = 'none';
+}
+
+function onPresetChange() {
+  const val = document.getElementById('presetSel').value;
+  document.getElementById('deleteProfileBtn').style.display = 'none';
+  if (!val) { document.getElementById('presetDesc').textContent = ''; activePresetKey = ''; return; }
+
+  if (val.startsWith('preset:')) {
+    const key = val.slice(7);
+    const p = presets[key];
+    if (!p) return;
+    document.getElementById('presetDesc').textContent = p.desc;
+    scheduleBase = p.schedule.map(row => [...row]);
+    manual       = [...p.manual];
+    resetMaster();
+    updateChart();
+    updateColorStrip();
+    renderSliders();
+    activePresetKey = val;
+    setOk(`Preset loaded: ${p.name} — click Push to apply`);
+
+  } else if (val.startsWith('saved:')) {
+    const name = val.slice(6);
+    const p = savedProfiles[name];
+    if (!p) return;
+    document.getElementById('presetDesc').textContent =
+      p.device !== cfg.device ? `⚠ Saved for ${p.device}` : `Saved profile`;
+    document.getElementById('deleteProfileBtn').style.display = '';
+    scheduleBase = p.scheduleBase.map(row => [...row]);
+    manual       = [...(p.manual || manual)];
+    // Restore saved slider state
+    masterBrightness = p.masterBrightness ?? 100;
+    dayShift         = p.dayShift ?? 0;
+    const chs = DEVICES[cfg.device].channels;
+    chs.forEach(ch => { channelBrightness[ch] = p.channelBrightness?.[ch] ?? 100; });
+    // Sync UI controls
+    const sl = document.getElementById('masterSlider');
+    if (sl) sl.value = masterBrightness;
+    const mv = document.getElementById('masterVal');
+    if (mv) mv.textContent = masterBrightness + '%';
+    const sv = document.getElementById('shiftVal');
+    if (sv) {
+      const d = dayShift;
+      sv.textContent = d === 0 ? '+0h' : d <= 12 ? `+${d}h` : `-${24-d}h`;
+    }
+    renderChannelScales();
+    applyMaster();
+    updateChart();
+    updateColorStrip();
+    renderSliders();
+    activePresetKey = val;
+    setOk(`Profile loaded: ${name} — click Push to apply`);
+  }
+}
+
+async function saveProfile() {
+  const name = prompt('Profile name:');
+  if (!name || !name.trim()) return;
+  const key = name.trim();
+  if (savedProfiles[key] && !confirm(`Profile "${key}" already exists. Overwrite?`)) return;
+  setBusy('Saving…');
+  try {
+    await api('POST', '/api/profiles', {
+      name:             key,
+      device:           cfg.device,
+      scheduleBase:     scheduleBase.map(row => [...row]),
+      manual:           [...manual],
+      channelBrightness: {...channelBrightness},
+      masterBrightness,
+      dayShift,
+    });
+    savedProfiles = await api('GET', '/api/profiles');
+    rebuildPresetDropdown();
+    // Select the newly saved profile
+    const sel = document.getElementById('presetSel');
+    for (const opt of sel.options) {
+      if (opt.value === `saved:${key}`) { sel.value = opt.value; break; }
+    }
+    onPresetChange();
+    setOk(`Profile "${key}" saved`);
+  } catch(e) {
+    setErr(e.message);
+  }
+}
+
+async function deleteProfile() {
+  const val = document.getElementById('presetSel').value;
+  if (!val.startsWith('saved:')) return;
+  const name = val.slice(6);
+  if (!confirm(`Delete profile "${name}"?`)) return;
+  setBusy('Deleting…');
+  try {
+    await api('DELETE', `/api/profiles/${encodeURIComponent(name)}`);
+    savedProfiles = await api('GET', '/api/profiles');
+    rebuildPresetDropdown();
+    setOk(`Profile "${name}" deleted`);
+  } catch(e) {
+    setErr(e.message);
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  const savedTheme = localStorage.getItem('k7-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  document.getElementById('themeBtn').textContent = savedTheme === 'light' ? '🌙' : '☀';
+  const savedShift = parseInt(localStorage.getItem('k7-dayShift') || '0', 10);
+  if (savedShift) {
+    dayShift = savedShift;
+    const sv = document.getElementById('shiftVal');
+    if (sv) sv.textContent = dayShift <= 12 ? `+${dayShift}h` : `-${24 - dayShift}h`;
+  }
+  initChart();
+  try {
+    const c = await api('GET','/api/config');
+    cfg = c;
+    document.getElementById('hostInput').value = cfg.host;
+    document.getElementById('deviceSel').value = cfg.device;
+  } catch(_){}
+
+  DEVICES[cfg.device].channels.forEach(ch => { channelBrightness[ch] = 100; });
+  try {
+    const h = localStorage.getItem('k7-hiddenChannels');
+    if (h) JSON.parse(h).forEach(ch => hiddenChannels.add(ch));
+  } catch(_) {}
+  renderSliders();
+  renderChannelToggles();
+  renderChannelScales();
+  updateChart();
+  updateColorStrip();
+  applyModeUI();
+  readFromDevice();
+  // Sync server clock (no-op on PC Flask; sets ESP32 RTC so scheduler has correct time)
+  // Send local time (not UTC) so the device RTC matches the timezone the
+  // schedule times were entered in. getTimezoneOffset() is negative for UTC+.
+  api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 }).catch(() => {});
+  // Restore button states for server-side effects
+  pollEffectStates();
+  setInterval(pollEffectStates, 5000);
+  loadLightningSchedule();
+  loadLunarStatus();
+  setInterval(loadLunarStatus, 60000);
+  // Redraw the now-line and colour strip highlight every minute
+  setInterval(() => { if (chart) chart.update('none'); updateColorStrip(); }, 60000);
+}
+
+// ── Cross-tab sync via storage events ────────────────────────────────────────
+window.addEventListener('storage', e => {
+  if (e.key === 'k7-dayShift') {
+    dayShift = parseInt(e.newValue || '0', 10);
+    const d  = dayShift;
+    const sv = document.getElementById('shiftVal');
+    if (sv) sv.textContent = d === 0 ? '+0h' : d <= 12 ? `+${d}h` : `-${24-d}h`;
+    applyMaster();
+    updateChart();
+    updateColorStrip();
+  }
+  if (e.key === 'k7-hiddenChannels') {
+    hiddenChannels.clear();
+    try { JSON.parse(e.newValue || '[]').forEach(ch => hiddenChannels.add(ch)); } catch(_) {}
+    renderChannelToggles();
+    updateChart();
+  }
+});
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>K7 LED Controller</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪸</text></svg>">
+<style>
+:root {
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --surface2: #1f2937;
+  --border:   rgba(255,255,255,0.10);
+  --text:     #c9d1d9;
+  --muted:    #6e7681;
+  --hover:    #2d3748;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding-bottom: 72px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Header ── */
+.hdr {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 10px;
+}
+.hdr-title { font-size: 1rem; font-weight: 600; flex: 1; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.ok    { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+.status-dot.error { background: #f85149; box-shadow: 0 0 6px #f85149; }
+.status-dot.busy  { background: #d29922; box-shadow: 0 0 6px #d29922; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.status-txt {
+  font-size: 0.78rem; color: var(--muted);
+  flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.hdr-btn {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+  border-radius: 6px; padding: 6px 11px; font-size: 0.78rem; cursor: pointer;
+  white-space: nowrap; text-decoration: none; display: inline-block;
+}
+.hdr-btn:active { background: var(--hover); color: var(--text); }
+
+/* ── Mode toggle ── */
+.mode-row {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 12px 14px;
+  display: flex; align-items: center; justify-content: center; gap: 16px;
+}
+.mode-lbl { font-size: 0.9rem; font-weight: 600; color: var(--muted); }
+.mode-lbl.on { color: var(--text); }
+.tog { position: relative; width: 54px; height: 28px; cursor: pointer; }
+.tog input { opacity: 0; width: 0; height: 0; }
+.tog-track { position: absolute; inset: 0; border-radius: 14px; background: #4169e1; transition: background 0.2s; }
+.tog-track.manual { background: #e1a141; }
+.tog-thumb { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+.tog input:checked ~ .tog-thumb { transform: translateX(26px); }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-top: 10px;
+}
+.card-hd {
+  padding: 10px 14px 6px;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+/* ── Channel sliders ── */
+.ch-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.ch-row:last-child { border-bottom: none; }
+.ch-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.ch-name { width: 92px; font-size: 0.85rem; font-weight: 500; flex-shrink: 0; }
+.ch-slider {
+  flex: 1; height: 8px;
+  -webkit-appearance: none; appearance: none;
+  border-radius: 4px; outline: none; cursor: pointer; background: var(--surface2);
+}
+.ch-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
+  cursor: pointer; border: 2px solid rgba(255,255,255,0.25);
+}
+.ch-val { width: 40px; text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.apply-row { padding: 12px 14px; }
+.btn-apply {
+  width: 100%; padding: 12px;
+  background: #238636; border: 1px solid #2ea043; color: #fff;
+  border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+}
+.btn-apply:active { background: #2ea043; }
+
+/* ── Master slider ── */
+.master-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+}
+.master-lbl { font-size: 0.82rem; font-weight: 600; color: var(--muted); width: 54px; flex-shrink: 0; }
+.master-slider {
+  flex: 1; height: 8px;
+  -webkit-appearance: none; appearance: none;
+  border-radius: 4px; outline: none; cursor: pointer;
+  background: var(--surface2); accent-color: #c9d1d9;
+}
+.master-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
+  background: #c9d1d9; cursor: pointer; border: 2px solid rgba(255,255,255,0.25);
+}
+.master-val { width: 44px; text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+/* ── Now bars ── */
+.now-row { display: flex; align-items: center; gap: 10px; padding: 6px 14px; }
+.now-name { width: 92px; font-size: 0.8rem; font-weight: 500; flex-shrink: 0; }
+.now-track { flex: 1; background: var(--surface2); border-radius: 4px; height: 16px; overflow: hidden; }
+.now-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
+.now-pct { width: 38px; text-align: right; font-size: 0.78rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* ── Expander ── */
+.expander {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; user-select: none; border-top: 1px solid var(--border);
+}
+.exp-icon { transition: transform 0.2s; display: inline-block; }
+.exp-icon.open { transform: rotate(180deg); }
+.collapse { display: none; }
+.collapse.open { display: block; }
+
+/* ── Schedule table ── */
+.sched-wrap { overflow-x: auto; padding: 0 14px 14px; }
+.sched-tbl { width: 100%; font-size: 0.78rem; border-collapse: collapse; white-space: nowrap; }
+.sched-tbl th {
+  padding: 6px 3px; text-align: center;
+  color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 600;
+}
+.sched-tbl td { padding: 4px 2px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.sched-tbl tr.cur td { background: rgba(56,189,248,0.08); }
+.sched-tbl td input {
+  width: 36px; background: transparent; border: 1px solid transparent;
+  color: var(--text); text-align: center; font-size: 0.78rem; padding: 3px 1px; border-radius: 4px;
+}
+.sched-tbl td input:focus { border-color: rgba(255,255,255,0.2); background: var(--surface2); outline: none; }
+
+/* ── Effects ── */
+.fx-card { border-top: 1px solid var(--border); }
+.fx-main { display: flex; align-items: center; padding: 14px; gap: 12px; }
+.fx-info { flex: 1; }
+.fx-name { font-size: 0.95rem; font-weight: 600; }
+.fx-sub  { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
+.fx-tog {
+  min-width: 60px; height: 34px; border-radius: 17px;
+  border: 2px solid var(--border); background: var(--surface2);
+  color: var(--muted); font-size: 0.8rem; font-weight: 700;
+  cursor: pointer; transition: all 0.15s;
+}
+.fx-tog.on-ramp      { border-color: rgba(56,189,248,0.6);  background: rgba(56,189,248,0.12);  color: #38bdf8; }
+.fx-tog.on-lightning { border-color: rgba(227,173,14,0.6);  background: rgba(227,173,14,0.12);  color: #e3ad0e; }
+.fx-tog.on-lunar     { border-color: rgba(99,102,241,0.6);  background: rgba(99,102,241,0.15);  color: #818cf8; }
+.fx-tog.on-clouds    { border-color: rgba(148,163,184,0.6); background: rgba(148,163,184,0.12); color: #94a3b8; }
+.fx-set-toggle {
+  padding: 0 14px 10px; font-size: 0.75rem; color: var(--muted); cursor: pointer; user-select: none;
+}
+.fx-settings { display: none; padding: 0 14px 14px; }
+.fx-settings.open { display: block; }
+.set-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.85rem; }
+.set-row:last-child { margin-bottom: 0; }
+.chk-lbl { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem; }
+.chk-lbl input[type=checkbox] { width: 18px; height: 18px; accent-color: #6366f1; cursor: pointer; }
+.time-in {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 7px 8px; font-size: 0.85rem; width: 105px;
+}
+.time-in::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+.num-in {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 7px 8px; font-size: 0.85rem; width: 60px; text-align: center;
+}
+
+/* ── Profiles ── */
+.profile-row { display: flex; gap: 8px; padding: 12px 14px; }
+.profile-sel {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 10px 12px; font-size: 0.85rem;
+}
+.profile-save {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 10px 14px; font-size: 0.95rem; cursor: pointer;
+}
+.profile-save:active { background: var(--hover); }
+.profile-desc { padding: 0 14px 12px; font-size: 0.78rem; color: var(--muted); min-height: 4px; }
+
+/* ── Fixed action bar ── */
+.action-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 10px 12px; display: flex; gap: 8px; z-index: 100;
+}
+.action-bar button {
+  flex: 1; padding: 13px; font-size: 0.95rem; font-weight: 600;
+  border-radius: 8px; border: 1px solid; cursor: pointer;
+}
+.btn-push { background: #238636; border-color: #2ea043; color: #fff; }
+.btn-push:active { background: #2ea043; }
+.btn-read { background: var(--surface2); border-color: var(--border); color: var(--text); }
+.btn-read:active { background: var(--hover); }
+button:disabled { opacity: 0.4; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <span class="hdr-title">🪸 K7 Controller</span>
+  <div class="status-dot busy" id="dot"></div>
+  <span class="status-txt" id="statusMsg">Connecting…</span>
+  <a href="/?view=desktop" class="hdr-btn">Desktop ↗</a>
+</div>
+
+<!-- Mode toggle -->
+<div class="mode-row">
+  <span class="mode-lbl" id="lblManual">Manual</span>
+  <label class="tog">
+    <input type="checkbox" id="modeToggle" onchange="onModeToggle()">
+    <div class="tog-track" id="togTrack"></div>
+    <div class="tog-thumb"></div>
+  </label>
+  <span class="mode-lbl on" id="lblAuto">Schedule</span>
+</div>
+
+<!-- Manual panel -->
+<div id="manualPanel" style="display:none">
+  <div class="card">
+    <div class="card-hd">Manual Brightness</div>
+    <div id="sliderRows"></div>
+    <div class="apply-row">
+      <button class="btn-apply" onclick="saveManual()">Apply to Lamp</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auto panel -->
+<div id="autoPanel">
+  <div class="card">
+    <div class="card-hd">Brightness</div>
+    <div class="master-row">
+      <span class="master-lbl">Master</span>
+      <input type="range" id="masterSlider" class="master-slider" min="0" max="200" value="100" oninput="onMasterChange()">
+      <span class="master-val" id="masterVal">100%</span>
+    </div>
+    <div id="nowBars"></div>
+    <div class="expander" onclick="toggleSched()">
+      <span>Schedule</span>
+      <span class="exp-icon" id="schedIcon">▾</span>
+    </div>
+    <div class="collapse" id="schedCollapse">
+      <div class="sched-wrap">
+        <table class="sched-tbl">
+          <thead><tr id="schedThead"></tr></thead>
+          <tbody id="schedTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Effects -->
+<div class="card" style="margin-top:10px">
+  <div class="card-hd" style="padding-bottom:4px">Effects</div>
+
+  <!-- Ramp -->
+  <div class="fx-card">
+    <div class="fx-main">
+      <div class="fx-info">
+        <div class="fx-name">≈ Smooth Ramp</div>
+        <div class="fx-sub" id="rampSub">Inactive</div>
+      </div>
+      <button class="fx-tog" id="rampBtn" onclick="toggleRamp()">OFF</button>
+    </div>
+  </div>
+
+  <!-- Lightning -->
+  <div class="fx-card">
+    <div class="fx-main">
+      <div class="fx-info">
+        <div class="fx-name">⚡ Lightning</div>
+        <div class="fx-sub" id="lightningSub">Inactive</div>
+      </div>
+      <button class="fx-tog" id="lightningBtn" onclick="toggleLightning()">OFF</button>
+    </div>
+    <div class="fx-set-toggle" onclick="toggleFxSet('lightning')">⚙ Settings ▾</div>
+    <div class="fx-settings" id="lightningSettings">
+      <div class="set-row">
+        <label class="chk-lbl">
+          <input type="checkbox" id="lsEnabled" onchange="onLsChange()"> Auto-schedule
+        </label>
+      </div>
+      <div class="set-row" id="lsTimeRow" style="display:none">
+        <input type="time" id="lsStart" class="time-in" onchange="onLsChange()">
+        <span style="color:var(--muted)">–</span>
+        <input type="time" id="lsEnd" class="time-in" onchange="onLsChange()">
+      </div>
+    </div>
+  </div>
+
+  <!-- Clouds -->
+  <div class="fx-card">
+    <div class="fx-main">
+      <div class="fx-info">
+        <div class="fx-name">☁ Clouds</div>
+        <div class="fx-sub" id="cloudsSub">Inactive</div>
+      </div>
+      <button class="fx-tog" id="cloudsBtn" onclick="toggleClouds()">OFF</button>
+    </div>
+    <div class="fx-set-toggle" onclick="toggleFxSet('clouds')">⚙ Settings ▾</div>
+    <div class="fx-settings" id="cloudsSettings">
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">Density</span>
+        <input type="number" id="cloudDensity" class="num-in" min="1" max="100" value="30" onchange="onCloudsChange()">
+        <span style="color:var(--muted);font-size:0.82rem">%</span>
+      </div>
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">Max depth</span>
+        <input type="number" id="cloudDepth" class="num-in" min="1" max="100" value="60" onchange="onCloudsChange()">
+        <span style="color:var(--muted);font-size:0.82rem">%</span>
+      </div>
+      <div class="set-row">
+        <label class="chk-lbl">
+          <input type="checkbox" id="cloudShift" checked onchange="onCloudsChange()"> Colour shift (blue dims more)
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lunar -->
+  <div class="fx-card">
+    <div class="fx-main">
+      <div class="fx-info">
+        <div class="fx-name">🌕 Lunar Cycle</div>
+        <div class="fx-sub" id="lunarSub">Loading…</div>
+      </div>
+      <button class="fx-tog" id="lunarBtn" onclick="toggleLunar()">OFF</button>
+    </div>
+    <div class="fx-set-toggle" onclick="toggleFxSet('lunar')">⚙ Settings ▾</div>
+    <div class="fx-settings" id="lunarSettings">
+      <div class="set-row">
+        <label class="chk-lbl">
+          <input type="checkbox" id="lmEnabled" onchange="onLmChange()"> Auto-schedule
+        </label>
+      </div>
+      <div class="set-row" id="lmTimeRow" style="display:none">
+        <input type="time" id="lmStart" class="time-in" onchange="onLmChange()">
+        <span style="color:var(--muted)">–</span>
+        <input type="time" id="lmEnd" class="time-in" onchange="onLmChange()">
+      </div>
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">Max intensity</span>
+        <input type="number" id="lmIntensity" class="num-in" min="1" max="100" value="15" onchange="onLmChange()">
+        <span style="color:var(--muted);font-size:0.82rem">%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Profiles & Presets -->
+<div class="card" style="margin-top:10px">
+  <div class="card-hd">Profiles &amp; Presets</div>
+  <div class="profile-row">
+    <select id="presetSel" class="profile-sel" onchange="onPresetChange()">
+      <option value="">— Select preset or profile —</option>
+    </select>
+    <button class="profile-save" onclick="saveProfile()" title="Save current schedule as profile">💾</button>
+  </div>
+  <div class="profile-desc" id="presetDesc"></div>
+</div>
+
+<div style="height:8px"></div>
+
+<!-- Fixed action bar -->
+<div class="action-bar">
+  <button class="btn-push" id="pushBtn" onclick="pushSchedule()">⬆ Push to Lamp</button>
+  <button class="btn-read" id="readBtn" onclick="readFromDevice()">↻ Read</button>
+</div>
+
+<script>
+// ── Channel metadata ─────────────────────────────────────────────────────
+const CH = {
+  uv:         { label:'UV',         css:'#8b2be2' },
+  royal_blue: { label:'Royal Blue', css:'#4169e1' },
+  blue:       { label:'Blue',       css:'#1e90ff' },
+  white:      { label:'White',      css:'#d2d2d2' },
+  warm_white: { label:'Warm White', css:'#ffc850' },
+  red:        { label:'Red',        css:'#dc3232' },
+};
+const DEVICES = {
+  k7mini: { channels:['white','royal_blue','blue'] },
+  k7pro:  { channels:['uv','royal_blue','blue','white','warm_white','red'] },
+};
+
+// ── State ────────────────────────────────────────────────────────────────
+let cfg      = { host:'192.168.4.1', port:8266, device:'k7mini' };
+let mode     = 'auto';
+let schedule = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
+let manual   = [0,0,0,0,0,0];
+let masterBrightness = 100;
+let presets  = {};
+let savedProfiles = {};
+let activePresetKey = '';  // e.g. "preset:mixed" or "profile:My Tank"
+
+function chs() { return DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels; }
+
+// ── Status ───────────────────────────────────────────────────────────────
+function setStatus(cls, msg) {
+  document.getElementById('dot').className = 'status-dot ' + cls;
+  document.getElementById('statusMsg').textContent = msg;
+}
+function setBusy(m) { setStatus('busy', m||'Working…'); }
+function setOk(m)   { setStatus('ok',   m); }
+function setErr(m)  { setStatus('error', m); }
+
+// ── API ──────────────────────────────────────────────────────────────────
+async function api(method, url, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  const d = await r.json();
+  if (!r.ok || d.error) throw new Error(d.error || r.statusText);
+  return d;
+}
+
+// ── Mode ─────────────────────────────────────────────────────────────────
+function applyModeUI() {
+  const auto = (mode === 'auto');
+  document.getElementById('manualPanel').style.display = auto ? 'none' : '';
+  document.getElementById('autoPanel').style.display   = auto ? '' : 'none';
+  document.getElementById('lblAuto').className   = 'mode-lbl' + (auto ? ' on' : '');
+  document.getElementById('lblManual').className = 'mode-lbl' + (!auto ? ' on' : '');
+  document.getElementById('togTrack').className  = 'tog-track' + (auto ? '' : ' manual');
+  document.getElementById('modeToggle').checked  = auto;
+}
+function onModeToggle() {
+  mode = document.getElementById('modeToggle').checked ? 'auto' : 'manual';
+  applyModeUI();
+}
+
+// ── Manual sliders ───────────────────────────────────────────────────────
+function buildSliders() {
+  document.getElementById('sliderRows').innerHTML = chs().map((ch, i) => {
+    const c = CH[ch];
+    return `<div class="ch-row">
+      <div class="ch-swatch" style="background:${c.css}"></div>
+      <span class="ch-name">${c.label}</span>
+      <input type="range" class="ch-slider" min="0" max="100" value="${manual[i]||0}"
+             style="accent-color:${c.css}"
+             oninput="onSlider(${i},this.value)" onchange="previewManual()">
+      <span class="ch-val" id="sv${i}">${manual[i]||0}%</span>
+    </div>`;
+  }).join('');
+}
+
+function onSlider(i, v) {
+  manual[i] = parseInt(v);
+  document.getElementById('sv'+i).textContent = v + '%';
+}
+
+let prevTimer = null;
+function previewManual() {
+  clearTimeout(prevTimer);
+  prevTimer = setTimeout(async () => {
+    const out = Array(6).fill(0);
+    chs().forEach((_,i) => { out[i] = manual[i]||0; });
+    try { await api('POST', '/api/preview', {channels: out}); } catch(_) {}
+  }, 120);
+}
+
+async function saveManual() {
+  setBusy('Applying…');
+  try {
+    const out = Array(6).fill(0);
+    chs().forEach((_,i) => { out[i] = manual[i]||0; });
+    await api('POST', '/api/push', {manual: out, schedule, mode: 'manual'});
+    mode = 'manual'; applyModeUI(); setOk('Applied');
+  } catch(e) { setErr(e.message); }
+}
+
+// ── Master & Now bars ────────────────────────────────────────────────────
+let _masterTimer = null;
+function onMasterChange() {
+  masterBrightness = parseInt(document.getElementById('masterSlider').value);
+  document.getElementById('masterVal').textContent = masterBrightness + '%';
+  updateNowBars();
+  clearTimeout(_masterTimer);
+  _masterTimer = setTimeout(_autoPushMaster, 400);
+}
+
+async function _autoPushMaster() {
+  try {
+    const man = Array(6).fill(0);
+    chs().forEach((_,i) => { man[i] = manual[i]||0; });
+    const sched = schedule.map(row => {
+      const r = [...row];
+      for(let i=0;i<6;i++) r[2+i] = Math.min(100, Math.round((r[2+i]||0)*masterBrightness/100));
+      return r;
+    });
+    await Promise.all([
+      api('POST', '/api/master', {value: masterBrightness}),
+      api('POST', '/api/push', {manual: man, schedule: sched, mode}),
+    ]);
+  } catch(_) {}
+}
+
+function interpNow() {
+  const now = new Date(), h = now.getHours(), m = now.getMinutes();
+  const lo = schedule[h], hi = schedule[(h+1)%24];
+  return chs().map((_,i) => {
+    const raw = (lo[2+i]||0) + (m/60)*((hi[2+i]||0)-(lo[2+i]||0));
+    return Math.min(100, Math.round(raw * masterBrightness / 100));
+  });
+}
+
+function buildNowBars() {
+  const vals = interpNow();
+  document.getElementById('nowBars').innerHTML = chs().map((ch,i) => {
+    const c = CH[ch];
+    return `<div class="now-row">
+      <span class="now-name">${c.label}</span>
+      <div class="now-track"><div class="now-fill" id="nf${i}" style="width:${vals[i]}%;background:${c.css}"></div></div>
+      <span class="now-pct" id="np${i}">${vals[i]}%</span>
+    </div>`;
+  }).join('');
+}
+
+function updateNowBars() {
+  interpNow().forEach((v,i) => {
+    const f=document.getElementById('nf'+i), p=document.getElementById('np'+i);
+    if(f){ f.style.width=v+'%'; p.textContent=v+'%'; }
+  });
+}
+
+// ── Schedule table ───────────────────────────────────────────────────────
+function buildSchedTable() {
+  const channels = chs(), cur = new Date().getHours();
+  document.getElementById('schedThead').innerHTML =
+    '<th>Hr</th>' + channels.map(ch =>
+      `<th style="color:${CH[ch].css}">${CH[ch].label.replace(' ','<br>')}</th>`
+    ).join('');
+  document.getElementById('schedTbody').innerHTML = schedule.map((row,h) =>
+    `<tr id="sr${h}" class="${h===cur?'cur':''}">
+      <td>${String(h).padStart(2,'0')}</td>
+      ${channels.map((ch,i) =>
+        `<td><input type="number" min="0" max="100" value="${row[2+i]||0}"
+           style="color:${CH[ch].css}"
+           onchange="onCell(${h},${i},this.value)"></td>`
+      ).join('')}
+    </tr>`
+  ).join('');
+}
+
+function updateSchedTable() {
+  const channels = chs(), cur = new Date().getHours();
+  schedule.forEach((row,h) => {
+    const tr = document.getElementById('sr'+h);
+    if(!tr) return;
+    tr.className = h===cur ? 'cur' : '';
+    channels.forEach((_,i) => {
+      const inp = tr.cells[i+1]?.querySelector('input');
+      if(inp && document.activeElement !== inp) inp.value = row[2+i]||0;
+    });
+  });
+}
+
+function onCell(h, i, v) {
+  schedule[h][2+i] = Math.max(0, Math.min(100, parseInt(v)||0));
+  updateNowBars();
+}
+
+function toggleSched() {
+  const c = document.getElementById('schedCollapse');
+  const open = c.classList.toggle('open');
+  document.getElementById('schedIcon').classList.toggle('open', open);
+  if(open) buildSchedTable();
+}
+
+// ── Read from device ─────────────────────────────────────────────────────
+async function readFromDevice() {
+  setBusy('Reading…');
+  document.getElementById('readBtn').disabled = true;
+  try {
+    const [cfgData, s, rampSt, lunarSt, lsSt, lStatus, cloudsSt] = await Promise.all([
+      api('GET', '/api/config'),
+      api('GET', '/api/state'),
+      api('GET', '/api/ramp/status'),
+      api('GET', '/api/lunar/status'),
+      api('GET', '/api/lightning/schedule'),
+      api('GET', '/api/lightning/status'),
+      api('GET', '/api/clouds/status'),
+    ]);
+
+    cfg             = cfgData;
+    schedule        = s.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
+    manual          = s.manual || [0,0,0,0,0,0];
+    mode            = s.mode;
+    activePresetKey = s.active_preset || '';
+    if (rampSt.active && mode === 'manual') mode = 'auto';
+    // Restore master — optional endpoint; old firmware may not have it
+    try {
+      const masterData = await api('GET', '/api/master');
+      masterBrightness = masterData.value ?? 100;
+      document.getElementById('masterSlider').value = masterBrightness;
+      document.getElementById('masterVal').textContent = masterBrightness + '%';
+    } catch(_) {}
+
+    applyModeUI();
+    buildSliders();
+    buildNowBars();
+    if (document.getElementById('schedCollapse').classList.contains('open'))
+      buildSchedTable();
+
+    // Ramp
+    setRampBtn(rampSt.active);
+    document.getElementById('rampSub').textContent = rampSt.active
+      ? (rampSt.last_tick ? 'Last tick: ' + new Date(rampSt.last_tick*1000).toLocaleTimeString() : 'Running…')
+      : 'Inactive';
+
+    // Lightning
+    setLightningBtn(lStatus.active);
+    document.getElementById('lightningSub').textContent = lStatus.active ? 'Active' : 'Inactive';
+    document.getElementById('lsEnabled').checked = !!lsSt.enabled;
+    document.getElementById('lsStart').value     = lsSt.start || '20:00';
+    document.getElementById('lsEnd').value       = lsSt.end   || '23:00';
+    document.getElementById('lsTimeRow').style.display = lsSt.enabled ? '' : 'none';
+
+    // Lunar
+    setLunarBtn(lunarSt.active);
+    const MOON = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
+    document.getElementById('lunarSub').textContent =
+      MOON[Math.round((lunarSt.phase||0)*8)%8] + ' ' +
+      (lunarSt.phase_name||'') + ' · ' + (lunarSt.illumination||0) + '%';
+    document.getElementById('lmEnabled').checked = !!lunarSt.enabled;
+    document.getElementById('lmStart').value     = lunarSt.start || '21:00';
+    document.getElementById('lmEnd').value       = lunarSt.end   || '06:00';
+    document.getElementById('lmIntensity').value = lunarSt.max_intensity ?? 15;
+    document.getElementById('lmTimeRow').style.display = lunarSt.enabled ? '' : 'none';
+
+    // Clouds
+    setCloudsBtn(cloudsSt.active);
+    document.getElementById('cloudsSub').textContent = cloudsSt.active ? 'Active' : 'Inactive';
+    document.getElementById('cloudDensity').value = cloudsSt.density ?? 30;
+    document.getElementById('cloudDepth').value   = cloudsSt.depth   ?? 60;
+    document.getElementById('cloudShift').checked = cloudsSt.colour_shift !== false;
+
+    await loadPresetsProfiles();
+    setOk((cfg.device==='k7mini' ? 'K7 Mini' : 'K7 Pro') + ' · ' + mode);
+  } catch(e) {
+    setErr(e.message);
+  } finally {
+    document.getElementById('readBtn').disabled = false;
+  }
+}
+
+// ── Push ─────────────────────────────────────────────────────────────────
+async function pushSchedule() {
+  setBusy('Pushing…');
+  document.getElementById('pushBtn').disabled = true;
+  try {
+    const man = Array(6).fill(0);
+    chs().forEach((_,i) => { man[i] = manual[i]||0; });
+    const sched = schedule.map(row => {
+      const r = [...row];
+      for(let i=0;i<6;i++) r[2+i] = Math.min(100, Math.round((r[2+i]||0)*masterBrightness/100));
+      return r;
+    });
+    await api('POST', '/api/push', {manual: man, schedule: sched, mode, active_preset: activePresetKey});
+    setOk('Pushed ✓');
+  } catch(e) {
+    setErr(e.message);
+  } finally {
+    document.getElementById('pushBtn').disabled = false;
+  }
+}
+
+// ── Effects ──────────────────────────────────────────────────────────────
+// Suppress poll overwriting optimistic toggle state for this many ms.
+const _suppress = { ramp: 0, lightning: 0, lunar: 0, clouds: 0 };
+function _suppressPoll(key) { _suppress[key] = Date.now() + 4000; }
+function _pollOk(key)       { return Date.now() >= _suppress[key]; }
+
+function setRampBtn(on) {
+  const b = document.getElementById('rampBtn');
+  b.textContent = on ? 'ON' : 'OFF';
+  b.className = 'fx-tog' + (on ? ' on-ramp' : '');
+}
+function setLightningBtn(on) {
+  const b = document.getElementById('lightningBtn');
+  b.textContent = on ? 'ON' : 'OFF';
+  b.className = 'fx-tog' + (on ? ' on-lightning' : '');
+}
+function setCloudsBtn(on) {
+  const b = document.getElementById('cloudsBtn');
+  b.textContent = on ? 'ON' : 'OFF';
+  b.className = 'fx-tog' + (on ? ' on-clouds' : '');
+}
+
+async function toggleClouds() {
+  const on = document.getElementById('cloudsBtn').classList.contains('on-clouds');
+  setCloudsBtn(!on);
+  document.getElementById('cloudsSub').textContent = !on ? 'Active' : 'Inactive';
+  _suppressPoll('clouds');
+  try {
+    await api('POST', on ? '/api/clouds/stop' : '/api/clouds/start');
+  } catch(e) { setCloudsBtn(on); _suppress.clouds = 0; setErr(e.message); }
+}
+
+async function onCloudsChange() {
+  try {
+    await api('POST', '/api/clouds/settings', {
+      density:      parseInt(document.getElementById('cloudDensity').value) || 30,
+      depth:        parseInt(document.getElementById('cloudDepth').value)   || 60,
+      colour_shift: document.getElementById('cloudShift').checked,
+    });
+  } catch(_) {}
+}
+
+function setLunarBtn(on) {
+  const b = document.getElementById('lunarBtn');
+  b.textContent = on ? 'ON' : 'OFF';
+  b.className = 'fx-tog' + (on ? ' on-lunar' : '');
+}
+
+function toggleFxSet(name) {
+  document.getElementById(name+'Settings').classList.toggle('open');
+}
+
+async function toggleRamp() {
+  const on = document.getElementById('rampBtn').classList.contains('on-ramp');
+  setRampBtn(!on);
+  _suppressPoll('ramp');
+  try {
+    await api('POST', on ? '/api/ramp/stop' : '/api/ramp/start');
+    document.getElementById('rampSub').textContent = !on ? 'Running…' : 'Inactive';
+  } catch(e) { setRampBtn(on); _suppress.ramp = 0; setErr(e.message); }
+}
+
+async function toggleLightning() {
+  const on = document.getElementById('lightningBtn').classList.contains('on-lightning');
+  setLightningBtn(!on);
+  document.getElementById('lightningSub').textContent = !on ? 'Active' : 'Inactive';
+  _suppressPoll('lightning');
+  try {
+    await api('POST', on ? '/api/lightning/stop' : '/api/lightning/start');
+  } catch(e) { setLightningBtn(on); _suppress.lightning = 0; setErr(e.message); }
+}
+
+async function toggleLunar() {
+  const on = document.getElementById('lunarBtn').classList.contains('on-lunar');
+  setLunarBtn(!on);
+  _suppressPoll('lunar');
+  try {
+    await api('POST', on ? '/api/lunar/stop' : '/api/lunar/start');
+  } catch(e) { setLunarBtn(on); _suppress.lunar = 0; setErr(e.message); }
+}
+
+// ── Lightning schedule ───────────────────────────────────────────────────
+async function onLsChange() {
+  const en = document.getElementById('lsEnabled').checked;
+  document.getElementById('lsTimeRow').style.display = en ? '' : 'none';
+  try {
+    await api('POST', '/api/lightning/schedule', {
+      enabled: en,
+      start:   document.getElementById('lsStart').value,
+      end:     document.getElementById('lsEnd').value,
+    });
+  } catch(_) {}
+}
+
+// ── Lunar settings ───────────────────────────────────────────────────────
+async function onLmChange() {
+  const en = document.getElementById('lmEnabled').checked;
+  document.getElementById('lmTimeRow').style.display = en ? '' : 'none';
+  try {
+    await api('POST', '/api/lunar/schedule', {
+      enabled:       en,
+      start:         document.getElementById('lmStart').value,
+      end:           document.getElementById('lmEnd').value,
+      max_intensity: parseInt(document.getElementById('lmIntensity').value)||15,
+    });
+  } catch(_) {}
+}
+
+// ── Profiles & presets ───────────────────────────────────────────────────
+async function loadPresetsProfiles() {
+  try {
+    [presets, savedProfiles] = await Promise.all([
+      api('GET', '/api/presets'),
+      api('GET', '/api/profiles'),
+    ]);
+    const sel = document.getElementById('presetSel');
+    sel.innerHTML = '<option value="">— Select preset or profile —</option>';
+    const pk = Object.keys(presets);
+    if(pk.length) {
+      const g = document.createElement('optgroup'); g.label = 'Presets';
+      pk.forEach(k => {
+        const o = document.createElement('option');
+        o.value = 'preset:'+k; o.textContent = presets[k].name;
+        if ('preset:'+k === activePresetKey) o.selected = true;
+        g.appendChild(o);
+      });
+      sel.appendChild(g);
+    }
+    const prk = Object.keys(savedProfiles);
+    if(prk.length) {
+      const g = document.createElement('optgroup'); g.label = 'Saved Profiles';
+      prk.forEach(k => {
+        const o = document.createElement('option');
+        o.value = 'profile:'+k; o.textContent = k;
+        if ('profile:'+k === activePresetKey) o.selected = true;
+        g.appendChild(o);
+      });
+      sel.appendChild(g);
+    }
+    // Update description for the selected entry
+    if (activePresetKey) {
+      const id  = activePresetKey.startsWith('preset:')  ? activePresetKey.slice(7)
+                : activePresetKey.startsWith('profile:') ? activePresetKey.slice(8) : '';
+      const src = activePresetKey.startsWith('preset:') ? presets : savedProfiles;
+      document.getElementById('presetDesc').textContent = src[id]?.desc || '';
+    }
+  } catch(_) {}
+}
+
+function onPresetChange() {
+  const v = document.getElementById('presetSel').value;
+  if(!v) { document.getElementById('presetDesc').textContent=''; activePresetKey=''; return; }
+  let p;
+  if(v.startsWith('preset:'))       p = presets[v.slice(7)];
+  else if(v.startsWith('profile:')) p = savedProfiles[v.slice(8)];
+  if(!p) return;
+  if(p.schedule) schedule = p.schedule.map(r => Array.isArray(r)?r:Object.values(r));
+  if(p.manual)   manual   = p.manual;
+  document.getElementById('presetDesc').textContent = p.desc || (v.startsWith('profile:') ? 'Saved profile' : '');
+  activePresetKey = v;
+  buildSliders(); buildNowBars();
+  if(document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
+}
+
+async function saveProfile() {
+  const name = prompt('Profile name:');
+  if(!name?.trim()) return;
+  setBusy('Saving…');
+  try {
+    await api('POST', '/api/profiles', {name: name.trim(), schedule, manual, device: cfg.device});
+    await loadPresetsProfiles();
+    setOk('Saved');
+  } catch(e) { setErr(e.message); }
+}
+
+// ── Live update ──────────────────────────────────────────────────────────
+setInterval(() => {
+  updateNowBars();
+  const cur = new Date().getHours();
+  document.querySelectorAll('#schedTbody tr').forEach((tr,h) => {
+    tr.className = h===cur ? 'cur' : '';
+  });
+}, 30000);
+
+function _setIfUnfocused(id, setter) {
+  const el = document.getElementById(id);
+  if (el && document.activeElement !== el) setter(el);
+}
+
+async function pollEffectStates() {
+  try {
+    const [ramp, light, lunar, master, stateData, clouds] = await Promise.all([
+      api('GET', '/api/ramp/status'),
+      api('GET', '/api/lightning/status'),
+      api('GET', '/api/lunar/status'),
+      api('GET', '/api/master'),
+      api('GET', '/api/state'),
+      api('GET', '/api/clouds/status'),
+    ]);
+    const masterSlider = document.getElementById('masterSlider');
+    if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
+      masterBrightness = master.value;
+      masterSlider.value = master.value;
+      document.getElementById('masterVal').textContent = master.value + '%';
+    }
+    // Sync schedule from server (picks up pushes from other clients)
+    if (stateData?.schedule?.length === 24) {
+      schedule = stateData.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
+      if (document.getElementById('schedCollapse').classList.contains('open'))
+        updateSchedTable();
+    }
+    updateNowBars();
+    if (_pollOk('ramp')) {
+      setRampBtn(ramp.active);
+      document.getElementById('rampSub').textContent = ramp.active
+        ? (ramp.last_tick ? 'Last tick: ' + new Date(ramp.last_tick*1000).toLocaleTimeString() : 'Running…')
+        : 'Inactive';
+    }
+    if (_pollOk('lightning')) {
+      setLightningBtn(light.active);
+      _setIfUnfocused('lsEnabled',  el => { el.checked = !!light.enabled; });
+      _setIfUnfocused('lsStart',    el => { el.value = light.start || '20:00'; });
+      _setIfUnfocused('lsEnd',      el => { el.value = light.end   || '23:00'; });
+      document.getElementById('lsTimeRow').style.display = light.enabled ? '' : 'none';
+    }
+    if (_pollOk('lunar')) {
+      setLunarBtn(lunar.active);
+      _setIfUnfocused('lmEnabled',  el => { el.checked = !!lunar.enabled; });
+      _setIfUnfocused('lmStart',    el => { el.value = lunar.start || '21:00'; });
+      _setIfUnfocused('lmEnd',      el => { el.value = lunar.end   || '06:00'; });
+      _setIfUnfocused('lmIntensity',el => { el.value = lunar.max_intensity ?? 15; });
+      document.getElementById('lmTimeRow').style.display = lunar.enabled ? '' : 'none';
+    }
+    const MOON = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
+    document.getElementById('lunarSub').textContent =
+      MOON[Math.round((lunar.phase||0)*8)%8] + ' ' + (lunar.phase_name||'') + ' · ' + (lunar.illumination||0) + '%';
+    if (_pollOk('clouds')) {
+      setCloudsBtn(clouds.active);
+      document.getElementById('cloudsSub').textContent = clouds.active ? 'Active' : 'Inactive';
+    }
+    _setIfUnfocused('cloudDensity', el => { el.value = clouds.density ?? 30; });
+    _setIfUnfocused('cloudDepth',   el => { el.value = clouds.depth   ?? 60; });
+    _setIfUnfocused('cloudShift',   el => { el.checked = clouds.colour_shift !== false; });
+  } catch(_) {}
+}
+setInterval(pollEffectStates, 5000);
+
+// ── Init ─────────────────────────────────────────────────────────────────
+(async function() {
+  try { await api('POST', '/api/time', {timestamp: Date.now() - new Date().getTimezoneOffset()*60000}); } catch(_) {}
+  await readFromDevice();
+})();
+</script>
+</body>
+</html>
