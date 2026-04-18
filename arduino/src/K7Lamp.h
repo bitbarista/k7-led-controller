@@ -24,6 +24,7 @@ public:
 
     bool readAll(LampState& out);
     bool handLuminance(const uint8_t ch[K7_CHANNELS]);
+    bool handLuminanceFast(const uint8_t ch[K7_CHANNELS]); // no ACK wait — for smooth fade loops
     bool previewBrightness(const uint8_t ch[K7_CHANNELS]);
     bool setModeAuto();
     bool setModeManual();

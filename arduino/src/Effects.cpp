@@ -527,6 +527,7 @@ static void cloudTask(void*) {
     }
 
     while (gCloudActive) {
+        uint8_t dimmed[K7_CHANNELS] = {};   // shared between fade-dim and fade-bright
         float density = gCloudSettings.density / 100.0f;
         float depth   = gCloudSettings.depth   / 100.0f;
         bool  shift   = gCloudSettings.colourShift;
@@ -534,6 +535,7 @@ static void cloudTask(void*) {
         // ── Gap ──────────────────────────────────────────────────────────────
         float gapBase  = max(300.0f, 7200.0f * (1.0f - density) * (1.0f - density));
         int   gapMs    = (int)(gapBase * 1000.0f) + (int)(esp_random() % (int)(gapBase * 1000.0f));
+        Serial.printf("[cloud] gap %d s\n", gapMs / 1000);
         int   lastSync = 0;
         for (int elapsed = 0; elapsed < gapMs && gCloudActive; elapsed += 500) {
             vTaskDelay(pdMS_TO_TICKS(500));
@@ -551,21 +553,36 @@ static void cloudTask(void*) {
         }
         if (!gCloudActive) break;
 
-        // ── Snap dim ─────────────────────────────────────────────────────────
+        // ── Fade dim ─────────────────────────────────────────────────────────
         float targetDim = depth * (0.4f + 0.6f * (esp_random() % 1000) / 1000.0f);
+        Serial.printf("[cloud] fade-dim depth=%.0f%%\n", targetDim * 100.0f);
         {
             time_t     now = time(nullptr);
             struct tm* t   = localtime(&now);
-            uint8_t    base[K7_CHANNELS], dimmed[K7_CHANNELS];
+            uint8_t    base[K7_CHANNELS];
             interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, base);
             applyMasterBrightness(base);
             if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
                 applyLunarOverlay(base);
             applyCloud(base, targetDim, shift, dimmed);
-            withLamp([&](K7Lamp& lamp) { lamp.handLuminance(dimmed); });
+            withLamp([&](K7Lamp& lamp) {
+                const int STEPS = 30;
+                for (int i = 1; i <= STEPS && gCloudActive; i++) {
+                    float   t2 = (float)i / STEPS;
+                    uint8_t ch[K7_CHANNELS];
+                    for (int c = 0; c < K7_CHANNELS; c++) {
+                        float v = base[c] + t2 * ((int)dimmed[c] - (int)base[c]);
+                        ch[c] = (uint8_t)roundf(v);
+                    }
+                    if (i < STEPS) lamp.handLuminanceFast(ch);
+                    else           lamp.handLuminance(ch);
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
+            });
         }
 
         // ── Hold ─────────────────────────────────────────────────────────────
+        Serial.printf("[cloud] hold\n");
         int holdMs = 20000 + (int)(esp_random() % 70000);
         lastSync = 0;
         for (int elapsed = 0; elapsed < holdMs && gCloudActive; elapsed += 500) {
@@ -584,16 +601,30 @@ static void cloudTask(void*) {
             }
         }
 
-        // ── Snap bright ───────────────────────────────────────────────────────
+        // ── Fade bright ───────────────────────────────────────────────────────
+        Serial.printf("[cloud] fade-bright\n");
         {
             time_t     now = time(nullptr);
             struct tm* t   = localtime(&now);
             uint8_t    full[K7_CHANNELS];
             interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, full);
+            applyMasterBrightness(full);
             if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
                 applyLunarOverlay(full);
-            applyMasterBrightness(full);
-            withLamp([&](K7Lamp& lamp) { lamp.handLuminance(full); });
+            withLamp([&](K7Lamp& lamp) {
+                const int STEPS = 30;
+                for (int i = 1; i <= STEPS && gCloudActive; i++) {
+                    float   t2 = (float)i / STEPS;
+                    uint8_t ch[K7_CHANNELS];
+                    for (int c = 0; c < K7_CHANNELS; c++) {
+                        float v = dimmed[c] + t2 * ((int)full[c] - (int)dimmed[c]);
+                        ch[c] = (uint8_t)roundf(v);
+                    }
+                    if (i < STEPS) lamp.handLuminanceFast(ch);
+                    else           lamp.handLuminance(ch);
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
+            });
         }
     }
 

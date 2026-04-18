@@ -139,6 +139,11 @@ bool K7Lamp::handLuminance(const uint8_t ch[K7_CHANNELS]) {
     return true;
 }
 
+bool K7Lamp::handLuminanceFast(const uint8_t ch[K7_CHANNELS]) {
+    _sendPkt(CMD_HAND_LUMINANCE[0], CMD_HAND_LUMINANCE[1], ch, K7_CHANNELS);
+    return true;
+}
+
 bool K7Lamp::previewBrightness(const uint8_t ch[K7_CHANNELS]) {
     _sendPkt(CMD_PREVIEW_LUMINANCE[0], CMD_PREVIEW_LUMINANCE[1], ch, K7_CHANNELS);
     // Fire-and-forget: no ack wait.  The connection closes right after this
