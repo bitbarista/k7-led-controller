@@ -83,12 +83,13 @@ static String buildHtml(const std::vector<FoundLamp>& lamps) {
 }
 
 static String savedHtml() {
-    return F("<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+    String ssid = makeApSsid(AP_SSID_CONTROLLER_BASE);
+    return String(F("<!DOCTYPE html><html><head><meta charset='UTF-8'>"
              "<style>body{font-family:system-ui;max-width:420px;margin:40px auto;padding:0 20px;"
              "background:#0d1117;color:#c9d1d9}h1{color:#3fb950}</style></head>"
              "<body><h1>Saved!</h1>"
-             "<p>Rebooting &mdash; connect to <b>K7-Controller</b> WiFi "
-             "(password: <b>12345678</b>) then browse to <b>http://192.168.5.1</b></p>"
+             "<p>Rebooting &mdash; connect to <b>")) + ssid +
+             F("</b> WiFi (password: <b>12345678</b>) then browse to <b>http://192.168.5.1</b></p>"
              "</body></html>");
 }
 
@@ -109,7 +110,8 @@ void runSetupPortal() {
 
     // Use AP_STA mode throughout — never switch modes after this point
     WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP(AP_SSID_SETUP);
+    String setupSsid = makeApSsid(AP_SSID_SETUP_BASE);
+    WiFi.softAP(setupSsid.c_str());
     WiFi.softAPConfig(
         IPAddress(192, 168, 5, 1),
         IPAddress(192, 168, 5, 1),
@@ -177,7 +179,7 @@ void runSetupPortal() {
     });
 
     server.begin();
-    Serial.printf("Setup portal running — connect to %s\n", AP_SSID_SETUP);
+    Serial.printf("Setup portal running — connect to %s\n", setupSsid.c_str());
 
     for (;;) {
         dns.processNextRequest();

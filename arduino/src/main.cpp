@@ -80,7 +80,8 @@ void setup() {
     Serial.printf("Config: lamp=%s device=%s\n", lampSsid.c_str(), device.c_str());
 
     WiFi.mode(WIFI_AP_STA);
-    startAP(AP_SSID_CONTROLLER, AP_PASSWORD);
+    String apSsid = makeApSsid(AP_SSID_CONTROLLER_BASE);
+    startAP(apSsid.c_str(), AP_PASSWORD);
 
     Serial.printf("Connecting STA -> %s ...", lampSsid.c_str());
     if (connectSta(lampSsid)) {
