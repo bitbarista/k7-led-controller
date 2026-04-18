@@ -443,7 +443,7 @@ static void lunarTask(void*) {
             interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
             applyMasterBrightness(ch);
             applyLunarOverlay(ch);
-            withLamp([&](K7Lamp& lamp) { lamp.previewBrightness(ch); });
+            withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
         }
         time_t     now = time(nullptr);
         struct tm* t   = localtime(&now);
@@ -481,10 +481,7 @@ void lunarApplyNow() {
     interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
     applyMasterBrightness(ch);
     applyLunarOverlay(ch);
-    withLamp([&](K7Lamp& lamp) {
-        if (gRampActive) lamp.handLuminance(ch);
-        else             lamp.previewBrightness(ch);
-    });
+    withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
 }
 
 void lunarRestoreNow() {
