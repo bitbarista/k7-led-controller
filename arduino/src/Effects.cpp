@@ -436,7 +436,8 @@ void stopLightning() {
 // ── Lunar ─────────────────────────────────────────────────────────────────────
 static void lunarTask(void*) {
     while (gLunarActive) {
-        if (!gRampActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end)) {
+        int lunarPct = (int)roundf(gLunarConfig.maxIntensity * Moon::illumination());
+        if (!gRampActive && lunarPct > 0 && inTimeWindow(gLunarConfig.start, gLunarConfig.end)) {
             time_t     now = time(nullptr);
             struct tm* t   = localtime(&now);
             uint8_t    ch[K7_CHANNELS];
@@ -475,6 +476,8 @@ void lunarApplyNow() {
     bool inWindow = inTimeWindow(gLunarConfig.start, gLunarConfig.end);
     if (!gLunarActive && !(gLunarConfig.enabled && inWindow && !gLunarStopped)) return;
     if (!inWindow) return;
+    int lunarPct = (int)roundf(gLunarConfig.maxIntensity * Moon::illumination());
+    if (lunarPct <= 0) return;
     time_t     now = time(nullptr);
     struct tm* t   = localtime(&now);
     uint8_t    ch[K7_CHANNELS];
