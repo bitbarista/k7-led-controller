@@ -340,10 +340,10 @@
       <p>After flashing, the board needs to know where your lamp is. Do this from your phone — it takes about two minutes.</p>
       <ul class="steps">
         <li><span class="step-letter">a.</span><span>Make sure your K7 lamp is <strong>switched on</strong>.</span></li>
-        <li><span class="step-letter">b.</span><span>On your phone, open WiFi settings and connect to the network called <strong>K7-Setup</strong>. There is no password.</span></li>
+        <li><span class="step-letter">b.</span><span>On your phone, open WiFi settings and look for a network starting with <strong>K7-Setup-</strong> followed by six letters and numbers (e.g. <em>K7-Setup-D745A8</em>). Connect to it — there is no password.</span></li>
         <li><span class="step-letter">c.</span><span>Open a browser and go to <strong>http://192.168.5.1</strong>. You'll see a setup page with a list of nearby lamps.</span></li>
         <li><span class="step-letter">d.</span><span>Your lamp will appear in the list (named something like <em>K7mini_XXXX</em>). Tap it, then tap <strong>Connect &amp; Save</strong>.</span></li>
-        <li><span class="step-letter">e.</span><span>The board reboots. The K7-Setup network will disappear — that's normal and means it worked.</span></li>
+        <li><span class="step-letter">e.</span><span>The board reboots. The K7-Setup-XXXXXX network will disappear — that's normal and means it worked.</span></li>
       </ul>
       <div class="tip">
         <strong>Lamp not in the list?</strong>
@@ -360,7 +360,7 @@
         <h3>Open the controller</h3>
       </div>
       <ul class="steps">
-        <li><span class="step-letter">a.</span><span>In your WiFi settings, connect to <strong>K7-Controller</strong>. The password is <code>12345678</code>.</span></li>
+        <li><span class="step-letter">a.</span><span>In your WiFi settings, look for a network starting with <strong>K7-Controller-</strong> followed by six letters and numbers (e.g. <em>K7-Controller-D745A8</em>) — the suffix matches the K7-Setup network you used in Step 2. Connect to it. The password is <code>12345678</code>.</span></li>
         <li><span class="step-letter">b.</span><span>Open a browser and go to <strong>http://192.168.5.1</strong>. The controller loads and reads your lamp automatically.</span></li>
         <li><span class="step-letter">c.</span><span>Unplug from your computer and plug into a USB charger near the tank. The controller now runs permanently — no computer needed.</span></li>
       </ul>
@@ -407,8 +407,8 @@
       <h3>Troubleshooting</h3>
 
       <div class="trouble-item">
-        <div class="trouble-q">The K7-Controller WiFi doesn't appear after setup</div>
-        <div class="trouble-a">Unplug and re-plug the USB power to restart the board. Wait 10 seconds then look for K7-Controller again. If K7-Setup reappears instead, the lamp connection wasn't saved — go through Step 2 again.</div>
+        <div class="trouble-q">The K7-Controller-XXXXXX WiFi doesn't appear after setup</div>
+        <div class="trouble-a">Unplug and re-plug the USB power to restart the board. Wait 10 seconds then look for a network starting with K7-Controller- again. If a K7-Setup- network reappears instead, the lamp connection wasn't saved — go through Step 2 again.</div>
       </div>
 
       <div class="trouble-item">

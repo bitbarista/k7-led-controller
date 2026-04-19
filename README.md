@@ -58,10 +58,10 @@ If the device is not detected, hold the **BOOT** button while pressing **RST**, 
 
 After flashing, the device starts a setup portal:
 
-1. Connect to the **K7-Setup** WiFi network (open, no password)
+1. Connect to the **K7-Setup-XXXXXX** WiFi network (open, no password — the suffix is unique to your board)
 2. Browse to **http://192.168.5.1** — the device scans for nearby K7 lamps automatically
 3. Select your lamp from the list and tap **Connect & Save**
-4. The device reboots. Connect to **K7-Controller** WiFi (password: `12345678`)
+4. The device reboots. Connect to **K7-Controller-XXXXXX** WiFi (same suffix, password: `12345678`)
 5. Browse to **http://192.168.5.1** — the controller loads and reads the lamp
 
 > If your lamp is not found, make sure it is powered on. You can also enter the SSID manually.
