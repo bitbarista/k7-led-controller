@@ -359,7 +359,7 @@ void startRamp() {
 
 void stopRamp() {
     gRampActive = false;
-    // rampTask sees the flag, exits, and restores auto mode — no blocking here
+    // rampTask sees the flag, exits, and the lamp holds the last handLuminance value
 }
 
 // ── Lightning ─────────────────────────────────────────────────────────────────
@@ -405,8 +405,7 @@ static void doLightningEvent() {
         } else if (gLunarActive || gCloudActive) {
             lamp.previewBrightness(ambient);   // lunar/cloud task will maintain from here
         } else {
-            lamp.previewBrightness(ambient);
-            lamp.setModeAuto();
+            lamp.handLuminance(ambient);
         }
     });
 }
@@ -452,8 +451,14 @@ static void lunarTask(void*) {
         for (int i = 0; i < sleepSecs * 2 && gLunarActive && !gRampActive; i++)
             vTaskDelay(pdMS_TO_TICKS(500));
     }
-    if (!gRampActive)
-        withLamp([](K7Lamp& lamp) { lamp.setModeAuto(); });
+    if (!gRampActive) {
+        time_t     now2 = time(nullptr);
+        struct tm* t2   = localtime(&now2);
+        uint8_t    ch2[K7_CHANNELS];
+        interpolateChannels(gLastSchedule, t2->tm_hour, t2->tm_min, ch2);
+        applyMasterBrightness(ch2);
+        withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch2); });
+    }
     hLunar       = nullptr;
     gLunarActive = false;
     vTaskDelete(nullptr);
@@ -494,8 +499,7 @@ void lunarRestoreNow() {
     interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
     applyMasterBrightness(ch);
     withLamp([&](K7Lamp& lamp) {
-        if (gRampActive) lamp.handLuminance(ch);
-        else { lamp.previewBrightness(ch); lamp.setModeAuto(); }
+        lamp.handLuminance(ch);
     });
 }
 
