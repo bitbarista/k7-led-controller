@@ -40,6 +40,12 @@ Either board draws ~80 mA and can run from any USB phone charger.
 
 ---
 
+## Documentation
+
+Full setup and usage guide: **[bitbarista.github.io/k7-led-controller/guide.html](https://bitbarista.github.io/k7-led-controller/guide.html)**
+
+---
+
 ## Flashing
 
 Visit **[bitbarista.github.io/k7-led-controller/flash.html](https://bitbarista.github.io/k7-led-controller/flash.html)**, connect your board via USB, and click **Install** next to your board type. Works in Chrome, Edge, and Opera — no software required.
