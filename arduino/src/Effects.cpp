@@ -269,6 +269,7 @@ static void lampWorkerTask(void*) {
                 uint8_t    ch[K7_CHANNELS];
                 if (push.autoMode) {
                     interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
+                    applyMasterBrightness(ch);
                     bool lunarOn = (gLunarActive.load() ||
                                     (gLunarConfig.enabled && !gLunarStopped.load()))
                                    && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
@@ -279,6 +280,10 @@ static void lampWorkerTask(void*) {
                 lamp.handLuminance(ch);
             });
             Serial.printf("[lamp] push withLamp=%s\n", pushed ? "ok" : "FAIL");
+            if (!pushed) xQueueSend(hPushQueue, &push, 0); // non-overwrite: yields to any newer job already queued
+            // Give lamp time to finish processing before we open another connection.
+            // Any changes queued during this window will be sent in the next iteration.
+            vTaskDelay(pdMS_TO_TICKS(400));
 
         // ── Preview ──────────────────────────────────────────────────────────
         // Per-operation connection: mutex held only for the ~20-60 ms of the

@@ -952,10 +952,8 @@ async function _autoPushMaster() {
       chs.forEach((ch,ci) => { if (hiddenChannels.has(ch)) r[2+ci] = 0; });
       return r;
     });
-    await Promise.all([
-      api('POST','/api/master', {value: masterBrightness}),
-      api('POST','/api/push',   {manual, schedule: pushBase, mode}),
-    ]);
+    await api('POST','/api/master', {value: masterBrightness});
+    await api('POST','/api/push',   {manual, schedule: pushBase, mode});
   } catch(_) {}
 }
 

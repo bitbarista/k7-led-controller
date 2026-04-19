@@ -75,6 +75,7 @@ The ESP32-S3 bridges your devices to the lamp. Your home network is never involv
 - Profiles and settings are saved to flash and survive power cycles
 - The lightning effect, smooth ramp, lunar cycle, and clouds run entirely on the device — no browser needed once configured
 - Reflashing erases all saved profiles and config
+- **Applying a change takes approximately 1 second to take effect on the lamp.** This is normal — each change requires a full TCP round-trip to the lamp (connect, send schedule + brightness, wait for acknowledgement, disconnect). Rapid successive changes are batched: only the latest value is sent. This is a constraint of the K7 lamp's TCP protocol, not a bug in the controller.
 
 ---
 
