@@ -4,6 +4,8 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 
 > This is an independent, community-developed project. It is not affiliated with or endorsed by Noo-Psyche.
 
+![K7 LED Controller UI](docs/screenshot.png)
+
 ## Features
 
 - Read the current schedule and mode directly from the lamp
