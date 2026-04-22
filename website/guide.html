@@ -343,7 +343,7 @@
         <li><span class="step-letter">b.</span><span>On your phone, open WiFi settings and look for a network starting with <strong>K7-Setup-</strong> followed by six letters and numbers (e.g. <em>K7-Setup-D745A8</em>). Connect to it — there is no password.</span></li>
         <li><span class="step-letter">c.</span><span>Open a browser and go to <strong>http://192.168.5.1</strong>. You'll see a setup page with a list of nearby lamps.</span></li>
         <li><span class="step-letter">d.</span><span>Your lamp will appear in the list (named something like <em>K7mini_XXXX</em>). Tap it, then tap <strong>Connect &amp; Save</strong>.</span></li>
-        <li><span class="step-letter">e.</span><span>The board reboots. The K7-Setup-XXXXXX network will disappear — that's normal and means it worked.</span></li>
+        <li><span class="step-letter">e.</span><span>The board reboots. The K7-Setup-XXXXXX network will disappear and the board joins the lamp's WiFi — that's normal and means it worked.</span></li>
       </ul>
       <div class="tip">
         <strong>Lamp not in the list?</strong>
@@ -360,13 +360,13 @@
         <h3>Open the controller</h3>
       </div>
       <ul class="steps">
-        <li><span class="step-letter">a.</span><span>In your WiFi settings, look for a network starting with <strong>K7-Controller-</strong> followed by six letters and numbers (e.g. <em>K7-Controller-D745A8</em>) — the suffix matches the K7-Setup network you used in Step 2. Connect to it. The password is <code>12345678</code>.</span></li>
-        <li><span class="step-letter">b.</span><span>Open a browser and go to <strong>http://192.168.5.1</strong>. The controller loads and reads your lamp automatically.</span></li>
+        <li><span class="step-letter">a.</span><span>In your WiFi settings, connect to your <strong>lamp's WiFi network</strong> — it starts with <strong>K7-</strong> followed by letters and numbers (e.g. <em>K7-mini52609</em>). This is the same network the lamp has always broadcast.</span></li>
+        <li><span class="step-letter">b.</span><span>Open a browser and go to <strong>http://k7controller.local</strong>. The controller loads and reads your lamp automatically.</span></li>
         <li><span class="step-letter">c.</span><span>Unplug from your computer and plug into a USB charger near the tank. The controller now runs permanently — no computer needed.</span></li>
       </ul>
       <div class="tip">
         <strong>Bookmark it.</strong>
-        Save <strong>http://192.168.5.1</strong> as a home screen shortcut on your phone so you can open it with one tap.
+        Save <strong>http://k7controller.local</strong> as a home screen shortcut on your phone so you can open it with one tap.
         On iPhone: tap Share → <em>Add to Home Screen</em>.
         On Android: tap the menu → <em>Add to Home Screen</em>.
       </div>
@@ -407,8 +407,8 @@
       <h3>Troubleshooting</h3>
 
       <div class="trouble-item">
-        <div class="trouble-q">The K7-Controller-XXXXXX WiFi doesn't appear after setup</div>
-        <div class="trouble-a">Unplug and re-plug the USB power to restart the board. Wait 10 seconds then look for a network starting with K7-Controller- again. If a K7-Setup- network reappears instead, the lamp connection wasn't saved — go through Step 2 again.</div>
+        <div class="trouble-q">I can't reach http://k7controller.local after setup</div>
+        <div class="trouble-a">Make sure your phone is connected to the lamp's WiFi (K7-XXXXXX), not your home network. If the address still doesn't load, try the board's IP address directly — it will be something like 192.168.4.2. If a K7-Setup- network reappears, the lamp connection wasn't saved — go through Step 2 again.</div>
       </div>
 
       <div class="trouble-item">
@@ -422,13 +422,13 @@
       </div>
 
       <div class="trouble-item">
-        <div class="trouble-q">My phone lost internet when I connected to K7-Controller</div>
-        <div class="trouble-a">Expected — K7-Controller is a local network for talking to the lamp, not for general internet browsing. Switch back to your home WiFi when you're done. The controller keeps running your schedule regardless.</div>
+        <div class="trouble-q">My phone lost internet when I connected to the lamp's WiFi</div>
+        <div class="trouble-a">Expected — the lamp's WiFi is a local network, not connected to the internet. Switch back to your home WiFi when you're done. The controller keeps running your schedule regardless.</div>
       </div>
 
       <div class="trouble-item">
         <div class="trouble-q">I want to change the lamp connection</div>
-        <div class="trouble-a">Flash the firmware again (Step 1) and redo the WiFi setup (Step 2). Note down your saved profiles first as they will be erased.</div>
+        <div class="trouble-a">Hold the <strong>BOOT</strong> button on the board while powering it on, and keep it held for 3 seconds. The board will clear its config and restart into setup mode. Note down your saved profiles first as they will be erased.</div>
       </div>
     </div>
 

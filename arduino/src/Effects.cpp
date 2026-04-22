@@ -262,28 +262,43 @@ static void lampWorkerTask(void*) {
             // (UTC) which may differ from local time, and previewBrightness is
             // transient — the lamp reverts to its internal schedule tick and can
             // go dark.  Manual mode + handLuminance is immediate and stays put.
-            bool pushed = withLamp([&](K7Lamp& lamp) {
-                lamp.pushSchedule(push.manual, push.sched, false);
-                time_t     now = time(nullptr);
-                struct tm* t   = localtime(&now);
-                uint8_t    ch[K7_CHANNELS];
-                if (push.autoMode) {
-                    interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
-                    applyMasterBrightness(ch);
-                    bool lunarOn = (gLunarActive.load() ||
-                                    (gLunarConfig.enabled && !gLunarStopped.load()))
-                                   && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
-                    if (lunarOn) applyLunarOverlay(ch);
-                } else {
-                    memcpy(ch, push.manual, K7_CHANNELS);
-                }
-                lamp.handLuminance(ch);
-            });
+            time_t     now = time(nullptr);
+            struct tm* t   = localtime(&now);
+            uint8_t    ch[K7_CHANNELS];
+            if (push.autoMode) {
+                interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
+                applyMasterBrightness(ch);
+                bool lunarOn = (gLunarActive.load() ||
+                                (gLunarConfig.enabled && !gLunarStopped.load()))
+                               && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
+                if (lunarOn) applyLunarOverlay(ch);
+            } else {
+                memcpy(ch, push.manual, K7_CHANNELS);
+            }
+
+            // CMD_ALL_SET takes ~2500 ms for the lamp to process internally.
+            // Any handLuminance sent during that window is queued by the lamp and
+            // delayed until CMD_ALL_SET finishes.  Track when we last sent it so
+            // step 1 can wait out any remaining processing before sending.
+            static uint32_t sLastPushScheduleMs = 0;
+            static const uint32_t CMD_ALL_SET_MS = 2500;
+
+            // Step 1: immediate visual update.  Wait only the remaining CMD_ALL_SET
+            // processing time from the previous cycle (zero if already done).
+            uint32_t elapsed = millis() - sLastPushScheduleMs;
+            if (elapsed < CMD_ALL_SET_MS)
+                vTaskDelay(pdMS_TO_TICKS(CMD_ALL_SET_MS - elapsed));
+
+            bool pushed = withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
             Serial.printf("[lamp] push withLamp=%s\n", pushed ? "ok" : "FAIL");
-            if (!pushed) xQueueSend(hPushQueue, &push, 0); // non-overwrite: yields to any newer job already queued
-            // Give lamp time to finish processing before we open another connection.
-            // Any changes queued during this window will be sent in the next iteration.
-            vTaskDelay(pdMS_TO_TICKS(400));
+            if (!pushed) { xQueueSend(hPushQueue, &push, 0); continue; }
+
+            // Step 2: persist schedule, then re-assert brightness once CMD_ALL_SET
+            // completes (it resets lamp output to stored manual[] on completion).
+            withLamp([&](K7Lamp& lamp) { lamp.pushSchedule(push.manual, push.sched, false); });
+            sLastPushScheduleMs = millis();
+            vTaskDelay(pdMS_TO_TICKS(CMD_ALL_SET_MS));
+            withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
 
         // ── Preview ──────────────────────────────────────────────────────────
         // Per-operation connection: mutex held only for the ~20-60 ms of the

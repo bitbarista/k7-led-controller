@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <WebServer.h>
-#include <DNSServer.h>
 #include <ArduinoJson.h>
 #include "Config.h"
 #include "Effects.h"
@@ -11,7 +11,6 @@
 #include "ApiServer.h"
 
 static WebServer server(80);
-static DNSServer dns;
 
 // ── Config loading ────────────────────────────────────────────────────────────
 static bool loadConfig(String& lampSsid, String& device) {
@@ -46,16 +45,6 @@ static bool connectSta(const String& ssid, uint32_t timeoutMs = 20000) {
     return WiFi.status() == WL_CONNECTED;
 }
 
-static void startAP(const char* ssid, const char* password) {
-    WiFi.softAP(ssid, password);
-    WiFi.softAPConfig(
-        IPAddress(192, 168, 5, 1),
-        IPAddress(192, 168, 5, 1),
-        IPAddress(255, 255, 255, 0));
-    delay(500);
-    Serial.printf("AP up: %s @ 192.168.5.1\n", ssid);
-}
-
 // ── Setup ─────────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
@@ -65,6 +54,21 @@ void setup() {
     if (!LittleFS.begin(true)) {
         Serial.println("LittleFS mount failed — halting");
         while (true) delay(1000);
+    }
+
+    // Boot button (GPIO0) held for 3 s on power-up → factory reset
+    pinMode(0, INPUT_PULLUP);
+    if (digitalRead(0) == LOW) {
+        Serial.println("Boot button held — release within 3 s to cancel factory reset");
+        uint32_t held = millis();
+        while (digitalRead(0) == LOW && millis() - held < 3000) delay(50);
+        if (millis() - held >= 3000) {
+            LittleFS.remove(CONFIG_FILE);
+            Serial.println("Config cleared — rebooting into setup portal");
+            delay(500);
+            ESP.restart();
+        }
+        Serial.println("Cancelled");
     }
 
     gLampMutex = xSemaphoreCreateMutex();
@@ -79,13 +83,14 @@ void setup() {
     strlcpy(gDevice, device.c_str(), sizeof(gDevice));
     Serial.printf("Config: lamp=%s device=%s\n", lampSsid.c_str(), device.c_str());
 
-    WiFi.mode(WIFI_AP_STA);
-    String apSsid = makeApSsid(AP_SSID_CONTROLLER_BASE);
-    startAP(apSsid.c_str(), AP_PASSWORD);
-
+    // STA-only: no AP, no radio timesharing — eliminates push delivery delays
+    WiFi.mode(WIFI_STA);
     Serial.printf("Connecting STA -> %s ...", lampSsid.c_str());
     if (connectSta(lampSsid)) {
         Serial.printf(" OK  (%s)\n", WiFi.localIP().toString().c_str());
+        MDNS.begin("k7controller");
+        MDNS.addService("http", "tcp", 80);
+        Serial.println("mDNS: http://k7controller.local");
     } else {
         Serial.println(" FAILED — running without lamp connection");
     }
@@ -100,15 +105,12 @@ void setup() {
                 memcpy(gLastSchedule, state.schedule, sizeof(gLastSchedule));
                 memcpy(gLastManual,   state.manual,   sizeof(gLastManual));
                 strlcpy(gLampName, state.name, sizeof(gLampName));
-                // gLampAutoMode is NOT seeded from lamp — it reflects the user's
-                // last explicit choice, loaded from the state file by loadEffectState().
                 Serial.println("Seeded schedule from lamp");
             }
         }
     }
 
     // On a fresh install (no state file), apply the Mixed Reef default schedule
-    // if the lamp had nothing, and record it as the active preset.
     if (!LittleFS.exists(STATE_FILE)) {
         bool blank = true;
         for (int h = 0; h < K7_SLOTS && blank; h++)
@@ -131,9 +133,7 @@ void setup() {
 
     setupApiServer(server);
     server.begin();
-    // DNS after server.begin() so redirected requests find the server ready
-    dns.start(53, "*", IPAddress(192, 168, 5, 1));
-    Serial.println("Web server + DNS started — http://192.168.5.1");
+    Serial.println("Web server started — http://k7controller.local");
 
     // Restore previously active effects (after server is up)
     loadEffectState();
@@ -143,7 +143,6 @@ void setup() {
 
 // ── Loop ──────────────────────────────────────────────────────────────────────
 void loop() {
-    dns.processNextRequest();
     server.handleClient();
 
     // Reconnect STA if lamp AP drops
