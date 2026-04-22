@@ -276,29 +276,12 @@ static void lampWorkerTask(void*) {
                 memcpy(ch, push.manual, K7_CHANNELS);
             }
 
-            // CMD_ALL_SET takes ~2500 ms for the lamp to process internally.
-            // Any handLuminance sent during that window is queued by the lamp and
-            // delayed until CMD_ALL_SET finishes.  Track when we last sent it so
-            // step 1 can wait out any remaining processing before sending.
-            static uint32_t sLastPushScheduleMs = 0;
-            static const uint32_t CMD_ALL_SET_MS = 2500;
-
-            // Step 1: immediate visual update.  Wait only the remaining CMD_ALL_SET
-            // processing time from the previous cycle (zero if already done).
-            uint32_t elapsed = millis() - sLastPushScheduleMs;
-            if (elapsed < CMD_ALL_SET_MS)
-                vTaskDelay(pdMS_TO_TICKS(CMD_ALL_SET_MS - elapsed));
-
+            // handLuminance only — CMD_ALL_SET blocks the lamp for ~2.5 s and
+            // resets its output; schedule persistence lives in LittleFS.
             bool pushed = withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
             Serial.printf("[lamp] push withLamp=%s\n", pushed ? "ok" : "FAIL");
-            if (!pushed) { xQueueSend(hPushQueue, &push, 0); continue; }
-
-            // Step 2: persist schedule, then re-assert brightness once CMD_ALL_SET
-            // completes (it resets lamp output to stored manual[] on completion).
-            withLamp([&](K7Lamp& lamp) { lamp.pushSchedule(push.manual, push.sched, false); });
-            sLastPushScheduleMs = millis();
-            vTaskDelay(pdMS_TO_TICKS(CMD_ALL_SET_MS));
-            withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+            if (!pushed) xQueueSend(hPushQueue, &push, 0);
+            vTaskDelay(pdMS_TO_TICKS(400));
 
         // ── Preview ──────────────────────────────────────────────────────────
         // Per-operation connection: mutex held only for the ~20-60 ms of the
@@ -333,7 +316,7 @@ void queuePreview(const uint8_t ch[K7_CHANNELS]) {
 void startLampWorker() {
     hPushQueue    = xQueueCreate(1, sizeof(PushJob));
     hPreviewQueue = xQueueCreate(1, K7_CHANNELS * sizeof(uint8_t));
-    xTaskCreatePinnedToCore(lampWorkerTask, "lamp_w", 6144, nullptr, 4, nullptr, 0);
+    xTaskCreatePinnedToCore(lampWorkerTask, "lamp_w", 8192, nullptr, 4, nullptr, 0);
 }
 
 // ── Ramp ──────────────────────────────────────────────────────────────────────

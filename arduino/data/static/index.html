@@ -560,16 +560,25 @@ async function readFromDevice() {
 }
 
 // ── Push schedule ─────────────────────────────────────────────────────────────
+function buildPushBase() {
+  const chs   = DEVICES[cfg.device].channels;
+  const peaks = chs.map((_, ci) => Math.max(1, ...scheduleBase.map(row => row[2 + ci])));
+  return scheduleBase.map(row => {
+    const r = [...row];
+    chs.forEach((ch, ci) => {
+      if (hiddenChannels.has(ch)) { r[2 + ci] = 0; return; }
+      const cap = channelBrightness[ch] ?? 100;
+      r[2 + ci] = Math.min(100, Math.round(r[2 + ci] * cap / peaks[ci]));
+    });
+    return r;
+  });
+}
+
 async function pushSchedule() {
   setBusy('Pushing…');
   document.getElementById('pushBtn').disabled = true;
   try {
-    const chs = DEVICES[cfg.device].channels;
-    const pushBase = scheduleBase.map(row => {
-      const r = [...row];
-      chs.forEach((ch, ci) => { if (hiddenChannels.has(ch)) r[2 + ci] = 0; });
-      return r;
-    });
+    const pushBase = buildPushBase();
     await api('POST','/api/push', { manual, schedule: pushBase, mode, active_preset: activePresetKey });
     setOk('Pushed successfully');
   } catch(e) {
@@ -946,12 +955,7 @@ function onMasterChange() {
 
 async function _autoPushMaster() {
   try {
-    const chs = DEVICES[cfg.device].channels;
-    const pushBase = scheduleBase.map(row => {
-      const r = [...row];
-      chs.forEach((ch,ci) => { if (hiddenChannels.has(ch)) r[2+ci] = 0; });
-      return r;
-    });
+    const pushBase = buildPushBase();
     await api('POST','/api/master', {value: masterBrightness});
     await api('POST','/api/push',   {manual, schedule: pushBase, mode});
   } catch(_) {}
