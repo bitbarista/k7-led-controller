@@ -145,16 +145,38 @@ void setup() {
 void loop() {
     server.handleClient();
 
-    // Reconnect STA if lamp AP drops
-    static uint32_t lastCheck = 0;
+    // Reconnect STA + restart mDNS if WiFi drops, or re-announce mDNS periodically
+    // (ESP32 mDNS library stops responding after extended uptime)
+    static uint32_t lastCheck  = 0;
+    static uint32_t lastMdns   = 0;
+    static bool     wasConnected = false;
+    bool connected = (WiFi.status() == WL_CONNECTED);
+
     if (millis() - lastCheck > 30000) {
         lastCheck = millis();
-        if (WiFi.status() != WL_CONNECTED) {
+        if (!connected) {
+            wasConnected = false;
             String lampSsid, device;
             if (loadConfig(lampSsid, device)) {
                 Serial.println("STA reconnecting...");
                 WiFi.reconnect();
             }
+        } else if (!wasConnected) {
+            wasConnected = true;
+            MDNS.end();
+            MDNS.begin("k7controller");
+            MDNS.addService("http", "tcp", 80);
+            lastMdns = millis();
+            Serial.println("mDNS restarted after reconnect");
         }
+    }
+
+    // Re-announce mDNS every 10 minutes regardless
+    if (connected && millis() - lastMdns > 600000) {
+        lastMdns = millis();
+        MDNS.end();
+        MDNS.begin("k7controller");
+        MDNS.addService("http", "tcp", 80);
+        Serial.println("mDNS re-announced");
     }
 }
