@@ -55,18 +55,6 @@ void setupApiServer(WebServer& server) {
         f.close();
     });
 
-    // ── Captive portal redirects ──────────────────────────────────────────────
-    auto redir = [&server]() {
-        server.sendHeader("Location", "http://192.168.5.1/");
-        server.send(302, "text/plain", "");
-    };
-    for (auto p : {"/hotspot-detect.html", "/library/test/success.html",
-                   "/generate_204",         "/gen_204",
-                   "/connecttest.txt",       "/ncsi.txt",
-                   "/redirect",              "/canonical.html"}) {
-        server.on(p, HTTP_GET, redir);
-    }
-
     // ── /api/master ───────────────────────────────────────────────────────────
     server.on("/api/master", HTTP_GET, [&server]() {
         JsonDocument doc;
@@ -279,57 +267,6 @@ void setupApiServer(WebServer& server) {
         sendOk(server);
     });
 
-    // ── /api/lightning/* ──────────────────────────────────────────────────────
-    server.on("/api/lightning/status", HTTP_GET, [&server]() {
-        JsonDocument doc;
-        doc["active"]  = gLightningActive.load();
-        doc["enabled"] = gLightningSchedule.enabled;
-        doc["start"]   = gLightningSchedule.start;
-        doc["end"]     = gLightningSchedule.end;
-        sendJson(server, doc);
-    });
-    server.on("/api/lightning/start", HTTP_POST, [&server]() {
-        gLightningUserEnabled = true;
-        gLightningUserStopped = false;
-        startLightning();
-        saveEffectState();
-        sendOk(server);
-    });
-    server.on("/api/lightning/stop", HTTP_POST, [&server]() {
-        gLightningUserEnabled = false;
-        gLightningUserStopped = true;
-        stopLightning();
-        saveEffectState();
-        sendOk(server);
-    });
-    server.on("/api/lightning/schedule", HTTP_GET, [&server]() {
-        JsonDocument doc;
-        doc["enabled"] = gLightningSchedule.enabled;
-        doc["start"]   = gLightningSchedule.start;
-        doc["end"]     = gLightningSchedule.end;
-        sendJson(server, doc);
-    });
-    server.on("/api/lightning/schedule", HTTP_POST, [&server]() {
-        JsonDocument doc;
-        deserializeJson(doc, server.arg("plain"));
-        bool wasEnabled = gLightningSchedule.enabled;
-        if (doc["enabled"].is<bool>())       gLightningSchedule.enabled = doc["enabled"];
-        if (doc["start"].is<const char*>())  strlcpy(gLightningSchedule.start, doc["start"], 8);
-        if (doc["end"].is<const char*>())    strlcpy(gLightningSchedule.end,   doc["end"],   8);
-        saveLightningSchedule();
-        if (!wasEnabled && gLightningSchedule.enabled)
-            gLightningUserStopped = false;
-        else if (wasEnabled && !gLightningSchedule.enabled) {
-            if (gLightningUserEnabled) startLightning();
-            else gLightningActive = false;
-        }
-        JsonDocument resp;
-        resp["enabled"] = gLightningSchedule.enabled;
-        resp["start"]   = gLightningSchedule.start;
-        resp["end"]     = gLightningSchedule.end;
-        sendJson(server, resp);
-    });
-
     // ── /api/ramp/* ───────────────────────────────────────────────────────────
     server.on("/api/ramp/status", HTTP_GET, [&server]() {
         JsonDocument doc;
@@ -396,35 +333,6 @@ void setupApiServer(WebServer& server) {
         resp["end"]           = gLunarConfig.end;
         resp["max_intensity"] = gLunarConfig.maxIntensity;
         sendJson(server, resp);
-    });
-
-    // ── /api/clouds/* ─────────────────────────────────────────────────────────
-    server.on("/api/clouds/status", HTTP_GET, [&server]() {
-        JsonDocument doc;
-        doc["active"]       = gCloudActive.load();
-        doc["density"]      = gCloudSettings.density;
-        doc["depth"]        = gCloudSettings.depth;
-        doc["colour_shift"] = gCloudSettings.colourShift;
-        sendJson(server, doc);
-    });
-    server.on("/api/clouds/start", HTTP_POST, [&server]() {
-        startCloud();
-        saveEffectState();
-        sendOk(server);
-    });
-    server.on("/api/clouds/stop", HTTP_POST, [&server]() {
-        stopCloud();
-        saveEffectState();
-        sendOk(server);
-    });
-    server.on("/api/clouds/settings", HTTP_POST, [&server]() {
-        JsonDocument doc;
-        deserializeJson(doc, server.arg("plain"));
-        if (doc["density"].is<int>())       gCloudSettings.density     = doc["density"];
-        if (doc["depth"].is<int>())         gCloudSettings.depth       = doc["depth"];
-        if (doc["colour_shift"].is<bool>()) gCloudSettings.colourShift = doc["colour_shift"];
-        saveCloudSettings();
-        sendOk(server);
     });
 
     // ── Not found — handles DELETE /api/profiles/{name} and 404s ─────────────

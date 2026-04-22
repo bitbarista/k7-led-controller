@@ -1,12 +1,12 @@
 {
   "name": "K7 LED Controller (XIAO)",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "new_install_prompt_erase": true,
   "funding_url": "https://github.com/bitbarista/k7-led-controller",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
-      "parts": [{ "path": "k7controller-xiao-v2.3.1.bin", "offset": 0 }]
+      "parts": [{ "path": "k7controller-xiao-v2.3.2.bin", "offset": 0 }]
     }
   ]
 }

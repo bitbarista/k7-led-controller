@@ -18,22 +18,14 @@ bool   gLampAutoMode    = true;
 char   gActivePreset[64] = "";
 
 std::atomic<bool> gRampActive{false};
-std::atomic<bool> gLightningActive{false};
 std::atomic<bool> gLunarActive{false};
-std::atomic<bool> gCloudActive{false};
-std::atomic<bool> gLightningUserEnabled{false};
-std::atomic<bool> gLightningUserStopped{false};
 std::atomic<bool> gLunarStopped{false};
 
-LightningSchedule gLightningSchedule;
-LunarConfig       gLunarConfig;
-CloudSettings     gCloudSettings;
+LunarConfig gLunarConfig;
 
 // ── Task handles ──────────────────────────────────────────────────────────────
-static TaskHandle_t hRamp      = nullptr;
-static TaskHandle_t hLightning = nullptr;
-static TaskHandle_t hLunar     = nullptr;
-static TaskHandle_t hCloud     = nullptr;
+static TaskHandle_t hRamp  = nullptr;
+static TaskHandle_t hLunar = nullptr;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 void interpolateChannels(const uint8_t sched[K7_SLOTS][8], int h, int m,
@@ -120,48 +112,16 @@ bool withLamp(const std::function<void(K7Lamp&)>& fn) {
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 void loadEffectConfigs() {
-    File f;
-    JsonDocument doc;
-    if (LittleFS.exists(LIGHTNING_SCHEDULE_FILE)) {
-        f = LittleFS.open(LIGHTNING_SCHEDULE_FILE, "r");
-        if (f && deserializeJson(doc, f) == DeserializationError::Ok) {
-            gLightningSchedule.enabled = doc["enabled"] | false;
-            strlcpy(gLightningSchedule.start, doc["start"] | "20:00", 8);
-            strlcpy(gLightningSchedule.end,   doc["end"]   | "23:00", 8);
-        }
-        if (f) f.close();
-    }
-    doc.clear();
-    if (LittleFS.exists(LUNAR_FILE)) {
-        f = LittleFS.open(LUNAR_FILE, "r");
-        if (f && deserializeJson(doc, f) == DeserializationError::Ok) {
-            gLunarConfig.enabled      = doc["enabled"]       | false;
-            gLunarConfig.maxIntensity = doc["max_intensity"] | 15;
-            strlcpy(gLunarConfig.start, doc["start"] | "21:00", 8);
-            strlcpy(gLunarConfig.end,   doc["end"]   | "06:00", 8);
-        }
-        if (f) f.close();
-    }
-    doc.clear();
-    if (LittleFS.exists(CLOUD_FILE)) {
-        f = LittleFS.open(CLOUD_FILE, "r");
-        if (f && deserializeJson(doc, f) == DeserializationError::Ok) {
-            gCloudSettings.density     = doc["density"]      | 30;
-            gCloudSettings.depth       = doc["depth"]        | 60;
-            gCloudSettings.colourShift = doc["colour_shift"] | true;
-        }
-        if (f) f.close();
-    }
-}
-
-void saveLightningSchedule() {
-    File f = LittleFS.open(LIGHTNING_SCHEDULE_FILE, "w");
+    if (!LittleFS.exists(LUNAR_FILE)) return;
+    File f = LittleFS.open(LUNAR_FILE, "r");
     if (!f) return;
     JsonDocument doc;
-    doc["enabled"] = gLightningSchedule.enabled;
-    doc["start"]   = gLightningSchedule.start;
-    doc["end"]     = gLightningSchedule.end;
-    serializeJson(doc, f);
+    if (deserializeJson(doc, f) == DeserializationError::Ok) {
+        gLunarConfig.enabled      = doc["enabled"]       | false;
+        gLunarConfig.maxIntensity = doc["max_intensity"] | 15;
+        strlcpy(gLunarConfig.start, doc["start"] | "21:00", 8);
+        strlcpy(gLunarConfig.end,   doc["end"]   | "06:00", 8);
+    }
     f.close();
 }
 
@@ -177,25 +137,12 @@ void saveLunarConfig() {
     f.close();
 }
 
-void saveCloudSettings() {
-    File f = LittleFS.open(CLOUD_FILE, "w");
-    if (!f) return;
-    JsonDocument doc;
-    doc["density"]      = gCloudSettings.density;
-    doc["depth"]        = gCloudSettings.depth;
-    doc["colour_shift"] = gCloudSettings.colourShift;
-    serializeJson(doc, f);
-    f.close();
-}
-
 void saveEffectState() {
     File f = LittleFS.open(STATE_FILE, "w");
     if (!f) return;
     JsonDocument doc;
     doc["ramp"]          = gRampActive.load();
-    doc["lightning"]     = gLightningUserEnabled.load();
     doc["lunar"]         = gLunarActive.load() && !gLunarStopped.load();
-    doc["clouds"]        = gCloudActive.load();
     doc["auto_mode"]     = gLampAutoMode;
     doc["active_preset"] = gActivePreset;
     // Persist unscaled base schedule so it survives reboot intact
@@ -235,10 +182,8 @@ void loadEffectState() {
     if (doc["auto_mode"].is<bool>())       gLampAutoMode = doc["auto_mode"];
     if (doc["active_preset"].is<const char*>())
         strlcpy(gActivePreset, doc["active_preset"], sizeof(gActivePreset));
-    if (doc["ramp"].as<bool>())      startRamp();
-    if (doc["lightning"].as<bool>()) { gLightningUserEnabled = true; gLightningUserStopped = false; startLightning(); }
-    if (doc["lunar"].as<bool>())     { startLunar(); lunarApplyNow(); }
-    if (doc["clouds"].as<bool>())    startCloud();
+    if (doc["ramp"].as<bool>())  startRamp();
+    if (doc["lunar"].as<bool>()) { startLunar(); lunarApplyNow(); }
 }
 
 // ── Async lamp worker (push + preview) ───────────────────────────────────────
@@ -365,79 +310,6 @@ void stopRamp() {
     // rampTask sees the flag, exits, and the lamp holds the last handLuminance value
 }
 
-// ── Lightning ─────────────────────────────────────────────────────────────────
-static void doLightningEvent() {
-    time_t     now = time(nullptr);
-    struct tm* t   = localtime(&now);
-    uint8_t    ambient[K7_CHANNELS];
-    interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ambient);
-    if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
-        applyLunarOverlay(ambient);
-    applyMasterBrightness(ambient);
-
-    static const uint8_t FLASH_MINI[K7_CHANNELS] = {100, 60, 60, 0,   0,   0};
-    static const uint8_t FLASH_PRO [K7_CHANNELS] = { 40, 60, 60, 100, 100, 0};
-    uint8_t flash[K7_CHANNELS];
-    memcpy(flash, (strcmp(gDevice, "k7mini") == 0) ? FLASH_MINI : FLASH_PRO, K7_CHANNELS);
-
-    bool burst      = (esp_random() % 5 == 0);
-    int  numStrikes = burst ? (3 + esp_random() % 4) : 1;
-
-    for (int s = 0; s < numStrikes && gLightningActive; s++) {
-        int pulses = 1;
-        {
-            int r = esp_random() % 100;
-            if (r >= 65 && r < 90) pulses = 2;
-            else if (r >= 90)      pulses = 3;
-        }
-        for (int p = 0; p < pulses && gLightningActive; p++) {
-            // Flash-on and flash-off each get their own connection.  Previously
-            // both shared one connection, and the lamp sometimes closed it after
-            // the first command — stranding us at flash brightness.
-            withLamp([&](K7Lamp& lamp) { lamp.previewBrightness(flash); });
-            vTaskDelay(pdMS_TO_TICKS(30 + esp_random() % 50));
-            withLamp([&](K7Lamp& lamp) { lamp.previewBrightness(ambient); });
-            if (p < pulses - 1)
-                vTaskDelay(pdMS_TO_TICKS(40 + esp_random() % 60));
-        }
-        if (s < numStrikes - 1)
-            vTaskDelay(pdMS_TO_TICKS(80 + esp_random() % 170));
-    }
-
-    // Restore
-    withLamp([&](K7Lamp& lamp) {
-        if (gRampActive) {
-            lamp.handLuminance(ambient);
-        } else if (gLunarActive || gCloudActive) {
-            lamp.previewBrightness(ambient);   // lunar/cloud task will maintain from here
-        } else {
-            lamp.handLuminance(ambient);
-        }
-    });
-}
-
-static void lightningTask(void*) {
-    while (gLightningActive) {
-        int delay_ms = 15000 + (int)(esp_random() % 30000);
-        for (int i = 0; i < delay_ms / 250 && gLightningActive; i++)
-            vTaskDelay(pdMS_TO_TICKS(250));
-        if (gLightningActive) doLightningEvent();
-    }
-    hLightning = nullptr;
-    vTaskDelete(nullptr);
-}
-
-void startLightning() {
-    if (gLightningActive && hLightning) return;
-    gLightningActive = true;
-    xTaskCreatePinnedToCore(lightningTask, "lightning", 4096, nullptr, 2, &hLightning, 0);
-}
-
-void stopLightning() {
-    gLightningActive = false;
-    // task exits on its next iteration — no blocking here
-}
-
 // ── Lunar ─────────────────────────────────────────────────────────────────────
 static void lunarTask(void*) {
     while (gLunarActive) {
@@ -509,181 +381,7 @@ void lunarRestoreNow() {
     });
 }
 
-// ── Clouds ────────────────────────────────────────────────────────────────────
-static uint8_t applyCloud(const uint8_t base[K7_CHANNELS],
-                           float dim, bool shift,
-                           uint8_t out[K7_CHANNELS]) {
-    float factor = 1.0f - dim;
-    float extra  = 0.15f * dim * (shift ? 1.0f : 0.0f);
-    for (int i = 0; i < K7_CHANNELS; i++) {
-        float f = (i == 0) ? factor : max(0.0f, factor - extra);
-        int v = (int)roundf(base[i] * f);
-        out[i] = (uint8_t)(v < 0 ? 0 : (v > 100 ? 100 : v));
-    }
-    return 0;
-}
-
-static void cloudTask(void*) {
-    // Enter manual mode immediately
-    if (!gRampActive) {
-        time_t     now = time(nullptr);
-        struct tm* t   = localtime(&now);
-        uint8_t    full[K7_CHANNELS];
-        interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, full);
-        applyMasterBrightness(full);
-        if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
-            applyLunarOverlay(full);
-        withLamp([&](K7Lamp& lamp) { lamp.setModeManual(); lamp.handLuminance(full); });
-    }
-
-    while (gCloudActive) {
-        uint8_t dimmed[K7_CHANNELS] = {};   // shared between fade-dim and fade-bright
-        float density = gCloudSettings.density / 100.0f;
-        float depth   = gCloudSettings.depth   / 100.0f;
-        bool  shift   = gCloudSettings.colourShift;
-
-        // ── Gap ──────────────────────────────────────────────────────────────
-        float gapBase  = max(300.0f, 7200.0f * (1.0f - density) * (1.0f - density));
-        int   gapMs    = (int)(gapBase * 1000.0f) + (int)(esp_random() % (int)(gapBase * 1000.0f));
-        Serial.printf("[cloud] gap %d s\n", gapMs / 1000);
-        int   lastSync = 0;
-        for (int elapsed = 0; elapsed < gapMs && gCloudActive; elapsed += 500) {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            if (!gRampActive && elapsed - lastSync >= 15000) {
-                lastSync = elapsed;
-                time_t     now = time(nullptr);
-                struct tm* t   = localtime(&now);
-                uint8_t    full[K7_CHANNELS];
-                interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, full);
-                applyMasterBrightness(full);
-                if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
-                    applyLunarOverlay(full);
-                withLamp([&](K7Lamp& lamp) { lamp.handLuminance(full); });
-            }
-        }
-        if (!gCloudActive) break;
-
-        // ── Fade dim ─────────────────────────────────────────────────────────
-        float targetDim = depth * (0.4f + 0.6f * (esp_random() % 1000) / 1000.0f);
-        Serial.printf("[cloud] fade-dim depth=%.0f%%\n", targetDim * 100.0f);
-        {
-            time_t     now = time(nullptr);
-            struct tm* t   = localtime(&now);
-            uint8_t    base[K7_CHANNELS];
-            interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, base);
-            applyMasterBrightness(base);
-            if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
-                applyLunarOverlay(base);
-            applyCloud(base, targetDim, shift, dimmed);
-            // One withLamp per step so the mutex is free between steps,
-            // letting lightning interleave without a 3-second delay.
-            for (int i = 1; i <= 30 && gCloudActive; i++) {
-                float   t2 = (float)i / 30;
-                uint8_t ch[K7_CHANNELS];
-                for (int c = 0; c < K7_CHANNELS; c++) {
-                    float v = base[c] + t2 * ((int)dimmed[c] - (int)base[c]);
-                    ch[c] = (uint8_t)roundf(v);
-                }
-                if (i < 30) withLamp([&](K7Lamp& lamp) { lamp.handLuminanceFast(ch); });
-                else        withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
-                vTaskDelay(pdMS_TO_TICKS(100));
-            }
-        }
-
-        // ── Hold ─────────────────────────────────────────────────────────────
-        Serial.printf("[cloud] hold\n");
-        int holdMs = 20000 + (int)(esp_random() % 70000);
-        lastSync = 0;
-        for (int elapsed = 0; elapsed < holdMs && gCloudActive; elapsed += 500) {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            if (elapsed - lastSync >= 15000) {
-                lastSync = elapsed;
-                time_t     now = time(nullptr);
-                struct tm* t   = localtime(&now);
-                uint8_t    base[K7_CHANNELS], dimmed[K7_CHANNELS];
-                interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, base);
-                if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
-                    applyLunarOverlay(base);
-                applyMasterBrightness(base);
-                applyCloud(base, targetDim, shift, dimmed);
-                withLamp([&](K7Lamp& lamp) { lamp.handLuminance(dimmed); });
-            }
-        }
-
-        // ── Fade bright ───────────────────────────────────────────────────────
-        Serial.printf("[cloud] fade-bright\n");
-        {
-            time_t     now = time(nullptr);
-            struct tm* t   = localtime(&now);
-            uint8_t    full[K7_CHANNELS];
-            interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, full);
-            applyMasterBrightness(full);
-            if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
-                applyLunarOverlay(full);
-            for (int i = 1; i <= 30 && gCloudActive; i++) {
-                float   t2 = (float)i / 30;
-                uint8_t ch[K7_CHANNELS];
-                for (int c = 0; c < K7_CHANNELS; c++) {
-                    float v = dimmed[c] + t2 * ((int)full[c] - (int)dimmed[c]);
-                    ch[c] = (uint8_t)roundf(v);
-                }
-                if (i < 30) withLamp([&](K7Lamp& lamp) { lamp.handLuminanceFast(ch); });
-                else        withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
-                vTaskDelay(pdMS_TO_TICKS(100));
-            }
-        }
-    }
-
-    // Restore: re-push scaled schedule so lamp has the current base
-    gCloudActive = false;
-    if (!gRampActive) {
-        float   mb = gMasterBrightness / 100.0f;
-        uint8_t scaledManual[K7_CHANNELS];
-        uint8_t scaledSched[K7_SLOTS][8];
-        for (int i = 0; i < K7_CHANNELS; i++) {
-            int v = (int)roundf(gLastManual[i] * mb);
-            scaledManual[i] = (uint8_t)(v > 100 ? 100 : v);
-        }
-        for (int h = 0; h < K7_SLOTS; h++) {
-            scaledSched[h][0] = gLastSchedule[h][0];
-            scaledSched[h][1] = gLastSchedule[h][1];
-            for (int c = 0; c < K7_CHANNELS; c++) {
-                int v = (int)roundf(gLastSchedule[h][2 + c] * mb);
-                scaledSched[h][2 + c] = (uint8_t)(v > 100 ? 100 : v);
-            }
-        }
-        withLamp([&](K7Lamp& lamp) {
-            lamp.pushSchedule(scaledManual, scaledSched, false);
-        });
-    }
-    hCloud = nullptr;
-    vTaskDelete(nullptr);
-}
-
-void startCloud() {
-    if (gCloudActive && hCloud) return;
-    gCloudActive = true;
-    xTaskCreatePinnedToCore(cloudTask, "cloud", 6144, nullptr, 2, &hCloud, 0);
-}
-
-void stopCloud() {
-    gCloudActive = false;
-    // cloudTask exits on its next iteration — no blocking here
-}
-
 // ── Scheduler tasks ───────────────────────────────────────────────────────────
-static void lightningSchedulerTask(void*) {
-    for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(30000));
-        if (!gLightningSchedule.enabled) continue;
-        if (inTimeWindow(gLightningSchedule.start, gLightningSchedule.end)) {
-            if (!gLightningUserStopped) startLightning();
-        } else {
-            gLightningActive = false;
-        }
-    }
-}
-
 static void lunarSchedulerTask(void*) {
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(60000));
@@ -697,6 +395,5 @@ static void lunarSchedulerTask(void*) {
 }
 
 void startEffectSchedulers() {
-    xTaskCreatePinnedToCore(lightningSchedulerTask, "ls_sched",  2048, nullptr, 1, nullptr, 0);
-    xTaskCreatePinnedToCore(lunarSchedulerTask,     "lun_sched", 2048, nullptr, 1, nullptr, 0);
+    xTaskCreatePinnedToCore(lunarSchedulerTask, "lun_sched", 2048, nullptr, 1, nullptr, 0);
 }

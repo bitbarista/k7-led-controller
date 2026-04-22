@@ -145,14 +145,10 @@ body {
 .fx-tog  { min-width: 46px; height: 26px; border-radius: 13px; border: 2px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 0.76rem; font-weight: 700; cursor: pointer; font-family: inherit; transition: border-color 0.15s, background 0.15s, color 0.15s; flex-shrink: 0; }
 
 /* active states */
-.fx-row-wrap[data-fx="ramp"].active      .fx-tog { border-color:rgba(56,189,248,0.6);  background:rgba(56,189,248,0.14);  color:#38bdf8; }
-.fx-row-wrap[data-fx="lightning"].active .fx-tog { border-color:rgba(227,173,14,0.6);  background:rgba(227,173,14,0.14);  color:#e3ad0e; }
-.fx-row-wrap[data-fx="lunar"].active     .fx-tog { border-color:rgba(99,102,241,0.6);  background:rgba(99,102,241,0.16);  color:#818cf8; }
-.fx-row-wrap[data-fx="clouds"].active    .fx-tog { border-color:rgba(148,163,184,0.6); background:rgba(148,163,184,0.14); color:#94a3b8; }
-.fx-row-wrap[data-fx="ramp"].active      .fx-name { color:#38bdf8; }
-.fx-row-wrap[data-fx="lightning"].active .fx-name { color:#e3ad0e; }
-.fx-row-wrap[data-fx="lunar"].active     .fx-name { color:#818cf8; }
-.fx-row-wrap[data-fx="clouds"].active    .fx-name { color:#94a3b8; }
+.fx-row-wrap[data-fx="ramp"].active  .fx-tog { border-color:rgba(56,189,248,0.6); background:rgba(56,189,248,0.14); color:#38bdf8; }
+.fx-row-wrap[data-fx="lunar"].active .fx-tog { border-color:rgba(99,102,241,0.6); background:rgba(99,102,241,0.16); color:#818cf8; }
+.fx-row-wrap[data-fx="ramp"].active  .fx-name { color:#38bdf8; }
+.fx-row-wrap[data-fx="lunar"].active .fx-name { color:#818cf8; }
 
 /* inline settings panel */
 .fx-flyout { display:none; padding:7px 0 3px; border-top:1px solid var(--border); }
@@ -166,7 +162,7 @@ body {
 .time-input    { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:3px 5px; font-size:0.8rem; width:86px; font-family:inherit; }
 .time-input::-webkit-calendar-picker-indicator { filter:invert(0.6); cursor:pointer; }
 [data-theme="light"] .time-input::-webkit-calendar-picker-indicator { filter:none; opacity:0.5; }
-.lm-intensity, .cloud-num { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:3px 4px; font-size:0.8rem; width:3rem; text-align:center; font-family:inherit; }
+.lm-intensity { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:3px 4px; font-size:0.8rem; width:3rem; text-align:center; font-family:inherit; }
 .fx-phase { font-size:0.82rem; color:var(--muted); }
 
 /* ── presets ── */
@@ -199,6 +195,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
   <div class="status-dot busy" id="dot"></div>
   <span id="statusMsg">Connecting…</span>
   <div style="flex:1"></div>
+  <a href="/?view=mobile" style="font-size:0.8rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:6px;padding:4px 9px;line-height:1">Mobile</a>
   <button id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark theme"
           style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 9px;font-size:0.95rem;cursor:pointer;line-height:1">☀</button>
   <select id="deviceSel" onchange="onDeviceChange()" title="Device type">
@@ -306,30 +303,6 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
         </div>
       </div>
 
-      <!-- Lightning -->
-      <div class="fx-row-wrap" data-fx="lightning" id="lightningPill">
-        <div class="fx-row">
-          <div class="fx-info">
-            <div class="fx-name">⚡ Lightning</div>
-            <div class="fx-sub" id="lightningSub">Off</div>
-          </div>
-          <button class="fx-cog" id="lightningCfgBtn" onclick="toggleFlyout('lightning')" title="Lightning schedule">⚙</button>
-          <button class="fx-tog" id="lightningBtn" onclick="toggleLightning()" title="Simulate lightning flashes">OFF</button>
-        </div>
-        <div class="fx-flyout" id="lightningFlyout">
-          <div class="fx-flyout-row">
-            <label class="ls-label" title="Auto-start/stop lightning on a daily schedule">
-              <input type="checkbox" id="lsEnabled" onchange="onLsChange()"> Auto-schedule
-            </label>
-          </div>
-          <div class="ls-time-wrap" id="lsTimeWrap" style="display:none">
-            <input type="time" id="lsStart" class="time-input" onchange="onLsChange()" title="Start time">
-            <span>–</span>
-            <input type="time" id="lsEnd" class="time-input" onchange="onLsChange()" title="End time">
-          </div>
-        </div>
-      </div>
-
       <!-- Lunar Cycle -->
       <div class="fx-row-wrap" data-fx="lunar" id="lunarPill">
         <div class="fx-row">
@@ -355,35 +328,6 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
             <span style="font-size:0.82rem;color:var(--muted)">Max blue brightness</span>
             <input type="number" id="lmMaxIntensity" class="lm-intensity" min="1" max="100" value="15" onchange="onLmChange()">
             <span style="font-size:0.82rem;color:var(--muted)">%</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Clouds -->
-      <div class="fx-row-wrap" data-fx="clouds" id="cloudsPill">
-        <div class="fx-row">
-          <div class="fx-info">
-            <div class="fx-name">☁ Clouds</div>
-            <div class="fx-sub" id="cloudsSub">Off</div>
-          </div>
-          <button class="fx-cog" id="cloudsCfgBtn" onclick="toggleFlyout('clouds')" title="Cloud settings">⚙</button>
-          <button class="fx-tog" id="cloudsBtn" onclick="toggleClouds()" title="Simulate passing clouds">OFF</button>
-        </div>
-        <div class="fx-flyout" id="cloudsFlyout">
-          <div class="fx-flyout-row">
-            <span style="font-size:0.82rem;color:var(--muted)">Density</span>
-            <input type="number" id="cloudDensity" class="cloud-num" min="1" max="100" value="30" onchange="onCloudsChange()" title="How often clouds pass (%)">
-            <span style="font-size:0.82rem;color:var(--muted)">%</span>
-          </div>
-          <div class="fx-flyout-row">
-            <span style="font-size:0.82rem;color:var(--muted)">Max depth</span>
-            <input type="number" id="cloudDepth" class="cloud-num" min="1" max="100" value="60" onchange="onCloudsChange()" title="Max dimming depth (%)">
-            <span style="font-size:0.82rem;color:var(--muted)">%</span>
-          </div>
-          <div class="fx-flyout-row">
-            <label class="ls-label" title="Dim blue channels more than white">
-              <input type="checkbox" id="cloudShift" checked onchange="onCloudsChange()"> Colour shift
-            </label>
           </div>
         </div>
       </div>
@@ -987,49 +931,6 @@ async function toggleRamp() {
   } catch(e) { setRampBtn(active, null); setErr(e.message); }
 }
 
-// ── Lightning effect ──────────────────────────────────────────────────────────
-function setLightningBtn(active) {
-  const pill = document.getElementById('lightningPill');
-  const btn  = document.getElementById('lightningBtn');
-  pill.classList.toggle('active', active);
-  btn.textContent = active ? 'ON' : 'OFF';
-  btn.title = active ? 'Lightning active — click to stop' : 'Simulate lightning flashes';
-}
-
-async function toggleLightning() {
-  const active = document.getElementById('lightningPill').classList.contains('active');
-  setLightningBtn(!active);
-  try {
-    await api('POST', active ? '/api/lightning/stop' : '/api/lightning/start');
-  } catch(e) { setLightningBtn(active); setErr(e.message); }
-}
-
-function applyLsUI(ls) {
-  document.getElementById('lsEnabled').checked = !!ls.enabled;
-  document.getElementById('lsStart').value     = ls.start || '20:00';
-  document.getElementById('lsEnd').value       = ls.end   || '23:00';
-  document.getElementById('lsTimeWrap').style.display = ls.enabled ? '' : 'none';
-  const sub = document.getElementById('lightningSub');
-  if (sub) sub.textContent = ls.enabled
-    ? `Auto ${ls.start||'20:00'}–${ls.end||'23:00'}` : 'Manual only';
-}
-
-async function loadLightningSchedule() {
-  try { applyLsUI(await api('GET', '/api/lightning/schedule')); } catch(_) {}
-}
-
-async function onLsChange() {
-  const ls = {
-    enabled: document.getElementById('lsEnabled').checked,
-    start:   document.getElementById('lsStart').value,
-    end:     document.getElementById('lsEnd').value,
-  };
-  document.getElementById('lsTimeWrap').style.display = ls.enabled ? '' : 'none';
-  const sub = document.getElementById('lightningSub');
-  if (sub) sub.textContent = ls.enabled ? `Auto ${ls.start}–${ls.end}` : 'Manual only';
-  try { await api('POST', '/api/lightning/schedule', ls); } catch(_) {}
-}
-
 // ── Lunar cycle ───────────────────────────────────────────────────────────────
 const MOON_EMOJIS = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
 function moonEmoji(phase) { return MOON_EMOJIS[Math.round(phase * 8) % 8]; }
@@ -1083,42 +984,6 @@ async function onLmChange() {
   await loadLunarStatus();
 }
 
-// ── Clouds effect ─────────────────────────────────────────────────────────────
-function setCloudsBtn(active) {
-  const pill = document.getElementById('cloudsPill');
-  const btn  = document.getElementById('cloudsBtn');
-  pill.classList.toggle('active', active);
-  btn.textContent = active ? 'ON' : 'OFF';
-  btn.title = active ? 'Clouds active — click to stop' : 'Simulate passing clouds';
-}
-
-async function toggleClouds() {
-  const active = document.getElementById('cloudsPill').classList.contains('active');
-  setCloudsBtn(!active);
-  try {
-    await api('POST', active ? '/api/clouds/stop' : '/api/clouds/start');
-  } catch(e) { setCloudsBtn(active); setErr(e.message); }
-}
-
-function applyCloudsUI(d) {
-  setCloudsBtn(d.active);
-  _setIfUnfocused('cloudDensity', el => { el.value = d.density ?? 30; });
-  _setIfUnfocused('cloudDepth',   el => { el.value = d.depth   ?? 60; });
-  _setIfUnfocused('cloudShift',   el => { el.checked = d.colour_shift !== false; });
-  const sub = document.getElementById('cloudsSub');
-  if (sub) sub.textContent = `Density ${d.density??30}% · depth ${d.depth??60}%`;
-}
-
-async function onCloudsChange() {
-  try {
-    await api('POST', '/api/clouds/settings', {
-      density:      parseInt(document.getElementById('cloudDensity').value) || 30,
-      depth:        parseInt(document.getElementById('cloudDepth').value)   || 60,
-      colour_shift: document.getElementById('cloudShift').checked,
-    });
-  } catch(_) {}
-}
-
 // ── Effect settings panels ────────────────────────────────────────────────────
 function toggleFlyout(name) {
   const flyout = document.getElementById(name + 'Flyout');
@@ -1137,12 +1002,10 @@ function _setIfUnfocused(id, setter) {
 
 async function pollEffectStates() {
   try {
-    const [ramp, light, lunar, master, clouds] = await Promise.all([
+    const [ramp, lunar, master] = await Promise.all([
       api('GET', '/api/ramp/status'),
-      api('GET', '/api/lightning/status'),
       api('GET', '/api/lunar/status'),
       api('GET', '/api/master'),
-      api('GET', '/api/clouds/status'),
     ]);
     const masterSlider = document.getElementById('masterSlider');
     if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
@@ -1152,14 +1015,6 @@ async function pollEffectStates() {
       applyMaster(); syncChannelSliders(); updateChart(); updateColorStrip(); updateNowBars();
     }
     setRampBtn(ramp.active, ramp.last_tick);
-    setLightningBtn(light.active);
-    _setIfUnfocused('lsEnabled', el => { el.checked = !!light.enabled; });
-    _setIfUnfocused('lsStart',   el => { el.value = light.start || '20:00'; });
-    _setIfUnfocused('lsEnd',     el => { el.value = light.end   || '23:00'; });
-    document.getElementById('lsTimeWrap').style.display = light.enabled ? '' : 'none';
-    const lsSub = document.getElementById('lightningSub');
-    if (lsSub) lsSub.textContent = light.enabled
-      ? `Auto ${light.start||'20:00'}–${light.end||'23:00'}` : 'Manual only';
     lunarState = lunar;
     setLunarBtn(lunar.active);
     _setIfUnfocused('lmEnabled',      el => { el.checked = !!lunar.enabled; });
@@ -1172,7 +1027,6 @@ async function pollEffectStates() {
       document.getElementById('lunarTonight').textContent =
         `${moonEmoji(lunar.phase||0)} ${lunar.phase_name} — blue tonight: ${tonight}%`;
     }
-    applyCloudsUI(clouds);
   } catch(_) {}
 }
 
@@ -1305,7 +1159,6 @@ async function init() {
   api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 }).catch(()=>{});
   pollEffectStates();
   setInterval(pollEffectStates, 5000);
-  loadLightningSchedule();
   loadLunarStatus();
   setInterval(loadLunarStatus, 60000);
   setInterval(() => {

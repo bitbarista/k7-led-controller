@@ -22,36 +22,19 @@ extern char              gActivePreset[64];    // e.g. "preset:mixed" or "profil
 // visible to tasks pinned to core 0 (lamp/effect tasks).  The Xtensa
 // architecture requires explicit memory barriers that volatile cannot provide.
 extern std::atomic<bool> gRampActive;
-extern std::atomic<bool> gLightningActive;
 extern std::atomic<bool> gLunarActive;
-extern std::atomic<bool> gCloudActive;
 
-// lightning: separate "user intent" vs scheduled
-extern std::atomic<bool> gLightningUserEnabled;
-extern std::atomic<bool> gLightningUserStopped;
 extern std::atomic<bool> gLunarStopped;
 
 // ── Schedule config (persisted in JSON files) ─────────────────────────────────
-struct LightningSchedule {
-    bool    enabled = false;
-    char    start[8] = "20:00";
-    char    end[8]   = "23:00";
-};
 struct LunarConfig {
     bool    enabled      = false;
     char    start[8]     = "21:00";
     char    end[8]       = "06:00";
     int     maxIntensity = 15;
 };
-struct CloudSettings {
-    int     density     = 30;
-    int     depth       = 60;
-    bool    colourShift = true;
-};
 
-extern LightningSchedule gLightningSchedule;
-extern LunarConfig       gLunarConfig;
-extern CloudSettings     gCloudSettings;
+extern LunarConfig gLunarConfig;
 
 // ── Helpers (used by both effects and ApiServer) ──────────────────────────────
 void interpolateChannels(const uint8_t sched[K7_SLOTS][8], int h, int m,
@@ -89,9 +72,7 @@ void startLampWorker();
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 void loadEffectConfigs();
-void saveLightningSchedule();
 void saveLunarConfig();
-void saveCloudSettings();
 void saveEffectState();
 void loadEffectState();
 
@@ -101,16 +82,10 @@ void loadEffectState();
 void startRamp();
 void stopRamp();
 
-void startLightning();
-void stopLightning();
-
 void startLunar();
 void stopLunar();
 void lunarApplyNow();
 void lunarRestoreNow();
-
-void startCloud();
-void stopCloud();
 
 // ── Background scheduler tasks (call once at startup) ─────────────────────────
 void startEffectSchedulers();

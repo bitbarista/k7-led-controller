@@ -168,10 +168,8 @@ body {
   color: var(--muted); font-size: 0.8rem; font-weight: 700;
   cursor: pointer; transition: all 0.15s;
 }
-.fx-tog.on-ramp      { border-color: rgba(56,189,248,0.6);  background: rgba(56,189,248,0.12);  color: #38bdf8; }
-.fx-tog.on-lightning { border-color: rgba(227,173,14,0.6);  background: rgba(227,173,14,0.12);  color: #e3ad0e; }
-.fx-tog.on-lunar     { border-color: rgba(99,102,241,0.6);  background: rgba(99,102,241,0.15);  color: #818cf8; }
-.fx-tog.on-clouds    { border-color: rgba(148,163,184,0.6); background: rgba(148,163,184,0.12); color: #94a3b8; }
+.fx-tog.on-ramp  { border-color: rgba(56,189,248,0.6); background: rgba(56,189,248,0.12); color: #38bdf8; }
+.fx-tog.on-lunar { border-color: rgba(99,102,241,0.6); background: rgba(99,102,241,0.15); color: #818cf8; }
 .fx-set-toggle {
   padding: 0 14px 10px; font-size: 0.75rem; color: var(--muted); cursor: pointer; user-select: none;
 }
@@ -290,59 +288,6 @@ button:disabled { opacity: 0.4; }
         <div class="fx-sub" id="rampSub">Inactive</div>
       </div>
       <button class="fx-tog" id="rampBtn" onclick="toggleRamp()">OFF</button>
-    </div>
-  </div>
-
-  <!-- Lightning -->
-  <div class="fx-card">
-    <div class="fx-main">
-      <div class="fx-info">
-        <div class="fx-name">⚡ Lightning</div>
-        <div class="fx-sub" id="lightningSub">Inactive</div>
-      </div>
-      <button class="fx-tog" id="lightningBtn" onclick="toggleLightning()">OFF</button>
-    </div>
-    <div class="fx-set-toggle" onclick="toggleFxSet('lightning')">⚙ Settings ▾</div>
-    <div class="fx-settings" id="lightningSettings">
-      <div class="set-row">
-        <label class="chk-lbl">
-          <input type="checkbox" id="lsEnabled" onchange="onLsChange()"> Auto-schedule
-        </label>
-      </div>
-      <div class="set-row" id="lsTimeRow" style="display:none">
-        <input type="time" id="lsStart" class="time-in" onchange="onLsChange()">
-        <span style="color:var(--muted)">–</span>
-        <input type="time" id="lsEnd" class="time-in" onchange="onLsChange()">
-      </div>
-    </div>
-  </div>
-
-  <!-- Clouds -->
-  <div class="fx-card">
-    <div class="fx-main">
-      <div class="fx-info">
-        <div class="fx-name">☁ Clouds</div>
-        <div class="fx-sub" id="cloudsSub">Inactive</div>
-      </div>
-      <button class="fx-tog" id="cloudsBtn" onclick="toggleClouds()">OFF</button>
-    </div>
-    <div class="fx-set-toggle" onclick="toggleFxSet('clouds')">⚙ Settings ▾</div>
-    <div class="fx-settings" id="cloudsSettings">
-      <div class="set-row">
-        <span style="color:var(--muted);font-size:0.82rem">Density</span>
-        <input type="number" id="cloudDensity" class="num-in" min="1" max="100" value="30" onchange="onCloudsChange()">
-        <span style="color:var(--muted);font-size:0.82rem">%</span>
-      </div>
-      <div class="set-row">
-        <span style="color:var(--muted);font-size:0.82rem">Max depth</span>
-        <input type="number" id="cloudDepth" class="num-in" min="1" max="100" value="60" onchange="onCloudsChange()">
-        <span style="color:var(--muted);font-size:0.82rem">%</span>
-      </div>
-      <div class="set-row">
-        <label class="chk-lbl">
-          <input type="checkbox" id="cloudShift" checked onchange="onCloudsChange()"> Colour shift (blue dims more)
-        </label>
-      </div>
     </div>
   </div>
 
@@ -597,14 +542,11 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   try {
-    const [cfgData, s, rampSt, lunarSt, lsSt, lStatus, cloudsSt] = await Promise.all([
+    const [cfgData, s, rampSt, lunarSt] = await Promise.all([
       api('GET', '/api/config'),
       api('GET', '/api/state'),
       api('GET', '/api/ramp/status'),
       api('GET', '/api/lunar/status'),
-      api('GET', '/api/lightning/schedule'),
-      api('GET', '/api/lightning/status'),
-      api('GET', '/api/clouds/status'),
     ]);
 
     cfg             = cfgData;
@@ -633,14 +575,6 @@ async function readFromDevice() {
       ? (rampSt.last_tick ? 'Last tick: ' + new Date(rampSt.last_tick*1000).toLocaleTimeString() : 'Running…')
       : 'Inactive';
 
-    // Lightning
-    setLightningBtn(lStatus.active);
-    document.getElementById('lightningSub').textContent = lStatus.active ? 'Active' : 'Inactive';
-    document.getElementById('lsEnabled').checked = !!lsSt.enabled;
-    document.getElementById('lsStart').value     = lsSt.start || '20:00';
-    document.getElementById('lsEnd').value       = lsSt.end   || '23:00';
-    document.getElementById('lsTimeRow').style.display = lsSt.enabled ? '' : 'none';
-
     // Lunar
     setLunarBtn(lunarSt.active);
     const MOON = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
@@ -652,13 +586,6 @@ async function readFromDevice() {
     document.getElementById('lmEnd').value       = lunarSt.end   || '06:00';
     document.getElementById('lmIntensity').value = lunarSt.max_intensity ?? 15;
     document.getElementById('lmTimeRow').style.display = lunarSt.enabled ? '' : 'none';
-
-    // Clouds
-    setCloudsBtn(cloudsSt.active);
-    document.getElementById('cloudsSub').textContent = cloudsSt.active ? 'Active' : 'Inactive';
-    document.getElementById('cloudDensity').value = cloudsSt.density ?? 30;
-    document.getElementById('cloudDepth').value   = cloudsSt.depth   ?? 60;
-    document.getElementById('cloudShift').checked = cloudsSt.colour_shift !== false;
 
     await loadPresetsProfiles();
     setOk((cfg.device==='k7mini' ? 'K7 Mini' : 'K7 Pro') + ' · ' + mode);
@@ -688,7 +615,7 @@ async function pushSchedule() {
 
 // ── Effects ──────────────────────────────────────────────────────────────
 // Suppress poll overwriting optimistic toggle state for this many ms.
-const _suppress = { ramp: 0, lightning: 0, lunar: 0, clouds: 0 };
+const _suppress = { ramp: 0, lunar: 0 };
 function _suppressPoll(key) { _suppress[key] = Date.now() + 4000; }
 function _pollOk(key)       { return Date.now() >= _suppress[key]; }
 
@@ -696,36 +623,6 @@ function setRampBtn(on) {
   const b = document.getElementById('rampBtn');
   b.textContent = on ? 'ON' : 'OFF';
   b.className = 'fx-tog' + (on ? ' on-ramp' : '');
-}
-function setLightningBtn(on) {
-  const b = document.getElementById('lightningBtn');
-  b.textContent = on ? 'ON' : 'OFF';
-  b.className = 'fx-tog' + (on ? ' on-lightning' : '');
-}
-function setCloudsBtn(on) {
-  const b = document.getElementById('cloudsBtn');
-  b.textContent = on ? 'ON' : 'OFF';
-  b.className = 'fx-tog' + (on ? ' on-clouds' : '');
-}
-
-async function toggleClouds() {
-  const on = document.getElementById('cloudsBtn').classList.contains('on-clouds');
-  setCloudsBtn(!on);
-  document.getElementById('cloudsSub').textContent = !on ? 'Active' : 'Inactive';
-  _suppressPoll('clouds');
-  try {
-    await api('POST', on ? '/api/clouds/stop' : '/api/clouds/start');
-  } catch(e) { setCloudsBtn(on); _suppress.clouds = 0; setErr(e.message); }
-}
-
-async function onCloudsChange() {
-  try {
-    await api('POST', '/api/clouds/settings', {
-      density:      parseInt(document.getElementById('cloudDensity').value) || 30,
-      depth:        parseInt(document.getElementById('cloudDepth').value)   || 60,
-      colour_shift: document.getElementById('cloudShift').checked,
-    });
-  } catch(_) {}
 }
 
 function setLunarBtn(on) {
@@ -748,16 +645,6 @@ async function toggleRamp() {
   } catch(e) { setRampBtn(on); _suppress.ramp = 0; setErr(e.message); }
 }
 
-async function toggleLightning() {
-  const on = document.getElementById('lightningBtn').classList.contains('on-lightning');
-  setLightningBtn(!on);
-  document.getElementById('lightningSub').textContent = !on ? 'Active' : 'Inactive';
-  _suppressPoll('lightning');
-  try {
-    await api('POST', on ? '/api/lightning/stop' : '/api/lightning/start');
-  } catch(e) { setLightningBtn(on); _suppress.lightning = 0; setErr(e.message); }
-}
-
 async function toggleLunar() {
   const on = document.getElementById('lunarBtn').classList.contains('on-lunar');
   setLunarBtn(!on);
@@ -765,19 +652,6 @@ async function toggleLunar() {
   try {
     await api('POST', on ? '/api/lunar/stop' : '/api/lunar/start');
   } catch(e) { setLunarBtn(on); _suppress.lunar = 0; setErr(e.message); }
-}
-
-// ── Lightning schedule ───────────────────────────────────────────────────
-async function onLsChange() {
-  const en = document.getElementById('lsEnabled').checked;
-  document.getElementById('lsTimeRow').style.display = en ? '' : 'none';
-  try {
-    await api('POST', '/api/lightning/schedule', {
-      enabled: en,
-      start:   document.getElementById('lsStart').value,
-      end:     document.getElementById('lsEnd').value,
-    });
-  } catch(_) {}
 }
 
 // ── Lunar settings ───────────────────────────────────────────────────────
@@ -877,13 +751,11 @@ function _setIfUnfocused(id, setter) {
 
 async function pollEffectStates() {
   try {
-    const [ramp, light, lunar, master, stateData, clouds] = await Promise.all([
+    const [ramp, lunar, master, stateData] = await Promise.all([
       api('GET', '/api/ramp/status'),
-      api('GET', '/api/lightning/status'),
       api('GET', '/api/lunar/status'),
       api('GET', '/api/master'),
       api('GET', '/api/state'),
-      api('GET', '/api/clouds/status'),
     ]);
     const masterSlider = document.getElementById('masterSlider');
     if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
@@ -891,7 +763,6 @@ async function pollEffectStates() {
       masterSlider.value = master.value;
       document.getElementById('masterVal').textContent = master.value + '%';
     }
-    // Sync schedule from server (picks up pushes from other clients)
     if (stateData?.schedule?.length === 24) {
       schedule = stateData.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
       if (document.getElementById('schedCollapse').classList.contains('open'))
@@ -904,13 +775,6 @@ async function pollEffectStates() {
         ? (ramp.last_tick ? 'Last tick: ' + new Date(ramp.last_tick*1000).toLocaleTimeString() : 'Running…')
         : 'Inactive';
     }
-    if (_pollOk('lightning')) {
-      setLightningBtn(light.active);
-      _setIfUnfocused('lsEnabled',  el => { el.checked = !!light.enabled; });
-      _setIfUnfocused('lsStart',    el => { el.value = light.start || '20:00'; });
-      _setIfUnfocused('lsEnd',      el => { el.value = light.end   || '23:00'; });
-      document.getElementById('lsTimeRow').style.display = light.enabled ? '' : 'none';
-    }
     if (_pollOk('lunar')) {
       setLunarBtn(lunar.active);
       _setIfUnfocused('lmEnabled',  el => { el.checked = !!lunar.enabled; });
@@ -922,13 +786,6 @@ async function pollEffectStates() {
     const MOON = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
     document.getElementById('lunarSub').textContent =
       MOON[Math.round((lunar.phase||0)*8)%8] + ' ' + (lunar.phase_name||'') + ' · ' + (lunar.illumination||0) + '%';
-    if (_pollOk('clouds')) {
-      setCloudsBtn(clouds.active);
-      document.getElementById('cloudsSub').textContent = clouds.active ? 'Active' : 'Inactive';
-    }
-    _setIfUnfocused('cloudDensity', el => { el.value = clouds.density ?? 30; });
-    _setIfUnfocused('cloudDepth',   el => { el.value = clouds.depth   ?? 60; });
-    _setIfUnfocused('cloudShift',   el => { el.checked = clouds.colour_shift !== false; });
   } catch(_) {}
 }
 setInterval(pollEffectStates, 5000);
