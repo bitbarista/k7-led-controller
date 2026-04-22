@@ -61,8 +61,10 @@ After flashing, the device starts a setup portal:
 1. Connect to the **K7-Setup-XXXXXX** WiFi network (open, no password — the suffix is unique to your board)
 2. Browse to **http://192.168.5.1** — the device scans for nearby K7 lamps automatically
 3. Select your lamp from the list and tap **Connect & Save**
-4. The device reboots. Connect to **K7-Controller-XXXXXX** WiFi (same suffix, password: `12345678`)
-5. Browse to **http://192.168.5.1** — the controller loads and reads the lamp
+4. The device reboots. Connect to your **lamp's WiFi network** (K7-XXXXXX)
+5. Browse to **http://k7controller.local** — the controller loads and reads the lamp
+
+> To reset to setup mode (e.g. to change lamps), hold the BOOT button on the board while powering on for 3 seconds.
 
 > If your lamp is not found, make sure it is powered on. You can also enter the SSID manually.
 
@@ -71,10 +73,10 @@ After flashing, the device starts a setup portal:
 ## Network architecture
 
 ```
-Your phone/browser ── K7-Controller WiFi (192.168.5.1) ── [ESP32-S3] ── K7 lamp AP (192.168.4.1)
+Your phone/browser ── K7 lamp AP (192.168.4.x) ── [ESP32-S3] ── K7 lamp (192.168.4.1)
 ```
 
-The ESP32-S3 bridges your devices to the lamp. Your home network is never involved — the lamp does not need to be on your router.
+All devices connect to the lamp's own WiFi network. The ESP32-S3 runs in STA-only mode — no separate controller AP. Your home network is never involved.
 
 ---
 

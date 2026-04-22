@@ -83,14 +83,13 @@ static String buildHtml(const std::vector<FoundLamp>& lamps) {
 }
 
 static String savedHtml() {
-    String ssid = makeApSsid(AP_SSID_CONTROLLER_BASE);
     return String(F("<!DOCTYPE html><html><head><meta charset='UTF-8'>"
              "<style>body{font-family:system-ui;max-width:420px;margin:40px auto;padding:0 20px;"
              "background:#0d1117;color:#c9d1d9}h1{color:#3fb950}</style></head>"
              "<body><h1>Saved!</h1>"
-             "<p>Rebooting &mdash; connect to <b>")) + ssid +
-             F("</b> WiFi (password: <b>12345678</b>) then browse to <b>http://192.168.5.1</b></p>"
-             "</body></html>");
+             "<p>Rebooting &mdash; connect your device to the lamp&rsquo;s WiFi network "
+             "then browse to <b>http://k7controller.local</b></p>"
+             "</body></html>"));
 }
 
 static bool saveConfig(const String& lampSsid, const String& device) {
