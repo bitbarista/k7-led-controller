@@ -384,19 +384,22 @@ static void doLightningEvent() {
     int  numStrikes = burst ? (3 + esp_random() % 4) : 1;
 
     for (int s = 0; s < numStrikes && gLightningActive; s++) {
-        withLamp([&](K7Lamp& lamp) {
-            int pulses = 1;
+        int pulses = 1;
+        {
             int r = esp_random() % 100;
             if (r >= 65 && r < 90) pulses = 2;
             else if (r >= 90)      pulses = 3;
-            for (int p = 0; p < pulses && gLightningActive; p++) {
-                lamp.previewBrightness(flash);
-                vTaskDelay(pdMS_TO_TICKS(30 + esp_random() % 50));
-                lamp.previewBrightness(ambient);
-                if (p < pulses - 1)
-                    vTaskDelay(pdMS_TO_TICKS(40 + esp_random() % 60));
-            }
-        });
+        }
+        for (int p = 0; p < pulses && gLightningActive; p++) {
+            // Flash-on and flash-off each get their own connection.  Previously
+            // both shared one connection, and the lamp sometimes closed it after
+            // the first command — stranding us at flash brightness.
+            withLamp([&](K7Lamp& lamp) { lamp.previewBrightness(flash); });
+            vTaskDelay(pdMS_TO_TICKS(30 + esp_random() % 50));
+            withLamp([&](K7Lamp& lamp) { lamp.previewBrightness(ambient); });
+            if (p < pulses - 1)
+                vTaskDelay(pdMS_TO_TICKS(40 + esp_random() % 60));
+        }
         if (s < numStrikes - 1)
             vTaskDelay(pdMS_TO_TICKS(80 + esp_random() % 170));
     }
@@ -415,7 +418,7 @@ static void doLightningEvent() {
 
 static void lightningTask(void*) {
     while (gLightningActive) {
-        int delay_ms = 15000 + (int)(esp_random() % 75000);
+        int delay_ms = 15000 + (int)(esp_random() % 30000);
         for (int i = 0; i < delay_ms / 250 && gLightningActive; i++)
             vTaskDelay(pdMS_TO_TICKS(250));
         if (gLightningActive) doLightningEvent();
@@ -572,20 +575,19 @@ static void cloudTask(void*) {
             if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
                 applyLunarOverlay(base);
             applyCloud(base, targetDim, shift, dimmed);
-            withLamp([&](K7Lamp& lamp) {
-                const int STEPS = 30;
-                for (int i = 1; i <= STEPS && gCloudActive; i++) {
-                    float   t2 = (float)i / STEPS;
-                    uint8_t ch[K7_CHANNELS];
-                    for (int c = 0; c < K7_CHANNELS; c++) {
-                        float v = base[c] + t2 * ((int)dimmed[c] - (int)base[c]);
-                        ch[c] = (uint8_t)roundf(v);
-                    }
-                    if (i < STEPS) lamp.handLuminanceFast(ch);
-                    else           lamp.handLuminance(ch);
-                    vTaskDelay(pdMS_TO_TICKS(100));
+            // One withLamp per step so the mutex is free between steps,
+            // letting lightning interleave without a 3-second delay.
+            for (int i = 1; i <= 30 && gCloudActive; i++) {
+                float   t2 = (float)i / 30;
+                uint8_t ch[K7_CHANNELS];
+                for (int c = 0; c < K7_CHANNELS; c++) {
+                    float v = base[c] + t2 * ((int)dimmed[c] - (int)base[c]);
+                    ch[c] = (uint8_t)roundf(v);
                 }
-            });
+                if (i < 30) withLamp([&](K7Lamp& lamp) { lamp.handLuminanceFast(ch); });
+                else        withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
         }
 
         // ── Hold ─────────────────────────────────────────────────────────────
@@ -618,20 +620,17 @@ static void cloudTask(void*) {
             applyMasterBrightness(full);
             if (gLunarActive && inTimeWindow(gLunarConfig.start, gLunarConfig.end))
                 applyLunarOverlay(full);
-            withLamp([&](K7Lamp& lamp) {
-                const int STEPS = 30;
-                for (int i = 1; i <= STEPS && gCloudActive; i++) {
-                    float   t2 = (float)i / STEPS;
-                    uint8_t ch[K7_CHANNELS];
-                    for (int c = 0; c < K7_CHANNELS; c++) {
-                        float v = dimmed[c] + t2 * ((int)full[c] - (int)dimmed[c]);
-                        ch[c] = (uint8_t)roundf(v);
-                    }
-                    if (i < STEPS) lamp.handLuminanceFast(ch);
-                    else           lamp.handLuminance(ch);
-                    vTaskDelay(pdMS_TO_TICKS(100));
+            for (int i = 1; i <= 30 && gCloudActive; i++) {
+                float   t2 = (float)i / 30;
+                uint8_t ch[K7_CHANNELS];
+                for (int c = 0; c < K7_CHANNELS; c++) {
+                    float v = dimmed[c] + t2 * ((int)full[c] - (int)dimmed[c]);
+                    ch[c] = (uint8_t)roundf(v);
                 }
-            });
+                if (i < 30) withLamp([&](K7Lamp& lamp) { lamp.handLuminanceFast(ch); });
+                else        withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
         }
     }
 
