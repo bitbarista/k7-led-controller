@@ -493,10 +493,11 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   try {
-    const [s, rampStatus, masterData] = await Promise.all([
+    const [s, rampStatus, masterData, feedStatus] = await Promise.all([
       api('GET', '/api/state'),
       api('GET', '/api/ramp/status'),
       api('GET', '/api/master'),
+      api('GET', '/api/feed/status'),
     ]);
     mode            = s.mode;
     activePresetKey = s.active_preset || '';
@@ -524,6 +525,10 @@ async function readFromDevice() {
     renderSliders();
     setOk(`${s.name}  ·  ${mode.toUpperCase()}`);
     await loadPresets();
+    if (feedStatus) {
+      if (feedStatus.duration  != null) document.getElementById('feedDuration').value  = feedStatus.duration;
+      if (feedStatus.intensity != null) document.getElementById('feedIntensity').value = feedStatus.intensity;
+    }
   } catch(e) {
     setErr(e.message);
   } finally {
