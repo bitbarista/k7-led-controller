@@ -42,6 +42,24 @@ static bool saveJsonFile(const char* path, const JsonDocument& doc) {
     return true;
 }
 
+static String urlDecode(String s) {
+    String out;
+    out.reserve(s.length());
+    for (size_t i = 0; i < s.length(); i++) {
+        char ch = s[i];
+        if (ch == '+') {
+            out += ' ';
+        } else if (ch == '%' && i + 2 < s.length()) {
+            char hex[3] = { s[i + 1], s[i + 2], 0 };
+            out += (char)strtol(hex, nullptr, 16);
+            i += 2;
+        } else {
+            out += ch;
+        }
+    }
+    return out;
+}
+
 static void loadConfigDoc(JsonDocument& doc) {
     doc.to<JsonObject>();
     loadJsonFile(CONFIG_FILE, doc);
@@ -594,7 +612,7 @@ void setupApiServer(WebServer& server) {
         if (server.method() == HTTP_DELETE) {
             String uri = server.uri();
             if (uri.startsWith("/api/profiles/")) {
-                String name = uri.substring(strlen("/api/profiles/"));
+                String name = urlDecode(uri.substring(strlen("/api/profiles/")));
                 JsonDocument profiles;
                 loadProfiles(profiles);
                 profiles.remove(name.c_str());
