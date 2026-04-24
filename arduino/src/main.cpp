@@ -34,7 +34,14 @@ static bool loadConfig(String& lampSsid, String& device) {
 }
 
 // ── WiFi ──────────────────────────────────────────────────────────────────────
+// Static IP — avoids DHCP re-assignments after reconnect so the bookmark always works.
+// Gateway / DNS = lamp AP address; subnet = /24.
+static const IPAddress STA_IP      (192, 168, 4, 200);
+static const IPAddress STA_GATEWAY (192, 168, 4,   1);
+static const IPAddress STA_SUBNET  (255, 255, 255,  0);
+
 static bool connectSta(const String& ssid, uint32_t timeoutMs = 20000) {
+    WiFi.config(STA_IP, STA_GATEWAY, STA_SUBNET, STA_GATEWAY);
     WiFi.begin(ssid.c_str(), LAMP_PASSWORD);
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
@@ -145,29 +152,54 @@ void setup() {
 void loop() {
     server.handleClient();
 
-    // Reconnect STA + restart mDNS if WiFi drops, or re-announce mDNS periodically
-    // (ESP32 mDNS library stops responding after extended uptime)
-    static uint32_t lastCheck  = 0;
-    static uint32_t lastMdns   = 0;
+    // Boot button (GPIO0) — brief press (50 ms – 3 s) toggles Feed mode.
+    // Factory-reset gesture (≥ 3 s on power-up) is handled in setup() only,
+    // so there is no conflict here during normal operation.
+    {
+        static bool     sBtnWasPressed = false;
+        static uint32_t sBtnPressedAt  = 0;
+        bool btnPressed = (digitalRead(0) == LOW);
+        if (btnPressed && !sBtnWasPressed)
+            sBtnPressedAt = millis();
+        else if (!btnPressed && sBtnWasPressed) {
+            uint32_t held = millis() - sBtnPressedAt;
+            if (held >= 50 && held < 3000) {
+                if (gFeedActive.load()) stopFeed();
+                else                    startFeed();
+            }
+        }
+        sBtnWasPressed = btnPressed;
+    }
+
+    // Reconnect STA + restart mDNS/server if WiFi drops.
+    // Check every 10 s — fast enough to minimise outage without hammering the stack.
+    static uint32_t lastCheck    = 0;
+    static uint32_t lastMdns     = 0;
     static bool     wasConnected = false;
     bool connected = (WiFi.status() == WL_CONNECTED);
 
-    if (millis() - lastCheck > 30000) {
+    if (millis() - lastCheck > 10000) {
         lastCheck = millis();
         if (!connected) {
             wasConnected = false;
             String lampSsid, device;
             if (loadConfig(lampSsid, device)) {
                 Serial.println("STA reconnecting...");
-                WiFi.reconnect();
+                WiFi.disconnect(false);
+                connectSta(lampSsid, 15000);
             }
         } else if (!wasConnected) {
+            // Just (re)connected — restart server so the TCP socket is fresh,
+            // then restart mDNS so the hostname resolves immediately.
             wasConnected = true;
+            server.close();
+            server.begin();
             MDNS.end();
             MDNS.begin("k7controller");
             MDNS.addService("http", "tcp", 80);
             lastMdns = millis();
-            Serial.println("mDNS restarted after reconnect");
+            Serial.printf("Reconnected  IP=%s  — server+mDNS restarted\n",
+                          WiFi.localIP().toString().c_str());
         }
     }
 

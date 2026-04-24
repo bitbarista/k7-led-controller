@@ -168,8 +168,9 @@ body {
   color: var(--muted); font-size: 0.8rem; font-weight: 700;
   cursor: pointer; transition: all 0.15s;
 }
-.fx-tog.on-ramp  { border-color: rgba(56,189,248,0.6); background: rgba(56,189,248,0.12); color: #38bdf8; }
-.fx-tog.on-lunar { border-color: rgba(99,102,241,0.6); background: rgba(99,102,241,0.15); color: #818cf8; }
+.fx-tog.on-ramp  { border-color: rgba(56,189,248,0.6);  background: rgba(56,189,248,0.12);  color: #38bdf8; }
+.fx-tog.on-feed  { border-color: rgba(249,115,22,0.6);  background: rgba(249,115,22,0.12);  color: #f97316; }
+.fx-tog.on-lunar { border-color: rgba(99,102,241,0.6);  background: rgba(99,102,241,0.15);  color: #818cf8; }
 .fx-set-toggle {
   padding: 0 14px 10px; font-size: 0.75rem; color: var(--muted); cursor: pointer; user-select: none;
 }
@@ -291,6 +292,30 @@ button:disabled { opacity: 0.4; }
     </div>
   </div>
 
+  <!-- Feed mode -->
+  <div class="fx-card">
+    <div class="fx-main">
+      <div class="fx-info">
+        <div class="fx-name">🍽 Feed mode</div>
+        <div class="fx-sub" id="feedSub">Inactive</div>
+      </div>
+      <button class="fx-tog" id="feedBtn" onclick="toggleFeed()">OFF</button>
+    </div>
+    <div class="fx-set-toggle" onclick="toggleFxSet('feedSettings')">⚙ Settings ▾</div>
+    <div class="fx-settings" id="feedSettings">
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">Duration</span>
+        <input type="number" id="feedDuration" class="num-in" min="1" max="60" value="15">
+        <span style="color:var(--muted);font-size:0.82rem">min</span>
+      </div>
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">White brightness</span>
+        <input type="number" id="feedIntensity" class="num-in" min="1" max="100" value="80">
+        <span style="color:var(--muted);font-size:0.82rem">%</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Lunar -->
   <div class="fx-card">
     <div class="fx-main">
@@ -366,6 +391,7 @@ let masterBrightness = 100;
 let presets  = {};
 let savedProfiles = {};
 let activePresetKey = '';  // e.g. "preset:mixed" or "profile:My Tank"
+let lunarState = null;
 
 function chs() { return DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels; }
 
@@ -468,9 +494,23 @@ async function _autoPushMaster() {
 function interpNow() {
   const now = new Date(), h = now.getHours(), m = now.getMinutes();
   const lo = schedule[h], hi = schedule[(h+1)%24];
-  return chs().map((_,i) => {
+  let lunarFloor = 0, lunarWin = null;
+  if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
+    lunarFloor = lunarState.max_intensity * lunarState.illumination / 100;
+    lunarWin   = { start: lunarState.start, end: lunarState.end };
+  }
+  const inLunarWin = lunarWin && lunarFloor > 0 && (() => {
+    const sH = parseInt(lunarWin.start), eH = parseInt(lunarWin.end);
+    return sH <= eH ? (h >= sH && h < eH) : (h >= sH || h < eH);
+  })();
+  return chs().map((ch, i) => {
     const raw = (lo[2+i]||0) + (m/60)*((hi[2+i]||0)-(lo[2+i]||0));
-    return Math.min(100, Math.round(raw * masterBrightness / 100));
+    let v = Math.min(100, Math.round(raw * masterBrightness / 100));
+    if (inLunarWin) {
+      if (ch === 'royal_blue') v = Math.max(v, Math.round(lunarFloor));
+      else if (ch === 'blue' && cfg.device !== 'k7mini') v = Math.max(v, Math.round(lunarFloor * 0.7));
+    }
+    return v;
   });
 }
 
@@ -542,10 +582,11 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   try {
-    const [cfgData, s, rampSt, lunarSt] = await Promise.all([
+    const [cfgData, s, rampSt, feedSt, lunarSt] = await Promise.all([
       api('GET', '/api/config'),
       api('GET', '/api/state'),
       api('GET', '/api/ramp/status'),
+      api('GET', '/api/feed/status'),
       api('GET', '/api/lunar/status'),
     ]);
 
@@ -569,6 +610,13 @@ async function readFromDevice() {
     if (document.getElementById('schedCollapse').classList.contains('open'))
       buildSchedTable();
 
+    // Feed
+    setFeedBtn(feedSt.active);
+    document.getElementById('feedDuration').value  = feedSt.duration  ?? 15;
+    document.getElementById('feedIntensity').value = feedSt.intensity ?? 80;
+    if (feedSt.active) startFeedCountdown(feedSt.remaining);
+    else updateFeedSub(0);
+
     // Ramp
     setRampBtn(rampSt.active);
     document.getElementById('rampSub').textContent = rampSt.active
@@ -576,6 +624,7 @@ async function readFromDevice() {
       : 'Inactive';
 
     // Lunar
+    lunarState = lunarSt;
     setLunarBtn(lunarSt.active);
     const MOON = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
     document.getElementById('lunarSub').textContent =
@@ -623,6 +672,50 @@ function setRampBtn(on) {
   const b = document.getElementById('rampBtn');
   b.textContent = on ? 'ON' : 'OFF';
   b.className = 'fx-tog' + (on ? ' on-ramp' : '');
+}
+
+let feedCountdownInterval = null;
+let feedRemaining = 0;
+
+function setFeedBtn(on) {
+  const b = document.getElementById('feedBtn');
+  b.textContent = on ? 'ON' : 'OFF';
+  b.className = 'fx-tog' + (on ? ' on-feed' : '');
+}
+
+function updateFeedSub(secs) {
+  const sub = document.getElementById('feedSub');
+  if (!sub) return;
+  if (secs <= 0) { sub.textContent = 'Inactive'; return; }
+  const m = Math.floor(secs / 60), s = secs % 60;
+  sub.textContent = `${m}:${String(s).padStart(2,'0')} remaining`;
+}
+
+function startFeedCountdown(secs) {
+  clearInterval(feedCountdownInterval);
+  feedRemaining = secs;
+  updateFeedSub(feedRemaining);
+  feedCountdownInterval = setInterval(() => {
+    feedRemaining = Math.max(0, feedRemaining - 1);
+    updateFeedSub(feedRemaining);
+    if (feedRemaining === 0) { clearInterval(feedCountdownInterval); feedCountdownInterval = null; setFeedBtn(false); }
+  }, 1000);
+}
+
+async function toggleFeed() {
+  const on = document.getElementById('feedBtn').classList.contains('on-feed');
+  setFeedBtn(!on);
+  try {
+    if (on) {
+      clearInterval(feedCountdownInterval); feedCountdownInterval = null; feedRemaining = 0; updateFeedSub(0);
+      await api('POST', '/api/feed/stop');
+    } else {
+      const duration  = parseInt(document.getElementById('feedDuration').value)  || 15;
+      const intensity = parseInt(document.getElementById('feedIntensity').value) || 80;
+      await api('POST', '/api/feed/start', { duration, intensity });
+      startFeedCountdown(duration * 60);
+    }
+  } catch(e) { setFeedBtn(on); setErr(e.message); }
 }
 
 function setLunarBtn(on) {
@@ -751,8 +844,9 @@ function _setIfUnfocused(id, setter) {
 
 async function pollEffectStates() {
   try {
-    const [ramp, lunar, master, stateData] = await Promise.all([
+    const [ramp, feed, lunar, master, stateData] = await Promise.all([
       api('GET', '/api/ramp/status'),
+      api('GET', '/api/feed/status'),
       api('GET', '/api/lunar/status'),
       api('GET', '/api/master'),
       api('GET', '/api/state'),
@@ -768,7 +862,15 @@ async function pollEffectStates() {
       if (document.getElementById('schedCollapse').classList.contains('open'))
         updateSchedTable();
     }
+    lunarState = lunar;
     updateNowBars();
+    // feedDuration/feedIntensity are "start" settings — only loaded on readFromDevice
+    if (feed.active) {
+      setFeedBtn(true);
+      if (!feedCountdownInterval || feedRemaining === 0) startFeedCountdown(feed.remaining);
+    } else if (!feed.active && document.getElementById('feedBtn').classList.contains('on-feed')) {
+      setFeedBtn(false); clearInterval(feedCountdownInterval); feedCountdownInterval = null; feedRemaining = 0; updateFeedSub(0);
+    }
     if (_pollOk('ramp')) {
       setRampBtn(ramp.active);
       document.getElementById('rampSub').textContent = ramp.active

@@ -23,8 +23,16 @@ extern char              gActivePreset[64];    // e.g. "preset:mixed" or "profil
 // architecture requires explicit memory barriers that volatile cannot provide.
 extern std::atomic<bool> gRampActive;
 extern std::atomic<bool> gLunarActive;
+extern std::atomic<bool> gFeedActive;
 
 extern std::atomic<bool> gLunarStopped;
+
+extern int gFeedDuration;   // minutes, 1-60
+extern int gFeedIntensity;  // white channel %, 1-100
+
+extern time_t gRampLastTick;  // unix time of last ramp fire, 0 if never
+
+int feedSecondsRemaining();
 
 // ── Schedule config (persisted in JSON files) ─────────────────────────────────
 struct LunarConfig {
@@ -81,6 +89,9 @@ void loadEffectState();
 // Mode switching (manual/auto) is managed by each effect task internally.
 void startRamp();
 void stopRamp();
+
+void startFeed();
+void stopFeed();
 
 void startLunar();
 void stopLunar();

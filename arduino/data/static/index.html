@@ -145,9 +145,11 @@ body {
 .fx-tog  { min-width: 46px; height: 26px; border-radius: 13px; border: 2px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 0.76rem; font-weight: 700; cursor: pointer; font-family: inherit; transition: border-color 0.15s, background 0.15s, color 0.15s; flex-shrink: 0; }
 
 /* active states */
-.fx-row-wrap[data-fx="ramp"].active  .fx-tog { border-color:rgba(56,189,248,0.6); background:rgba(56,189,248,0.14); color:#38bdf8; }
-.fx-row-wrap[data-fx="lunar"].active .fx-tog { border-color:rgba(99,102,241,0.6); background:rgba(99,102,241,0.16); color:#818cf8; }
+.fx-row-wrap[data-fx="ramp"].active  .fx-tog { border-color:rgba(56,189,248,0.6);  background:rgba(56,189,248,0.14);  color:#38bdf8; }
+.fx-row-wrap[data-fx="feed"].active  .fx-tog { border-color:rgba(249,115,22,0.6);  background:rgba(249,115,22,0.14);  color:#f97316; }
+.fx-row-wrap[data-fx="lunar"].active .fx-tog { border-color:rgba(99,102,241,0.6);  background:rgba(99,102,241,0.16);  color:#818cf8; }
 .fx-row-wrap[data-fx="ramp"].active  .fx-name { color:#38bdf8; }
+.fx-row-wrap[data-fx="feed"].active  .fx-name { color:#f97316; }
 .fx-row-wrap[data-fx="lunar"].active .fx-name { color:#818cf8; }
 
 /* inline settings panel */
@@ -299,7 +301,33 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
           <button class="fx-tog" id="rampBtn" onclick="toggleRamp()" title="Enable smooth per-minute ramping">OFF</button>
         </div>
         <div class="fx-flyout" id="rampFlyout">
-          <!-- ramp has no config inputs — tick shown in subtitle -->
+          <div class="fx-flyout-row">
+            <span style="font-size:0.8rem;color:var(--muted)">Steps each channel once per minute to match the 24-hour schedule, smoothing abrupt brightness transitions. Last tick is shown below the name above.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feed mode -->
+      <div class="fx-row-wrap" data-fx="feed" id="feedPill">
+        <div class="fx-row">
+          <div class="fx-info">
+            <div class="fx-name">🍽 Feed mode</div>
+            <div class="fx-sub" id="feedSub">Off</div>
+          </div>
+          <button class="fx-cog" id="feedCfgBtn" onclick="toggleFlyout('feed')" title="Feed settings">⚙</button>
+          <button class="fx-tog" id="feedBtn" onclick="toggleFeed()" title="Temporarily boost white for feeding">OFF</button>
+        </div>
+        <div class="fx-flyout" id="feedFlyout">
+          <div class="fx-flyout-row">
+            <span style="font-size:0.82rem;color:var(--muted)">Duration</span>
+            <input type="number" id="feedDuration" class="lm-intensity" min="1" max="60" value="15" onchange="onFeedDurationChange()">
+            <span style="font-size:0.82rem;color:var(--muted)">min</span>
+          </div>
+          <div class="fx-flyout-row">
+            <span style="font-size:0.82rem;color:var(--muted)">White brightness</span>
+            <input type="number" id="feedIntensity" class="lm-intensity" min="1" max="100" value="80" onchange="onFeedIntensityChange()">
+            <span style="font-size:0.82rem;color:var(--muted)">%</span>
+          </div>
         </div>
       </div>
 
@@ -605,11 +633,20 @@ function updateNowBars() {
   const title = document.getElementById('nowTitle');
   if (title) title.textContent = `Right now · ${timeStr}`;
   const chs = DEVICES[cfg.device].channels;
+  let lunarFloor = 0, lunarWin = null;
+  if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
+    lunarFloor = lunarState.max_intensity * lunarState.illumination / 100;
+    lunarWin   = { start: lunarState.start, end: lunarState.end };
+  }
   container.innerHTML = '';
   chs.forEach((ch, ci) => {
     const v0 = schedule[h0][2 + ci];
     const v1 = schedule[h1][2 + ci];
-    const v  = Math.round(v0 + frac * (v1 - v0));
+    let v  = Math.round(v0 + frac * (v1 - v0));
+    if (lunarWin && lunarFloor > 0 && _hourInLunarWindow(h0, lunarWin.start, lunarWin.end)) {
+      if (ch === 'royal_blue') v = Math.max(v, Math.round(lunarFloor));
+      else if (ch === 'blue' && cfg.device !== 'k7mini') v = Math.max(v, Math.round(lunarFloor * 0.7));
+    }
     const row = document.createElement('div');
     row.className = 'now-bar-row';
     row.innerHTML = `
@@ -931,6 +968,55 @@ async function toggleRamp() {
   } catch(e) { setRampBtn(active, null); setErr(e.message); }
 }
 
+// ── Feed mode ─────────────────────────────────────────────────────────────────
+let feedCountdownInterval = null;
+let feedRemaining = 0;
+
+function setFeedBtn(active) {
+  document.getElementById('feedPill').classList.toggle('active', active);
+  const btn = document.getElementById('feedBtn');
+  btn.textContent = active ? 'ON' : 'OFF';
+  btn.title = active ? 'Feed mode active — click to stop' : 'Temporarily boost white for feeding';
+}
+
+function updateFeedSub(secs) {
+  const sub = document.getElementById('feedSub');
+  if (!sub) return;
+  if (secs <= 0) { sub.textContent = 'Off'; return; }
+  const m = Math.floor(secs / 60), s = secs % 60;
+  sub.textContent = `${m}:${String(s).padStart(2,'0')} remaining`;
+}
+
+function startFeedCountdown(secs) {
+  clearInterval(feedCountdownInterval);
+  feedRemaining = secs;
+  updateFeedSub(feedRemaining);
+  feedCountdownInterval = setInterval(() => {
+    feedRemaining = Math.max(0, feedRemaining - 1);
+    updateFeedSub(feedRemaining);
+    if (feedRemaining === 0) { clearInterval(feedCountdownInterval); feedCountdownInterval = null; setFeedBtn(false); }
+  }, 1000);
+}
+
+async function toggleFeed() {
+  const active = document.getElementById('feedPill').classList.contains('active');
+  setFeedBtn(!active);
+  try {
+    if (active) {
+      clearInterval(feedCountdownInterval); feedCountdownInterval = null; feedRemaining = 0; updateFeedSub(0);
+      await api('POST', '/api/feed/stop');
+    } else {
+      const duration  = parseInt(document.getElementById('feedDuration').value)  || 15;
+      const intensity = parseInt(document.getElementById('feedIntensity').value) || 80;
+      await api('POST', '/api/feed/start', { duration, intensity });
+      startFeedCountdown(duration * 60);
+    }
+  } catch(e) { setFeedBtn(active); setErr(e.message); }
+}
+
+function onFeedDurationChange()  { /* applied on next start */ }
+function onFeedIntensityChange() { /* applied on next start */ }
+
 // ── Lunar cycle ───────────────────────────────────────────────────────────────
 const MOON_EMOJIS = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
 function moonEmoji(phase) { return MOON_EMOJIS[Math.round(phase * 8) % 8]; }
@@ -1002,8 +1088,9 @@ function _setIfUnfocused(id, setter) {
 
 async function pollEffectStates() {
   try {
-    const [ramp, lunar, master] = await Promise.all([
+    const [ramp, feed, lunar, master] = await Promise.all([
       api('GET', '/api/ramp/status'),
+      api('GET', '/api/feed/status'),
       api('GET', '/api/lunar/status'),
       api('GET', '/api/master'),
     ]);
@@ -1015,7 +1102,15 @@ async function pollEffectStates() {
       applyMaster(); syncChannelSliders(); updateChart(); updateColorStrip(); updateNowBars();
     }
     setRampBtn(ramp.active, ramp.last_tick);
+    // feedDuration/feedIntensity are "start" settings — only loaded on readFromDevice
+    if (feed.active) {
+      setFeedBtn(true);
+      if (!feedCountdownInterval || feedRemaining === 0) startFeedCountdown(feed.remaining);
+    } else if (!feed.active && document.getElementById('feedPill').classList.contains('active')) {
+      setFeedBtn(false); clearInterval(feedCountdownInterval); feedCountdownInterval = null; feedRemaining = 0; updateFeedSub(0);
+    }
     lunarState = lunar;
+    updateNowBars();
     setLunarBtn(lunar.active);
     _setIfUnfocused('lmEnabled',      el => { el.checked = !!lunar.enabled; });
     _setIfUnfocused('lmStart',        el => { el.value = lunar.start || '21:00'; });

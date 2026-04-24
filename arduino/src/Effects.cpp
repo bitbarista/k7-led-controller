@@ -19,12 +19,20 @@ char   gActivePreset[64] = "";
 
 std::atomic<bool> gRampActive{false};
 std::atomic<bool> gLunarActive{false};
+std::atomic<bool> gFeedActive{false};
 std::atomic<bool> gLunarStopped{false};
+
+int gFeedDuration  = 15;
+int gFeedIntensity = 80;
+static uint32_t gFeedEndMs = 0;
+
+time_t gRampLastTick = 0;
 
 LunarConfig gLunarConfig;
 
 // ── Task handles ──────────────────────────────────────────────────────────────
 static TaskHandle_t hRamp  = nullptr;
+static TaskHandle_t hFeed  = nullptr;
 static TaskHandle_t hLunar = nullptr;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -143,6 +151,8 @@ void saveEffectState() {
     JsonDocument doc;
     doc["ramp"]          = gRampActive.load();
     doc["lunar"]         = gLunarActive.load() && !gLunarStopped.load();
+    doc["feed_duration"]  = gFeedDuration;
+    doc["feed_intensity"] = gFeedIntensity;
     doc["auto_mode"]     = gLampAutoMode;
     doc["active_preset"] = gActivePreset;
     // Persist unscaled base schedule so it survives reboot intact
@@ -182,6 +192,8 @@ void loadEffectState() {
     if (doc["auto_mode"].is<bool>())       gLampAutoMode = doc["auto_mode"];
     if (doc["active_preset"].is<const char*>())
         strlcpy(gActivePreset, doc["active_preset"], sizeof(gActivePreset));
+    if (doc["feed_duration"].is<int>())  gFeedDuration  = max(1,   min(60,  doc["feed_duration"].as<int>()));
+    if (doc["feed_intensity"].is<int>()) gFeedIntensity = max(1,   min(100, doc["feed_intensity"].as<int>()));
     if (doc["ramp"].as<bool>())  startRamp();
     if (doc["lunar"].as<bool>()) { startLunar(); lunarApplyNow(); }
 }
@@ -270,30 +282,30 @@ static void rampTask(void*) {
         time_t     now = time(nullptr);
         struct tm* t   = localtime(&now);
 
-        // Scale base schedule by current master brightness each tick so MB
-        // changes take effect immediately without a separate push.
-        float   mbf = gMasterBrightness / 100.0f;
-        uint8_t sc[K7_SLOTS][8];
-        for (int h = 0; h < K7_SLOTS; h++) {
-            sc[h][0] = gLastSchedule[h][0];
-            sc[h][1] = gLastSchedule[h][1];
-            for (int c = 0; c < K7_CHANNELS; c++) {
-                int v = (int)roundf(gLastSchedule[h][2 + c] * mbf);
-                sc[h][2 + c] = (uint8_t)(v > 100 ? 100 : v);
+        if (!gFeedActive) {
+            gRampLastTick = time(nullptr);
+            float   mbf = gMasterBrightness / 100.0f;
+            uint8_t sc[K7_SLOTS][8];
+            for (int h = 0; h < K7_SLOTS; h++) {
+                sc[h][0] = gLastSchedule[h][0];
+                sc[h][1] = gLastSchedule[h][1];
+                for (int c = 0; c < K7_CHANNELS; c++) {
+                    int v = (int)roundf(gLastSchedule[h][2 + c] * mbf);
+                    sc[h][2 + c] = (uint8_t)(v > 100 ? 100 : v);
+                }
             }
+            uint8_t ch[K7_CHANNELS];
+            interpolateChannels(sc, t->tm_hour, t->tm_min, ch);
+            bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
+                           && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
+            if (lunarOn) applyLunarOverlay(ch);
+            withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
         }
-        uint8_t ch[K7_CHANNELS];
-        interpolateChannels(sc, t->tm_hour, t->tm_min, ch);
-        bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
-                       && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
-        if (lunarOn) applyLunarOverlay(ch);
-        withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
 
         int sleepSecs = max(1, 60 - t->tm_sec);
         for (int i = 0; i < sleepSecs * 2 && gRampActive; i++)
             vTaskDelay(pdMS_TO_TICKS(500));
     }
-    // Lamp stays at the last handLuminance value; next push will set final state.
     hRamp = nullptr;
     vTaskDelete(nullptr);
 }
@@ -314,7 +326,7 @@ void stopRamp() {
 static void lunarTask(void*) {
     while (gLunarActive) {
         int lunarPct = (int)roundf(gLunarConfig.maxIntensity * Moon::illumination());
-        if (!gRampActive && lunarPct > 0 && inTimeWindow(gLunarConfig.start, gLunarConfig.end)) {
+        if (!gRampActive && !gFeedActive && lunarPct > 0 && inTimeWindow(gLunarConfig.start, gLunarConfig.end)) {
             time_t     now = time(nullptr);
             struct tm* t   = localtime(&now);
             uint8_t    ch[K7_CHANNELS];
@@ -326,10 +338,10 @@ static void lunarTask(void*) {
         time_t     now = time(nullptr);
         struct tm* t   = localtime(&now);
         int sleepSecs  = max(1, 60 - t->tm_sec);
-        for (int i = 0; i < sleepSecs * 2 && gLunarActive && !gRampActive; i++)
+        for (int i = 0; i < sleepSecs * 2 && gLunarActive; i++)
             vTaskDelay(pdMS_TO_TICKS(500));
     }
-    if (!gRampActive) {
+    if (!gRampActive && !gFeedActive) {
         time_t     now2 = time(nullptr);
         struct tm* t2   = localtime(&now2);
         uint8_t    ch2[K7_CHANNELS];
@@ -379,6 +391,60 @@ void lunarRestoreNow() {
     withLamp([&](K7Lamp& lamp) {
         lamp.handLuminance(ch);
     });
+}
+
+// ── Feed mode ─────────────────────────────────────────────────────────────────
+// K7 mini: white=80, royal_blue=10, blue=10
+// K7 pro:  uv=5, royal_blue=10, blue=10, white=80, warm_white=40, red=0
+static const uint8_t FEED_MINI[K7_CHANNELS] = {80, 10, 10,  0,  0, 0};
+static const uint8_t FEED_PRO [K7_CHANNELS] = { 5, 10, 10, 80, 40, 0};
+
+int feedSecondsRemaining() {
+    if (!gFeedActive) return 0;
+    int32_t rem = (int32_t)(gFeedEndMs - millis()) / 1000;
+    return rem > 0 ? rem : 0;
+}
+
+static void feedTask(void*) {
+    uint8_t ch[K7_CHANNELS];
+    bool isPro = (strcmp(gDevice, "k7pro") == 0);
+    memcpy(ch, isPro ? FEED_PRO : FEED_MINI, K7_CHANNELS);
+    ch[isPro ? 3 : 0] = (uint8_t)max(0, min(100, gFeedIntensity));
+    applyMasterBrightness(ch);
+    withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+
+    while (gFeedActive && (int32_t)(gFeedEndMs - millis()) > 0)
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+    gFeedActive = false;
+
+    // Immediately restore the lamp. ramp/lunar tasks were still running throughout
+    // feed (just skipping their pushes); they resume normally on their next tick.
+    {
+        time_t     now = time(nullptr);
+        struct tm* t   = localtime(&now);
+        uint8_t    restored[K7_CHANNELS];
+        interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, restored);
+        applyMasterBrightness(restored);
+        bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
+                       && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
+        if (lunarOn) applyLunarOverlay(restored);
+        withLamp([&](K7Lamp& lamp) { lamp.handLuminance(restored); });
+    }
+
+    hFeed = nullptr;
+    vTaskDelete(nullptr);
+}
+
+void startFeed() {
+    if (gFeedActive && hFeed) return;
+    gFeedEndMs  = millis() + (uint32_t)gFeedDuration * 60000;
+    gFeedActive = true;
+    xTaskCreatePinnedToCore(feedTask, "feed", 4096, nullptr, 2, &hFeed, 0);
+}
+
+void stopFeed() {
+    gFeedActive = false;
 }
 
 // ── Scheduler tasks ───────────────────────────────────────────────────────────

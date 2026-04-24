@@ -270,7 +270,8 @@ void setupApiServer(WebServer& server) {
     // ── /api/ramp/* ───────────────────────────────────────────────────────────
     server.on("/api/ramp/status", HTTP_GET, [&server]() {
         JsonDocument doc;
-        doc["active"] = gRampActive.load();
+        doc["active"]    = gRampActive.load();
+        doc["last_tick"] = (long long)gRampLastTick;
         sendJson(server, doc);
     });
     server.on("/api/ramp/start", HTTP_POST, [&server]() {
@@ -281,6 +282,31 @@ void setupApiServer(WebServer& server) {
     server.on("/api/ramp/stop", HTTP_POST, [&server]() {
         stopRamp();
         saveEffectState();
+        sendOk(server);
+    });
+
+    // ── /api/feed/* ───────────────────────────────────────────────────────────
+    server.on("/api/feed/status", HTTP_GET, [&server]() {
+        JsonDocument doc;
+        doc["active"]    = gFeedActive.load();
+        doc["remaining"] = feedSecondsRemaining();
+        doc["duration"]  = gFeedDuration;
+        doc["intensity"] = gFeedIntensity;
+        sendJson(server, doc);
+    });
+    server.on("/api/feed/start", HTTP_POST, [&server]() {
+        JsonDocument doc;
+        deserializeJson(doc, server.arg("plain"));
+        if (doc["duration"].is<int>())
+            gFeedDuration  = max(1, min(60,  doc["duration"].as<int>()));
+        if (doc["intensity"].is<int>())
+            gFeedIntensity = max(1, min(100, doc["intensity"].as<int>()));
+        startFeed();
+        saveEffectState();
+        sendOk(server);
+    });
+    server.on("/api/feed/stop", HTTP_POST, [&server]() {
+        stopFeed();
         sendOk(server);
     });
 
