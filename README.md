@@ -11,7 +11,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 - Read the current schedule and mode directly from the lamp
 - Edit the 24-hour lighting schedule on an interactive drag-and-drop chart
 - Additive colour preview strip showing the blended light output for each hour
-- Built-in presets for Fish Only, LPS Reef, SPS Reef, and Mixed Reef
+- Built-in presets for Fish Only, LPS Reef, SPS Reef, and Mixed Reef with dark overnight periods, practical coral photoperiods, and short dusk tails
 - Master brightness slider and per-channel intensity sliders (absolute output ceiling per channel)
 - Per-channel visibility toggles — hidden channels are zeroed when pushing to the device
 - Day-shift control to slide the entire schedule forward or back (e.g. peak at 18:00 instead of midday)
@@ -19,7 +19,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 - Manual mode with live preview
 - **Smooth Ramp** — sends per-minute interpolated brightness values so transitions are smooth rather than stepped
 - **Feed mode** — timed white brightness boost for feeding; adjustable intensity (1–100 %) and duration (1–60 min); also triggered by a quick press of the BOOT button on the board
-- **Lunar Cycle** — varies the royal blue channel over the 29.5-day synodic cycle, with either a fixed nightly window or a moonrise/moonset-shifted window anchored to full-moon times
+- **Lunar Cycle** — varies the royal blue channel over the 29.5-day synodic cycle, with either a fixed nightly window or a moonrise/moonset-shifted window anchored to full-moon times, plus optional night clamping and schedule-aware cutoff
 - Supports K7 Mini (3 channels) and K7 Pro (6 channels)
 
 ---
@@ -86,6 +86,7 @@ The controller uses a **static IP of 192.168.4.200** so the address never change
 - Profiles and settings are saved to flash and survive power cycles
 - Smooth ramp, lunar cycle, and feed mode run entirely on the device — no browser needed once configured
 - Reflashing erases all saved profiles and config
+- After updating firmware, reselect and push a built-in preset once if you want the controller to replace an older saved schedule with the latest preset definition
 - **Applying a change takes approximately 1 second to take effect on the lamp.** This is normal — each change requires a full TCP round-trip to the lamp (connect, send schedule + brightness, wait for acknowledgement, disconnect). Rapid successive changes are batched: only the latest value is sent. This is a constraint of the K7 lamp's TCP protocol, not a bug in the controller.
 
 ---
