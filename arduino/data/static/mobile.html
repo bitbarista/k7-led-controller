@@ -332,14 +332,32 @@ button:disabled { opacity: 0.4; }
           <input type="checkbox" id="lmEnabled" onchange="onLmChange()"> Auto-schedule
         </label>
       </div>
-      <div class="set-row" id="lmTimeRow" style="display:none">
-        <input type="time" id="lmStart" class="time-in" onchange="onLmChange()">
-        <span style="color:var(--muted)">–</span>
-        <input type="time" id="lmEnd" class="time-in" onchange="onLmChange()">
+      <div class="set-row">
+        <label class="chk-lbl">
+          <input type="checkbox" id="lmTrackMoonrise" onchange="onLmChange()"> Shift with moonrise/set
+        </label>
       </div>
+      <div class="set-row" id="lmTimeRow" style="display:none">
+        <span style="color:var(--muted);font-size:0.82rem;min-width:86px">Full moon</span>
+        <input type="time" id="lmStart" class="time-in" onchange="onLmChange()" title="Full-moon window start">
+        <span style="color:var(--muted)">–</span>
+        <input type="time" id="lmEnd" class="time-in" onchange="onLmChange()" title="Full-moon window end">
+      </div>
+      <div class="set-row" id="lmClampRow" style="display:none">
+        <span style="color:var(--muted);font-size:0.82rem;min-width:86px">Night clamp</span>
+        <input type="time" id="lmClampStart" class="time-in" onchange="onLmChange()" title="Night clamp start">
+        <span style="color:var(--muted)">–</span>
+        <input type="time" id="lmClampEnd" class="time-in" onchange="onLmChange()" title="Night clamp end">
+      </div>
+      <div id="lmHint" style="font-size:0.75rem;color:var(--muted);margin:0 4px 8px"></div>
       <div class="set-row">
         <span style="color:var(--muted);font-size:0.82rem">Full moon brightness</span>
         <input type="number" id="lmIntensity" class="num-in" min="1" max="100" value="15" onchange="onLmChange()">
+        <span style="color:var(--muted);font-size:0.82rem">%</span>
+      </div>
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">Day starts above</span>
+        <input type="number" id="lmDayThreshold" class="num-in" min="0" max="100" value="2" onchange="onLmChange()">
         <span style="color:var(--muted);font-size:0.82rem">%</span>
       </div>
       <div style="font-size:0.75rem;color:var(--muted);margin-top:2px;padding:0 4px">Scales with moon phase — current contribution shown on graph</div>
@@ -394,6 +412,25 @@ let activePresetKey = '';  // e.g. "preset:mixed" or "profile:My Tank"
 let lunarState = null;
 
 function chs() { return DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels; }
+function lunarWindow(d) {
+  return {
+    start: d?.effective_start || d?.start || '18:30',
+    end:   d?.effective_end   || d?.end   || '06:30',
+  };
+}
+
+function updateLunarHint(d) {
+  const hint = document.getElementById('lmHint');
+  if (!hint) return;
+  if (d?.track_moonrise) {
+    const shift = d.shift_minutes || 0;
+    const sign = shift >= 0 ? '+' : '';
+    const win = lunarWindow(d);
+    hint.textContent = `Full moon ${d.start || '18:30'}-${d.end || '06:30'}; clamp ${d.clamp_start || '18:00'}-${d.clamp_end || '08:00'}; day starts above ${d.day_threshold ?? 2}%; tonight ${win.start}-${win.end} (${sign}${shift} min)`;
+  } else {
+    hint.textContent = `Fixed nightly window using the times above; lunar stops once the schedule rises above ${d.day_threshold ?? 2}%`;
+  }
+}
 
 // ── Status ───────────────────────────────────────────────────────────────
 function setStatus(cls, msg) {
@@ -497,7 +534,7 @@ function interpNow() {
   let lunarFloor = 0, lunarWin = null;
   if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
     lunarFloor = lunarState.max_intensity * lunarState.illumination / 100;
-    lunarWin   = { start: lunarState.start, end: lunarState.end };
+    lunarWin   = lunarWindow(lunarState);
   }
   const inLunarWin = lunarWin && lunarFloor > 0 && (() => {
     const sH = parseInt(lunarWin.start), eH = parseInt(lunarWin.end);
@@ -627,14 +664,21 @@ async function readFromDevice() {
     lunarState = lunarSt;
     setLunarBtn(lunarSt.active);
     const MOON = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
+    const win = lunarWindow(lunarSt);
     document.getElementById('lunarSub').textContent =
       MOON[Math.round((lunarSt.phase||0)*8)%8] + ' ' +
-      (lunarSt.phase_name||'') + ' · ' + (lunarSt.illumination||0) + '%';
+      (lunarSt.phase_name||'') + ' · ' + win.start + '-' + win.end + ' · ' + (lunarSt.illumination||0) + '%';
     document.getElementById('lmEnabled').checked = !!lunarSt.enabled;
-    document.getElementById('lmStart').value     = lunarSt.start || '21:00';
-    document.getElementById('lmEnd').value       = lunarSt.end   || '06:00';
+    document.getElementById('lmTrackMoonrise').checked = !!lunarSt.track_moonrise;
+    document.getElementById('lmStart').value     = lunarSt.start || '18:30';
+    document.getElementById('lmEnd').value       = lunarSt.end   || '06:30';
+    document.getElementById('lmClampStart').value = lunarSt.clamp_start || '18:00';
+    document.getElementById('lmClampEnd').value   = lunarSt.clamp_end   || '08:00';
     document.getElementById('lmIntensity').value = lunarSt.max_intensity ?? 15;
+    document.getElementById('lmDayThreshold').value = lunarSt.day_threshold ?? 2;
     document.getElementById('lmTimeRow').style.display = lunarSt.enabled ? '' : 'none';
+    document.getElementById('lmClampRow').style.display = lunarSt.enabled && lunarSt.track_moonrise ? '' : 'none';
+    updateLunarHint(lunarSt);
 
     await loadPresetsProfiles();
     setOk((cfg.device==='k7mini' ? 'K7 Mini' : 'K7 Pro') + ' · ' + mode);
@@ -754,9 +798,13 @@ async function onLmChange() {
   try {
     await api('POST', '/api/lunar/schedule', {
       enabled:       en,
+      track_moonrise: document.getElementById('lmTrackMoonrise').checked,
       start:         document.getElementById('lmStart').value,
       end:           document.getElementById('lmEnd').value,
+      clamp_start:   document.getElementById('lmClampStart').value,
+      clamp_end:     document.getElementById('lmClampEnd').value,
       max_intensity: parseInt(document.getElementById('lmIntensity').value)||15,
+      day_threshold: parseInt(document.getElementById('lmDayThreshold').value)||0,
     });
   } catch(_) {}
 }
@@ -880,14 +928,21 @@ async function pollEffectStates() {
     if (_pollOk('lunar')) {
       setLunarBtn(lunar.active);
       _setIfUnfocused('lmEnabled',  el => { el.checked = !!lunar.enabled; });
-      _setIfUnfocused('lmStart',    el => { el.value = lunar.start || '21:00'; });
-      _setIfUnfocused('lmEnd',      el => { el.value = lunar.end   || '06:00'; });
+      _setIfUnfocused('lmTrackMoonrise', el => { el.checked = !!lunar.track_moonrise; });
+      _setIfUnfocused('lmStart',    el => { el.value = lunar.start || '18:30'; });
+      _setIfUnfocused('lmEnd',      el => { el.value = lunar.end   || '06:30'; });
+      _setIfUnfocused('lmClampStart', el => { el.value = lunar.clamp_start || '18:00'; });
+      _setIfUnfocused('lmClampEnd',   el => { el.value = lunar.clamp_end   || '08:00'; });
       _setIfUnfocused('lmIntensity',el => { el.value = lunar.max_intensity ?? 15; });
+      _setIfUnfocused('lmDayThreshold',el => { el.value = lunar.day_threshold ?? 2; });
       document.getElementById('lmTimeRow').style.display = lunar.enabled ? '' : 'none';
+      document.getElementById('lmClampRow').style.display = lunar.enabled && lunar.track_moonrise ? '' : 'none';
+      updateLunarHint(lunar);
     }
     const MOON = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
+    const win = lunarWindow(lunar);
     document.getElementById('lunarSub').textContent =
-      MOON[Math.round((lunar.phase||0)*8)%8] + ' ' + (lunar.phase_name||'') + ' · ' + (lunar.illumination||0) + '%';
+      MOON[Math.round((lunar.phase||0)*8)%8] + ' ' + (lunar.phase_name||'') + ' · ' + win.start + '-' + win.end + ' · ' + (lunar.illumination||0) + '%';
   } catch(_) {}
 }
 setInterval(pollEffectStates, 5000);

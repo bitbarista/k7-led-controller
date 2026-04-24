@@ -57,6 +57,53 @@ int parseHHMM(const char* s) {
     return h * 60 + m;
 }
 
+static int wrapMinutes(int mins) {
+    mins %= 1440;
+    if (mins < 0) mins += 1440;
+    return mins;
+}
+
+static void formatHHMM(int mins, char out[8]) {
+    mins = wrapMinutes(mins);
+    snprintf(out, 8, "%02d:%02d", mins / 60, mins % 60);
+}
+
+static int windowLength(int start, int end) {
+    int len = end - start;
+    if (len <= 0) len += 1440;
+    return len;
+}
+
+static bool clampWindowToNight(int start, int end, int clampStart, int clampEnd,
+                               int* outStart, int* outEnd) {
+    int rawLen   = windowLength(start, end);
+    int clampLen = windowLength(clampStart, clampEnd);
+    int bestOverlap = -1;
+    int bestStart = 0, bestEnd = 0;
+
+    for (int rawShift = -1440; rawShift <= 1440; rawShift += 1440) {
+        int shiftedStart = start + rawShift;
+        int shiftedEnd   = shiftedStart + rawLen;
+        for (int clampShift = 0; clampShift <= 1440; clampShift += 1440) {
+            int shiftedClampStart = clampStart + clampShift;
+            int shiftedClampEnd   = shiftedClampStart + clampLen;
+            int overlapStart = max(shiftedStart, shiftedClampStart);
+            int overlapEnd   = min(shiftedEnd, shiftedClampEnd);
+            int overlapLen   = overlapEnd - overlapStart;
+            if (overlapLen > bestOverlap) {
+                bestOverlap = overlapLen;
+                bestStart   = overlapStart;
+                bestEnd     = overlapEnd;
+            }
+        }
+    }
+
+    if (bestOverlap <= 0) return false;
+    *outStart = wrapMinutes(bestStart);
+    *outEnd   = wrapMinutes(bestEnd);
+    return true;
+}
+
 bool inTimeWindow(const char* start, const char* end) {
     int s = parseHHMM(start);
     int e = parseHHMM(end);
@@ -66,6 +113,61 @@ bool inTimeWindow(const char* start, const char* end) {
     int cur = t->tm_hour * 60 + t->tm_min;
     if (s <= e) return cur >= s && cur < e;
     return cur >= s || cur < e;   // overnight window
+}
+
+bool lunarScheduleAllowsNow() {
+    time_t now = time(nullptr);
+    struct tm* t = localtime(&now);
+    uint8_t ch[K7_CHANNELS];
+    interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
+    int threshold = max(0, min(100, gLunarConfig.dayThreshold));
+    for (int i = 0; i < K7_CHANNELS; i++) {
+        if (ch[i] > threshold) return false;
+    }
+    return true;
+}
+
+void lunarWindowNow(char start[8], char end[8], int* shiftMinutes) {
+    int rawStart = parseHHMM(gLunarConfig.start);
+    int rawEnd   = parseHHMM(gLunarConfig.end);
+    if (rawStart < 0) rawStart = 18 * 60 + 30;
+    if (rawEnd   < 0) rawEnd   = 6 * 60 + 30;
+
+    int windowLen = windowLength(rawStart, rawEnd);
+
+    int shift = 0;
+    if (gLunarConfig.trackMoonrise) {
+        float delta = Moon::phase() - 0.5f;  // full moon = anchor window
+        if (delta < -0.5f) delta += 1.0f;
+        if (delta >= 0.5f) delta -= 1.0f;
+        shift = (int)roundf(delta * 1440.0f);
+    }
+
+    int effectiveStart = wrapMinutes(rawStart + shift);
+    int effectiveEnd   = wrapMinutes(effectiveStart + windowLen);
+    if (gLunarConfig.trackMoonrise) {
+        int clampStart = parseHHMM(gLunarConfig.clampStart);
+        int clampEnd   = parseHHMM(gLunarConfig.clampEnd);
+        if (clampStart < 0) clampStart = 18 * 60;
+        if (clampEnd   < 0) clampEnd   = 8 * 60;
+        int clampedStart = 0, clampedEnd = 0;
+        if (clampWindowToNight(effectiveStart, effectiveEnd, clampStart, clampEnd,
+                               &clampedStart, &clampedEnd)) {
+            effectiveStart = clampedStart;
+            effectiveEnd   = clampedEnd;
+        } else {
+            effectiveEnd = effectiveStart;
+        }
+    }
+    formatHHMM(effectiveStart, start);
+    formatHHMM(effectiveEnd, end);
+    if (shiftMinutes) *shiftMinutes = shift;
+}
+
+bool lunarWindowActiveNow() {
+    char start[8], end[8];
+    lunarWindowNow(start, end);
+    return inTimeWindow(start, end);
 }
 
 void applyLunarOverlay(uint8_t ch[K7_CHANNELS]) {
@@ -127,8 +229,12 @@ void loadEffectConfigs() {
     if (deserializeJson(doc, f) == DeserializationError::Ok) {
         gLunarConfig.enabled      = doc["enabled"]       | false;
         gLunarConfig.maxIntensity = doc["max_intensity"] | 15;
-        strlcpy(gLunarConfig.start, doc["start"] | "21:00", 8);
-        strlcpy(gLunarConfig.end,   doc["end"]   | "06:00", 8);
+        strlcpy(gLunarConfig.start, doc["start"] | "18:30", 8);
+        strlcpy(gLunarConfig.end,   doc["end"]   | "06:30", 8);
+        strlcpy(gLunarConfig.clampStart, doc["clamp_start"] | "18:00", 8);
+        strlcpy(gLunarConfig.clampEnd,   doc["clamp_end"]   | "08:00", 8);
+        gLunarConfig.dayThreshold = max(0, min(100, (int)(doc["day_threshold"] | 2)));
+        gLunarConfig.trackMoonrise = doc["track_moonrise"] | false;
     }
     f.close();
 }
@@ -140,7 +246,11 @@ void saveLunarConfig() {
     doc["enabled"]       = gLunarConfig.enabled;
     doc["start"]         = gLunarConfig.start;
     doc["end"]           = gLunarConfig.end;
+    doc["clamp_start"]   = gLunarConfig.clampStart;
+    doc["clamp_end"]     = gLunarConfig.clampEnd;
     doc["max_intensity"] = gLunarConfig.maxIntensity;
+    doc["day_threshold"] = gLunarConfig.dayThreshold;
+    doc["track_moonrise"] = gLunarConfig.trackMoonrise;
     serializeJson(doc, f);
     f.close();
 }
@@ -226,8 +336,9 @@ static void lampWorkerTask(void*) {
                 interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
                 applyMasterBrightness(ch);
                 bool lunarOn = (gLunarActive.load() ||
-                                (gLunarConfig.enabled && !gLunarStopped.load()))
-                               && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
+                               (gLunarConfig.enabled && !gLunarStopped.load()))
+                               && lunarWindowActiveNow()
+                               && lunarScheduleAllowsNow();
                 if (lunarOn) applyLunarOverlay(ch);
             } else {
                 memcpy(ch, push.manual, K7_CHANNELS);
@@ -297,7 +408,8 @@ static void rampTask(void*) {
             uint8_t ch[K7_CHANNELS];
             interpolateChannels(sc, t->tm_hour, t->tm_min, ch);
             bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
-                           && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
+                           && lunarWindowActiveNow()
+                           && lunarScheduleAllowsNow();
             if (lunarOn) applyLunarOverlay(ch);
             withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
         }
@@ -326,7 +438,8 @@ void stopRamp() {
 static void lunarTask(void*) {
     while (gLunarActive) {
         int lunarPct = (int)roundf(gLunarConfig.maxIntensity * Moon::illumination());
-        if (!gRampActive && !gFeedActive && lunarPct > 0 && inTimeWindow(gLunarConfig.start, gLunarConfig.end)) {
+        if (!gRampActive && !gFeedActive && lunarPct > 0
+            && lunarWindowActiveNow() && lunarScheduleAllowsNow()) {
             time_t     now = time(nullptr);
             struct tm* t   = localtime(&now);
             uint8_t    ch[K7_CHANNELS];
@@ -368,7 +481,7 @@ void stopLunar() {
 }
 
 void lunarApplyNow() {
-    bool inWindow = inTimeWindow(gLunarConfig.start, gLunarConfig.end);
+    bool inWindow = lunarWindowActiveNow() && lunarScheduleAllowsNow();
     if (!gLunarActive && !(gLunarConfig.enabled && inWindow && !gLunarStopped)) return;
     if (!inWindow) return;
     int lunarPct = (int)roundf(gLunarConfig.maxIntensity * Moon::illumination());
@@ -427,7 +540,8 @@ static void feedTask(void*) {
         interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, restored);
         applyMasterBrightness(restored);
         bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
-                       && inTimeWindow(gLunarConfig.start, gLunarConfig.end);
+                       && lunarWindowActiveNow()
+                       && lunarScheduleAllowsNow();
         if (lunarOn) applyLunarOverlay(restored);
         withLamp([&](K7Lamp& lamp) { lamp.handLuminance(restored); });
     }
@@ -452,7 +566,7 @@ static void lunarSchedulerTask(void*) {
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(60000));
         if (!gLunarConfig.enabled) continue;
-        if (inTimeWindow(gLunarConfig.start, gLunarConfig.end)) {
+        if (lunarWindowActiveNow() && lunarScheduleAllowsNow()) {
             if (!gLunarStopped) startLunar();
         } else {
             gLunarActive = false;

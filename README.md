@@ -19,7 +19,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 - Manual mode with live preview
 - **Smooth Ramp** — sends per-minute interpolated brightness values so transitions are smooth rather than stepped
 - **Feed mode** — timed white brightness boost for feeding; adjustable intensity (1–100 %) and duration (1–60 min); also triggered by a quick press of the BOOT button on the board
-- **Lunar Cycle** — varies the royal blue channel over the 29.5-day synodic cycle, tracking the actual current moon phase
+- **Lunar Cycle** — varies the royal blue channel over the 29.5-day synodic cycle, with either a fixed nightly window or a moonrise/moonset-shifted window anchored to full-moon times
 - Supports K7 Mini (3 channels) and K7 Pro (6 channels)
 
 ---

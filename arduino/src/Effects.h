@@ -37,9 +37,13 @@ int feedSecondsRemaining();
 // ── Schedule config (persisted in JSON files) ─────────────────────────────────
 struct LunarConfig {
     bool    enabled      = false;
-    char    start[8]     = "21:00";
-    char    end[8]       = "06:00";
+    char    start[8]     = "18:30";
+    char    end[8]       = "06:30";
+    char    clampStart[8] = "18:00";
+    char    clampEnd[8]   = "08:00";
     int     maxIntensity = 15;
+    int     dayThreshold = 2;
+    bool    trackMoonrise = false;
 };
 
 extern LunarConfig gLunarConfig;
@@ -51,6 +55,9 @@ void interpolateChannels(const uint8_t sched[K7_SLOTS][8], int h, int m,
 // Parse "HH:MM" → minutes since midnight, returns -1 on error
 int  parseHHMM(const char* s);
 bool inTimeWindow(const char* start, const char* end);
+void lunarWindowNow(char start[8], char end[8], int* shiftMinutes = nullptr);
+bool lunarWindowActiveNow();
+bool lunarScheduleAllowsNow();
 
 void applyLunarOverlay(uint8_t ch[K7_CHANNELS]);
 void applyMasterBrightness(uint8_t ch[K7_CHANNELS]);

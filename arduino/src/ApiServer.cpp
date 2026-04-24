@@ -312,6 +312,9 @@ void setupApiServer(WebServer& server) {
 
     // ── /api/lunar/* ──────────────────────────────────────────────────────────
     server.on("/api/lunar/status", HTTP_GET, [&server]() {
+        char effectiveStart[8], effectiveEnd[8];
+        int shiftMinutes = 0;
+        lunarWindowNow(effectiveStart, effectiveEnd, &shiftMinutes);
         JsonDocument doc;
         doc["active"]        = gLunarActive.load();
         doc["phase"]         = Moon::phase();
@@ -320,7 +323,14 @@ void setupApiServer(WebServer& server) {
         doc["enabled"]       = gLunarConfig.enabled;
         doc["start"]         = gLunarConfig.start;
         doc["end"]           = gLunarConfig.end;
+        doc["clamp_start"]   = gLunarConfig.clampStart;
+        doc["clamp_end"]     = gLunarConfig.clampEnd;
         doc["max_intensity"] = gLunarConfig.maxIntensity;
+        doc["day_threshold"] = gLunarConfig.dayThreshold;
+        doc["track_moonrise"] = gLunarConfig.trackMoonrise;
+        doc["effective_start"] = effectiveStart;
+        doc["effective_end"]   = effectiveEnd;
+        doc["shift_minutes"]   = shiftMinutes;
         sendJson(server, doc);
     });
     server.on("/api/lunar/start", HTTP_POST, [&server]() {
@@ -342,7 +352,11 @@ void setupApiServer(WebServer& server) {
         if (doc["enabled"].is<bool>())      gLunarConfig.enabled      = doc["enabled"];
         if (doc["start"].is<const char*>()) strlcpy(gLunarConfig.start, doc["start"], 8);
         if (doc["end"].is<const char*>())   strlcpy(gLunarConfig.end,   doc["end"],   8);
+        if (doc["clamp_start"].is<const char*>()) strlcpy(gLunarConfig.clampStart, doc["clamp_start"], 8);
+        if (doc["clamp_end"].is<const char*>())   strlcpy(gLunarConfig.clampEnd,   doc["clamp_end"],   8);
         if (doc["max_intensity"].is<int>()) gLunarConfig.maxIntensity  = doc["max_intensity"];
+        if (doc["day_threshold"].is<int>()) gLunarConfig.dayThreshold = max(0, min(100, doc["day_threshold"].as<int>()));
+        if (doc["track_moonrise"].is<bool>()) gLunarConfig.trackMoonrise = doc["track_moonrise"];
         saveLunarConfig();
         if (!wasEnabled && gLunarConfig.enabled) {
             gLunarStopped = false;
@@ -353,11 +367,21 @@ void setupApiServer(WebServer& server) {
         } else {
             lunarApplyNow();
         }
+        char effectiveStart[8], effectiveEnd[8];
+        int shiftMinutes = 0;
+        lunarWindowNow(effectiveStart, effectiveEnd, &shiftMinutes);
         JsonDocument resp;
         resp["enabled"]       = gLunarConfig.enabled;
         resp["start"]         = gLunarConfig.start;
         resp["end"]           = gLunarConfig.end;
+        resp["clamp_start"]   = gLunarConfig.clampStart;
+        resp["clamp_end"]     = gLunarConfig.clampEnd;
         resp["max_intensity"] = gLunarConfig.maxIntensity;
+        resp["day_threshold"] = gLunarConfig.dayThreshold;
+        resp["track_moonrise"] = gLunarConfig.trackMoonrise;
+        resp["effective_start"] = effectiveStart;
+        resp["effective_end"]   = effectiveEnd;
+        resp["shift_minutes"]   = shiftMinutes;
         sendJson(server, resp);
     });
 
