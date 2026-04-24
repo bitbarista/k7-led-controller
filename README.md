@@ -18,9 +18,8 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 - Save and reload your own named profiles (stored on the controller, persists across sessions)
 - Manual mode with live preview
 - **Smooth Ramp** — sends per-minute interpolated brightness values so transitions are smooth rather than stepped
-- **Lightning effect** — random white-dominant flashes with optional time-of-day schedule
+- **Feed mode** — timed white brightness boost for feeding; adjustable intensity (1–100 %) and duration (1–60 min); also triggered by a quick press of the BOOT button on the board
 - **Lunar Cycle** — varies the royal blue channel over the 29.5-day synodic cycle, tracking the actual current moon phase
-- **Clouds effect** — random dimming events simulating passing cloud cover
 - Supports K7 Mini (3 channels) and K7 Pro (6 channels)
 
 ---
@@ -62,7 +61,7 @@ After flashing, the device starts a setup portal:
 2. Browse to **http://192.168.5.1** — the device scans for nearby K7 lamps automatically
 3. Select your lamp from the list and tap **Connect & Save**
 4. The device reboots. Connect to your **lamp's WiFi network** (K7-XXXXXX)
-5. Browse to **http://k7controller.local** — the controller loads and reads the lamp
+5. Browse to **http://k7controller.local** — the controller loads and reads the lamp. If mDNS doesn't resolve, use the fixed IP **http://192.168.4.200** instead.
 
 > To reset to setup mode (e.g. to change lamps), hold the BOOT button on the board while powering on for 3 seconds.
 
@@ -73,17 +72,19 @@ After flashing, the device starts a setup portal:
 ## Network architecture
 
 ```
-Your phone/browser ── K7 lamp AP (192.168.4.x) ── [ESP32-S3] ── K7 lamp (192.168.4.1)
+Your phone/browser ── K7 lamp AP (192.168.4.x) ── [ESP32-S3 @ 192.168.4.200] ── K7 lamp (192.168.4.1)
 ```
 
 All devices connect to the lamp's own WiFi network. The ESP32-S3 runs in STA-only mode — no separate controller AP. Your home network is never involved.
+
+The controller uses a **static IP of 192.168.4.200** so the address never changes after a WiFi reconnect. Bookmark `http://192.168.4.200` as a reliable fallback if `http://k7controller.local` is not resolving.
 
 ---
 
 ## Notes
 
 - Profiles and settings are saved to flash and survive power cycles
-- The lightning effect, smooth ramp, lunar cycle, and clouds run entirely on the device — no browser needed once configured
+- Smooth ramp, lunar cycle, and feed mode run entirely on the device — no browser needed once configured
 - Reflashing erases all saved profiles and config
 - **Applying a change takes approximately 1 second to take effect on the lamp.** This is normal — each change requires a full TCP round-trip to the lamp (connect, send schedule + brightness, wait for acknowledgement, disconnect). Rapid successive changes are batched: only the latest value is sent. This is a constraint of the K7 lamp's TCP protocol, not a bug in the controller.
 
