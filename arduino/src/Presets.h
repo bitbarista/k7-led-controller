@@ -78,6 +78,63 @@ static const Keyframe KF_MINI_MIXED[] = {
     {20, { 2,  8, 11, 0, 0, 0}},
     {21, { 0,  0,  0, 0, 0, 0}},
 };
+static const Keyframe KF_MINI_SOFTMIX[] = {
+    { 0, { 0,  0,  0, 0, 0, 0}},
+    { 7, { 0,  0,  0, 0, 0, 0}},
+    { 8, { 1,  5,  7, 0, 0, 0}},
+    { 9, { 3, 16, 22, 0, 0, 0}},
+    {10, { 7, 28, 30, 0, 0, 0}},
+    {11, {11, 38, 36, 0, 0, 0}},
+    {12, {16, 48, 44, 0, 0, 0}},
+    {17, {16, 48, 44, 0, 0, 0}},
+    {18, {10, 30, 28, 0, 0, 0}},
+    {19, { 4, 14, 16, 0, 0, 0}},
+    {20, { 1,  4,  6, 0, 0, 0}},
+    {21, { 0,  0,  0, 0, 0, 0}},
+};
+static const Keyframe KF_MINI_ACCLIMIX[] = {
+    { 0, { 0,  0,  0, 0, 0, 0}},
+    { 7, { 0,  0,  0, 0, 0, 0}},
+    { 8, { 1,  4,  6, 0, 0, 0}},
+    { 9, { 3, 12, 18, 0, 0, 0}},
+    {10, { 6, 22, 24, 0, 0, 0}},
+    {11, { 9, 30, 28, 0, 0, 0}},
+    {12, {13, 38, 34, 0, 0, 0}},
+    {17, {13, 38, 34, 0, 0, 0}},
+    {18, { 8, 24, 22, 0, 0, 0}},
+    {19, { 3, 11, 12, 0, 0, 0}},
+    {20, { 1,  4,  5, 0, 0, 0}},
+    {21, { 0,  0,  0, 0, 0, 0}},
+};
+static const Keyframe KF_MINI_LOWENERGY[] = {
+    { 0, { 0,  0,  0, 0, 0, 0}},
+    { 7, { 0,  0,  0, 0, 0, 0}},
+    { 8, { 0,  3,  5, 0, 0, 0}},
+    { 9, { 2, 10, 14, 0, 0, 0}},
+    {10, { 4, 18, 22, 0, 0, 0}},
+    {11, { 6, 24, 28, 0, 0, 0}},
+    {12, { 8, 30, 32, 0, 0, 0}},
+    {17, { 8, 30, 32, 0, 0, 0}},
+    {18, { 5, 20, 21, 0, 0, 0}},
+    {19, { 2,  9, 10, 0, 0, 0}},
+    {20, { 0,  3,  4, 0, 0, 0}},
+    {21, { 0,  0,  0, 0, 0, 0}},
+};
+static const Keyframe KF_MINI_SHALLOWSPS[] = {
+    { 0, { 0,   0,  0, 0, 0, 0}},
+    { 7, { 0,   0,  0, 0, 0, 0}},
+    { 8, { 8,  22, 28, 0, 0, 0}},
+    { 9, {26,  58, 66, 0, 0, 0}},
+    {10, {46,  88, 92, 0, 0, 0}},
+    {11, {62, 100,100, 0, 0, 0}},
+    {12, {78, 100,100, 0, 0, 0}},
+    {17, {78, 100,100, 0, 0, 0}},
+    {18, {54,  88, 82, 0, 0, 0}},
+    {19, {28,  58, 54, 0, 0, 0}},
+    {20, {10,  26, 28, 0, 0, 0}},
+    {21, { 0,   8, 10, 0, 0, 0}},
+    {22, { 0,   0,  0, 0, 0, 0}},
+};
 
 static const Preset MINI_PRESETS[] = {
     {"fo",    "Fish Only",           "White-dominant for natural daylight appearance and fish colour rendering. 10-hour photoperiod. Target ~100 µmol/m²/s at 300 mm.",
@@ -88,6 +145,14 @@ static const Preset MINI_PRESETS[] = {
      {69,100,100, 0, 0, 0}, KF_MINI_SPS,   13},
     {"mixed", "Mixed Reef (LPS + SPS)", "SPS-level Royal Blue with LPS-appropriate White. Target ~175 µmol/m²/s at 300 mm.",
      {25, 70, 64, 0, 0, 0}, KF_MINI_MIXED, 12},
+    {"softmixed", "Soft Mixed Reef", "Balanced mixed-reef schedule with a gentler peak and calmer dusk. Good default if Mixed Reef feels slightly too strong.",
+     {16, 48, 44, 0, 0, 0}, KF_MINI_SOFTMIX, 12},
+    {"acclimation", "Acclimation Mixed", "Reduced-output mixed-reef schedule for new corals, recent frags, or recovering colonies. Intended as a temporary step-up profile.",
+     {13, 38, 34, 0, 0, 0}, KF_MINI_ACCLIMIX, 12},
+    {"lowenergy", "LPS Low Energy", "Gentle low-light reef profile with restrained peak intensity and short dusk tail. Suitable for lower-demand LPS and shaded systems.",
+     {8, 30, 32, 0, 0, 0}, KF_MINI_LOWENERGY, 12},
+    {"shallowsps", "Shallow SPS", "Higher-output SPS profile for shallow tanks or elevated mounting, with strong midday intensity and a controlled evening falloff.",
+     {78,100,100, 0, 0, 0}, KF_MINI_SHALLOWSPS, 13},
 };
 
 // ── K7 Pro presets ────────────────────────────────────────────────────────────
@@ -149,6 +214,63 @@ static const Keyframe KF_PRO_MIXED[] = {
     {20, { 2,  8, 11,  0,  0, 0}},
     {21, { 0,  0,  0,  0,  0, 0}},
 };
+static const Keyframe KF_PRO_SOFTMIX[] = {
+    { 0, { 0,  0,  0,  0,  0, 0}},
+    { 7, { 0,  0,  0,  0,  0, 0}},
+    { 8, { 1,  5,  7,  0,  0, 0}},
+    { 9, { 3, 16, 22,  6,  3, 0}},
+    {10, { 7, 28, 30, 10,  5, 0}},
+    {11, {11, 38, 36, 15,  7, 0}},
+    {12, {16, 48, 44, 19,  8, 0}},
+    {17, {16, 48, 44, 19,  8, 0}},
+    {18, {10, 30, 28,  9,  4, 0}},
+    {19, { 4, 14, 16,  3,  1, 0}},
+    {20, { 1,  4,  6,  0,  0, 0}},
+    {21, { 0,  0,  0,  0,  0, 0}},
+};
+static const Keyframe KF_PRO_ACCLIMIX[] = {
+    { 0, { 0,  0,  0,  0,  0, 0}},
+    { 7, { 0,  0,  0,  0,  0, 0}},
+    { 8, { 1,  4,  6,  0,  0, 0}},
+    { 9, { 3, 12, 18,  5,  2, 0}},
+    {10, { 6, 22, 24,  9,  4, 0}},
+    {11, { 9, 30, 28, 12,  5, 0}},
+    {12, {13, 38, 34, 16,  7, 0}},
+    {17, {13, 38, 34, 16,  7, 0}},
+    {18, { 8, 24, 22,  7,  3, 0}},
+    {19, { 3, 11, 12,  2,  1, 0}},
+    {20, { 1,  4,  5,  0,  0, 0}},
+    {21, { 0,  0,  0,  0,  0, 0}},
+};
+static const Keyframe KF_PRO_LOWENERGY[] = {
+    { 0, { 0,  0,  0,  0,  0, 0}},
+    { 7, { 0,  0,  0,  0,  0, 0}},
+    { 8, { 0,  3,  5,  0,  0, 0}},
+    { 9, { 2, 10, 14,  4,  2, 0}},
+    {10, { 4, 18, 22,  7,  3, 0}},
+    {11, { 6, 24, 28,  9,  4, 0}},
+    {12, { 8, 30, 32, 12,  5, 0}},
+    {17, { 8, 30, 32, 12,  5, 0}},
+    {18, { 5, 20, 21,  5,  2, 0}},
+    {19, { 2,  9, 10,  2,  1, 0}},
+    {20, { 0,  3,  4,  0,  0, 0}},
+    {21, { 0,  0,  0,  0,  0, 0}},
+};
+static const Keyframe KF_PRO_SHALLOWSPS[] = {
+    { 0, { 0,   0,  0,  0,  0, 0}},
+    { 7, { 0,   0,  0,  0,  0, 0}},
+    { 8, { 6,  22, 28,  4,  2, 0}},
+    { 9, {18,  58, 66, 18,  6, 0}},
+    {10, {30,  88, 92, 34, 10, 0}},
+    {11, {40, 100,100, 44, 12, 0}},
+    {12, {48, 100,100, 52, 14, 0}},
+    {17, {48, 100,100, 52, 14, 0}},
+    {18, {34,  88, 82, 28,  8, 0}},
+    {19, {18,  58, 54, 10,  3, 0}},
+    {20, { 6,  26, 28,  0,  0, 0}},
+    {21, { 0,   8, 10,  0,  0, 0}},
+    {22, { 0,   0,  0,  0,  0, 0}},
+};
 
 static const Preset PRO_PRESETS[] = {
     {"fo",    "Fish Only",           "White-dominant for natural fish colour. Royal Blue for depth and sparkle. Bluer at dawn/dusk.",
@@ -159,10 +281,18 @@ static const Preset PRO_PRESETS[] = {
      {46,100,100, 42, 11, 0}, KF_PRO_SPS,  13},
     {"mixed", "Mixed Reef (LPS + SPS)", "SPS-level Royal Blue with LPS-appropriate White.",
      {22, 70, 64, 25, 11, 0}, KF_PRO_MIXED, 12},
+    {"softmixed", "Soft Mixed Reef", "Balanced mixed-reef schedule with a gentler peak and calmer dusk. Good default if Mixed Reef feels slightly too strong.",
+     {16, 48, 44, 19, 8, 0}, KF_PRO_SOFTMIX, 12},
+    {"acclimation", "Acclimation Mixed", "Reduced-output mixed-reef schedule for new corals, recent frags, or recovering colonies. Intended as a temporary step-up profile.",
+     {13, 38, 34, 16, 7, 0}, KF_PRO_ACCLIMIX, 12},
+    {"lowenergy", "LPS Low Energy", "Gentle low-light reef profile with restrained peak intensity and short dusk tail. Suitable for lower-demand LPS and shaded systems.",
+     {8, 30, 32, 12, 5, 0}, KF_PRO_LOWENERGY, 12},
+    {"shallowsps", "Shallow SPS", "Higher-output SPS profile for shallow tanks or elevated mounting, with strong midday intensity and a controlled evening falloff.",
+     {48,100,100, 52,14, 0}, KF_PRO_SHALLOWSPS, 13},
 };
 
-static constexpr uint8_t NUM_MINI_PRESETS = 4;
-static constexpr uint8_t NUM_PRO_PRESETS  = 4;
+static constexpr uint8_t NUM_MINI_PRESETS = 8;
+static constexpr uint8_t NUM_PRO_PRESETS  = 8;
 
 // ── buildSchedule implementation ──────────────────────────────────────────────
 inline void buildSchedule(const Preset& p, uint8_t out[K7_SLOTS][8]) {

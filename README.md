@@ -11,7 +11,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 - Read the current schedule and mode directly from the lamp
 - Edit the 24-hour lighting schedule on an interactive drag-and-drop chart
 - Additive colour preview strip showing the blended light output for each hour
-- Built-in presets for Fish Only, LPS Reef, SPS Reef, and Mixed Reef with dark overnight periods, practical coral photoperiods, and short dusk tails
+- Built-in preset library for Fish Only, LPS Reef, SPS Reef, Mixed Reef, Soft Mixed Reef, Acclimation Mixed, LPS Low Energy, and Shallow SPS with dark overnight periods, practical coral photoperiods, and short dusk tails
 - Master brightness slider and per-channel intensity sliders (absolute output ceiling per channel)
 - Per-channel visibility toggles — hidden channels are zeroed when pushing to the device
 - Day-shift control to slide the entire schedule forward or back (e.g. peak at 18:00 instead of midday)
