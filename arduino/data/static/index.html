@@ -389,6 +389,10 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
         <button class="btn-danger-custom" id="deleteProfileBtn" onclick="deleteProfile()" title="Delete selected profile" style="display:none;padding:5px 10px">🗑</button>
         <span id="presetDesc"></span>
       </div>
+      <div style="display:flex;gap:6px;margin-top:7px;align-items:center">
+        <button class="btn-secondary-custom" onclick="exportBackup()" title="Download controller backup JSON" style="padding:5px 10px">Export Backup</button>
+        <button class="btn-secondary-custom" onclick="chooseBackupImport()" title="Restore config, schedules, lunar settings, and profiles from a backup JSON file" style="padding:5px 10px">Import Backup</button>
+      </div>
     </div>
 
     <!-- Actions -->
@@ -407,6 +411,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
 <!-- Hidden stubs for JS backward-compat -->
 <div id="schedActions" style="display:none"></div>
 <div id="chToggles" style="display:none"></div>
+<input type="file" id="backupImportInput" accept="application/json,.json" style="display:none" onchange="onBackupImport(event)">
 
 <script>
 // ── Channel metadata ─────────────────────────────────────────────────────────
@@ -1280,6 +1285,56 @@ async function deleteProfile() {
     savedProfiles = await api('GET', '/api/profiles');
     rebuildPresetDropdown(); setOk(`Profile "${name}" deleted`);
   } catch(e) { setErr(e.message); }
+}
+
+function chooseBackupImport() {
+  const input = document.getElementById('backupImportInput');
+  input.value = '';
+  input.click();
+}
+
+async function exportBackup() {
+  setBusy('Exporting backup…');
+  try {
+    const r = await fetch('/api/backup');
+    if (!r.ok) {
+      let msg = r.statusText;
+      try {
+        const err = await r.json();
+        msg = err.error || msg;
+      } catch(_) {}
+      throw new Error(msg);
+    }
+    const blob = await r.blob();
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `k7controller-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+    setOk('Backup downloaded');
+  } catch(e) {
+    setErr(e.message);
+  }
+}
+
+async function onBackupImport(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!confirm(`Import backup "${file.name}"? This will overwrite the controller's saved config, state, lunar settings, and profiles.`))
+    return;
+  setBusy('Importing backup…');
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+    const resp = await api('POST', '/api/backup', backup);
+    setOk(resp.reboot_recommended ? 'Backup imported. Reloading… reboot recommended if lamp connection settings changed.' : 'Backup imported. Reloading…');
+    setTimeout(() => location.reload(), 700);
+  } catch(e) {
+    setErr(e.message);
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────

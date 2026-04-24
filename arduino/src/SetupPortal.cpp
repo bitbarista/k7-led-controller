@@ -7,6 +7,7 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <vector>
+#include "Storage.h"
 
 struct FoundLamp { String ssid; const char* device; };
 
@@ -93,7 +94,7 @@ static String savedHtml() {
 }
 
 static bool saveConfig(const String& lampSsid, const String& device) {
-    File f = LittleFS.open(CONFIG_FILE, "w");
+    File f = UserDataFS.open(CONFIG_FILE, "w");
     if (!f) return false;
     JsonDocument doc;
     doc["lamp_ssid"] = lampSsid;

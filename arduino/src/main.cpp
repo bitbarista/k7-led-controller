@@ -9,13 +9,14 @@
 #include "Presets.h"
 #include "SetupPortal.h"
 #include "ApiServer.h"
+#include "Storage.h"
 
 static WebServer server(80);
 
 // ── Config loading ────────────────────────────────────────────────────────────
 static bool loadConfig(String& lampSsid, String& device) {
-    if (!LittleFS.exists(CONFIG_FILE)) return false;
-    File f = LittleFS.open(CONFIG_FILE, "r");
+    if (!UserDataFS.exists(CONFIG_FILE)) return false;
+    File f = UserDataFS.open(CONFIG_FILE, "r");
     if (!f) return false;
     JsonDocument doc;
     if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return false; }
@@ -30,6 +31,8 @@ static bool loadConfig(String& lampSsid, String& device) {
         lampSsid = prefix + doc["suffix"].as<String>();
     }
     device = doc["device"] | "k7mini";
+    if (doc["host"].is<const char*>())
+        strlcpy(gLampHost, doc["host"], sizeof(gLampHost));
     return !lampSsid.isEmpty();
 }
 
@@ -58,8 +61,8 @@ void setup() {
     delay(500);
     Serial.println("\n=== K7 LED Controller (C++ / Arduino) ===");
 
-    if (!LittleFS.begin(true)) {
-        Serial.println("LittleFS mount failed — halting");
+    if (!initStorage()) {
+        Serial.println("Filesystem mount failed — halting");
         while (true) delay(1000);
     }
 
@@ -70,8 +73,8 @@ void setup() {
         uint32_t held = millis();
         while (digitalRead(0) == LOW && millis() - held < 3000) delay(50);
         if (millis() - held >= 3000) {
-            LittleFS.remove(CONFIG_FILE);
-            Serial.println("Config cleared — rebooting into setup portal");
+            clearUserData();
+            Serial.println("User data cleared — rebooting into setup portal");
             delay(500);
             ESP.restart();
         }
@@ -79,6 +82,7 @@ void setup() {
     }
 
     gLampMutex = xSemaphoreCreateMutex();
+    migrateLegacyUserData();
 
     String lampSsid, device;
     if (!loadConfig(lampSsid, device)) {
@@ -118,7 +122,7 @@ void setup() {
     }
 
     // On a fresh install (no state file), apply the Mixed Reef default schedule
-    if (!LittleFS.exists(STATE_FILE)) {
+    if (!UserDataFS.exists(STATE_FILE)) {
         bool blank = true;
         for (int h = 0; h < K7_SLOTS && blank; h++)
             for (int c = 0; c < K7_CHANNELS && blank; c++)

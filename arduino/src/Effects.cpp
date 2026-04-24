@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <functional>
 #include <time.h>
+#include "Storage.h"
 
 // ── Shared globals ────────────────────────────────────────────────────────────
 SemaphoreHandle_t gLampMutex = nullptr;
@@ -222,8 +223,8 @@ bool withLamp(const std::function<void(K7Lamp&)>& fn) {
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 void loadEffectConfigs() {
-    if (!LittleFS.exists(LUNAR_FILE)) return;
-    File f = LittleFS.open(LUNAR_FILE, "r");
+    if (!UserDataFS.exists(LUNAR_FILE)) return;
+    File f = UserDataFS.open(LUNAR_FILE, "r");
     if (!f) return;
     JsonDocument doc;
     if (deserializeJson(doc, f) == DeserializationError::Ok) {
@@ -240,7 +241,7 @@ void loadEffectConfigs() {
 }
 
 void saveLunarConfig() {
-    File f = LittleFS.open(LUNAR_FILE, "w");
+    File f = UserDataFS.open(LUNAR_FILE, "w");
     if (!f) return;
     JsonDocument doc;
     doc["enabled"]       = gLunarConfig.enabled;
@@ -256,11 +257,12 @@ void saveLunarConfig() {
 }
 
 void saveEffectState() {
-    File f = LittleFS.open(STATE_FILE, "w");
+    File f = UserDataFS.open(STATE_FILE, "w");
     if (!f) return;
     JsonDocument doc;
     doc["ramp"]          = gRampActive.load();
     doc["lunar"]         = gLunarActive.load() && !gLunarStopped.load();
+    doc["master_brightness"] = gMasterBrightness;
     doc["feed_duration"]  = gFeedDuration;
     doc["feed_intensity"] = gFeedIntensity;
     doc["auto_mode"]     = gLampAutoMode;
@@ -278,8 +280,8 @@ void saveEffectState() {
 }
 
 void loadEffectState() {
-    if (!LittleFS.exists(STATE_FILE)) return;
-    File f = LittleFS.open(STATE_FILE, "r");
+    if (!UserDataFS.exists(STATE_FILE)) return;
+    File f = UserDataFS.open(STATE_FILE, "r");
     if (!f) return;
     JsonDocument doc;
     if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return; }
@@ -299,6 +301,8 @@ void loadEffectState() {
             gLastManual[i] = (uint8_t)arr[i].as<int>();
     }
     // Restore auto_mode before effects so the mode is correct even if ramp starts
+    if (doc["master_brightness"].is<int>())
+        gMasterBrightness = max(0, min(200, doc["master_brightness"].as<int>()));
     if (doc["auto_mode"].is<bool>())       gLampAutoMode = doc["auto_mode"];
     if (doc["active_preset"].is<const char*>())
         strlcpy(gActivePreset, doc["active_preset"], sizeof(gActivePreset));

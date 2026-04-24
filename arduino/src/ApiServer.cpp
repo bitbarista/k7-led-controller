@@ -8,6 +8,7 @@
 #include <ArduinoJson.h>
 #include <WebServer.h>
 #include <time.h>
+#include "Storage.h"
 
 // ── JSON response helpers ─────────────────────────────────────────────────────
 static void sendJson(WebServer& srv, const JsonDocument& doc, int code = 200) {
@@ -23,15 +24,96 @@ static void sendError(WebServer& srv, const char* msg, int code = 500) {
     srv.send(code, "application/json", j);
 }
 
+static bool loadJsonFile(const char* path, JsonDocument& doc) {
+    doc.clear();
+    if (!UserDataFS.exists(path)) return false;
+    File f = UserDataFS.open(path, "r");
+    if (!f) return false;
+    DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    return err == DeserializationError::Ok;
+}
+
+static bool saveJsonFile(const char* path, const JsonDocument& doc) {
+    File f = UserDataFS.open(path, "w");
+    if (!f) return false;
+    serializeJson(doc, f);
+    f.close();
+    return true;
+}
+
+static void loadConfigDoc(JsonDocument& doc) {
+    doc.to<JsonObject>();
+    loadJsonFile(CONFIG_FILE, doc);
+    doc["device"] = gDevice;
+    doc["host"]   = gLampHost;
+}
+
+static bool saveConfigDoc(JsonVariantConst src) {
+    JsonDocument doc;
+    doc.to<JsonObject>();
+    if (src.is<JsonObjectConst>())
+        doc.set(src);
+    if (!doc["device"].is<const char*>()) doc["device"] = gDevice;
+    if (!doc["host"].is<const char*>())   doc["host"]   = gLampHost;
+
+    if (doc["device"].is<const char*>())
+        strlcpy(gDevice, doc["device"], sizeof(gDevice));
+    if (doc["host"].is<const char*>())
+        strlcpy(gLampHost, doc["host"], sizeof(gLampHost));
+
+    return saveJsonFile(CONFIG_FILE, doc);
+}
+
+static void buildStateDoc(JsonDocument& doc) {
+    doc["ramp"]              = gRampActive.load();
+    doc["lunar"]             = gLunarActive.load() && !gLunarStopped.load();
+    doc["master_brightness"] = gMasterBrightness;
+    doc["feed_duration"]     = gFeedDuration;
+    doc["feed_intensity"]    = gFeedIntensity;
+    doc["auto_mode"]         = gLampAutoMode;
+    doc["active_preset"]     = gActivePreset;
+
+    auto schedArr = doc["schedule"].to<JsonArray>();
+    for (int h = 0; h < K7_SLOTS; h++) {
+        auto row = schedArr.add<JsonArray>();
+        for (int c = 0; c < 8; c++) row.add(gLastSchedule[h][c]);
+    }
+    auto manArr = doc["manual"].to<JsonArray>();
+    for (int i = 0; i < K7_CHANNELS; i++) manArr.add(gLastManual[i]);
+}
+
+static void buildLunarDoc(JsonDocument& doc) {
+    doc["enabled"]        = gLunarConfig.enabled;
+    doc["start"]          = gLunarConfig.start;
+    doc["end"]            = gLunarConfig.end;
+    doc["clamp_start"]    = gLunarConfig.clampStart;
+    doc["clamp_end"]      = gLunarConfig.clampEnd;
+    doc["max_intensity"]  = gLunarConfig.maxIntensity;
+    doc["day_threshold"]  = gLunarConfig.dayThreshold;
+    doc["track_moonrise"] = gLunarConfig.trackMoonrise;
+}
+
+static void applyLunarDoc(JsonVariantConst src) {
+    if (src["enabled"].is<bool>())            gLunarConfig.enabled = src["enabled"];
+    if (src["start"].is<const char*>())       strlcpy(gLunarConfig.start, src["start"], sizeof(gLunarConfig.start));
+    if (src["end"].is<const char*>())         strlcpy(gLunarConfig.end, src["end"], sizeof(gLunarConfig.end));
+    if (src["clamp_start"].is<const char*>()) strlcpy(gLunarConfig.clampStart, src["clamp_start"], sizeof(gLunarConfig.clampStart));
+    if (src["clamp_end"].is<const char*>())   strlcpy(gLunarConfig.clampEnd, src["clamp_end"], sizeof(gLunarConfig.clampEnd));
+    if (src["max_intensity"].is<int>())       gLunarConfig.maxIntensity = max(1, min(100, src["max_intensity"].as<int>()));
+    if (src["day_threshold"].is<int>())       gLunarConfig.dayThreshold = max(0, min(100, src["day_threshold"].as<int>()));
+    if (src["track_moonrise"].is<bool>())     gLunarConfig.trackMoonrise = src["track_moonrise"];
+}
+
 // ── Profiles helpers ──────────────────────────────────────────────────────────
 static void loadProfiles(JsonDocument& doc) {
     doc.to<JsonObject>();  // ensures {} not null when no profiles file exists
-    if (!LittleFS.exists(PROFILES_FILE)) return;
-    File f = LittleFS.open(PROFILES_FILE, "r");
+    if (!UserDataFS.exists(PROFILES_FILE)) return;
+    File f = UserDataFS.open(PROFILES_FILE, "r");
     if (f) { deserializeJson(doc, f); f.close(); }
 }
 static void saveProfiles(const JsonDocument& doc) {
-    File f = LittleFS.open(PROFILES_FILE, "w");
+    File f = UserDataFS.open(PROFILES_FILE, "w");
     if (f) { serializeJson(doc, f); f.close(); }
 }
 
@@ -66,6 +148,7 @@ void setupApiServer(WebServer& server) {
         deserializeJson(doc, server.arg("plain"));
         if (doc["value"].is<int>())
             gMasterBrightness = max(0, min(200, doc["value"].as<int>()));
+        saveEffectState();
         // Re-push lamp immediately so MB changes take effect without a separate push.
         // This also eliminates any race with a simultaneous /api/push: whichever
         // handler runs second will overwrite the first push in the queue, and the
@@ -113,10 +196,131 @@ void setupApiServer(WebServer& server) {
         deserializeJson(doc, server.arg("plain"));
         if (doc["host"].is<const char*>())   strlcpy(gLampHost, doc["host"],   sizeof(gLampHost));
         if (doc["device"].is<const char*>()) strlcpy(gDevice,   doc["device"], sizeof(gDevice));
+        saveConfigDoc(doc.as<JsonVariantConst>());
         JsonDocument resp;
         resp["host"]   = gLampHost;
         resp["port"]   = LAMP_PORT;
         resp["device"] = gDevice;
+        sendJson(server, resp);
+    });
+
+    // ── /api/backup ───────────────────────────────────────────────────────────
+    server.on("/api/backup", HTTP_GET, [&server]() {
+        JsonDocument backup;
+        backup["kind"]        = "k7controller_backup";
+        backup["schema"]      = 1;
+        backup["exported_at"] = (long long)time(nullptr) * 1000LL;
+        auto controller = backup["controller"].to<JsonObject>();
+        controller["device"]    = gDevice;
+        controller["lamp_name"] = gLampName;
+
+        JsonDocument configDoc;
+        loadConfigDoc(configDoc);
+        backup["config"] = configDoc.as<JsonObject>();
+
+        JsonDocument stateDoc;
+        buildStateDoc(stateDoc);
+        backup["state"] = stateDoc.as<JsonObject>();
+
+        JsonDocument lunarDoc;
+        buildLunarDoc(lunarDoc);
+        backup["lunar"] = lunarDoc.as<JsonObject>();
+
+        JsonDocument profilesDoc;
+        loadProfiles(profilesDoc);
+        backup["profiles"] = profilesDoc.as<JsonObject>();
+
+        server.sendHeader("Content-Disposition", "attachment; filename=\"k7controller-backup.json\"");
+        sendJson(server, backup);
+    });
+    server.on("/api/backup", HTTP_POST, [&server]() {
+        JsonDocument backup;
+        if (deserializeJson(backup, server.arg("plain")) != DeserializationError::Ok) {
+            sendError(server, "Bad JSON", 400);
+            return;
+        }
+        if (String(backup["kind"] | "") != "k7controller_backup" || (backup["schema"] | 0) != 1) {
+            sendError(server, "Unsupported backup format", 400);
+            return;
+        }
+
+        bool rebootRecommended = false;
+        bool applyPush = false;
+        if (gFeedActive.load()) stopFeed();
+
+        if (backup["config"].is<JsonObjectConst>()) {
+            if (!saveConfigDoc(backup["config"].as<JsonVariantConst>())) {
+                sendError(server, "Failed to save config");
+                return;
+            }
+            rebootRecommended = true;
+        }
+
+        if (backup["lunar"].is<JsonObjectConst>()) {
+            applyLunarDoc(backup["lunar"].as<JsonVariantConst>());
+            saveLunarConfig();
+        }
+
+        if (backup["profiles"].is<JsonObjectConst>()) {
+            JsonDocument profilesDoc;
+            profilesDoc.set(backup["profiles"].as<JsonVariantConst>());
+            if (!saveJsonFile(PROFILES_FILE, profilesDoc)) {
+                sendError(server, "Failed to save profiles");
+                return;
+            }
+        }
+
+        if (backup["state"].is<JsonObjectConst>()) {
+            JsonVariantConst state = backup["state"].as<JsonVariantConst>();
+            if (state["schedule"].is<JsonArrayConst>()) {
+                JsonArrayConst arr = state["schedule"].as<JsonArrayConst>();
+                for (int h = 0; h < K7_SLOTS && h < (int)arr.size(); h++) {
+                    JsonArrayConst row = arr[h].as<JsonArrayConst>();
+                    for (int c = 0; c < 8 && c < (int)row.size(); c++)
+                        gLastSchedule[h][c] = (uint8_t)max(0, min(100, row[c].as<int>()));
+                }
+                applyPush = true;
+            }
+            if (state["manual"].is<JsonArrayConst>()) {
+                JsonArrayConst arr = state["manual"].as<JsonArrayConst>();
+                for (int i = 0; i < K7_CHANNELS && i < (int)arr.size(); i++)
+                    gLastManual[i] = (uint8_t)max(0, min(100, arr[i].as<int>()));
+                applyPush = true;
+            }
+            if (state["master_brightness"].is<int>())
+                gMasterBrightness = max(0, min(200, state["master_brightness"].as<int>()));
+            if (state["feed_duration"].is<int>())
+                gFeedDuration = max(1, min(60, state["feed_duration"].as<int>()));
+            if (state["feed_intensity"].is<int>())
+                gFeedIntensity = max(1, min(100, state["feed_intensity"].as<int>()));
+            if (state["auto_mode"].is<bool>())
+                gLampAutoMode = state["auto_mode"];
+            if (state["active_preset"].is<const char*>())
+                strlcpy(gActivePreset, state["active_preset"], sizeof(gActivePreset));
+
+            if (state["ramp"].is<bool>()) {
+                if (state["ramp"].as<bool>()) startRamp();
+                else stopRamp();
+            }
+            if (state["lunar"].is<bool>()) {
+                if (state["lunar"].as<bool>()) {
+                    gLunarStopped = false;
+                    startLunar();
+                    lunarApplyNow();
+                } else {
+                    stopLunar();
+                    lunarRestoreNow();
+                }
+            }
+            saveEffectState();
+        }
+
+        if (applyPush)
+            queuePush(gLastManual, gLastSchedule, gLampAutoMode);
+
+        JsonDocument resp;
+        resp["ok"] = true;
+        resp["reboot_recommended"] = rebootRecommended;
         sendJson(server, resp);
     });
 
