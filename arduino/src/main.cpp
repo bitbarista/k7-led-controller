@@ -4,6 +4,7 @@
 #include <LittleFS.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
+#include <esp_netif.h>
 #include "Config.h"
 #include "Effects.h"
 #include "Presets.h"
@@ -12,6 +13,12 @@
 #include "Storage.h"
 
 static WebServer server(80);
+static constexpr const char* MDNS_HOSTNAME = "k7controller";
+static constexpr uint32_t WIFI_CHECK_MS = 10000;
+static constexpr uint32_t MDNS_ANNOUNCE_MS = 60000;
+static constexpr uint32_t MDNS_RESTART_MS = 3600000;
+
+static bool sMdnsRunning = false;
 
 // ── Config loading ────────────────────────────────────────────────────────────
 static bool loadConfig(String& lampSsid, String& device) {
@@ -44,6 +51,7 @@ static const IPAddress STA_GATEWAY (192, 168, 4,   1);
 static const IPAddress STA_SUBNET  (255, 255, 255,  0);
 
 static bool connectSta(const String& ssid, uint32_t timeoutMs = 20000) {
+    WiFi.setHostname(MDNS_HOSTNAME);
     WiFi.config(STA_IP, STA_GATEWAY, STA_SUBNET, STA_GATEWAY);
     WiFi.begin(ssid.c_str(), LAMP_PASSWORD);
     uint32_t start = millis();
@@ -53,6 +61,47 @@ static bool connectSta(const String& ssid, uint32_t timeoutMs = 20000) {
     }
     Serial.println();
     return WiFi.status() == WL_CONNECTED;
+}
+
+static void stopMdns() {
+    if (!sMdnsRunning) return;
+    MDNS.end();
+    sMdnsRunning = false;
+}
+
+static bool startMdns() {
+    stopMdns();
+    if (!MDNS.begin(MDNS_HOSTNAME)) {
+        Serial.println("mDNS start failed");
+        return false;
+    }
+    MDNS.setInstanceName("K7 LED Controller");
+    if (!MDNS.addService("http", "tcp", 80)) {
+        Serial.println("mDNS HTTP service add failed");
+        MDNS.end();
+        return false;
+    }
+    MDNS.addServiceTxt("http", "tcp", "path", "/");
+    sMdnsRunning = true;
+    Serial.println("mDNS: http://k7controller.local");
+    return true;
+}
+
+static bool announceMdns() {
+    if (!sMdnsRunning) return startMdns();
+
+    esp_netif_t* staNetif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (!staNetif) {
+        Serial.println("mDNS announce failed: no STA netif");
+        return false;
+    }
+
+    esp_err_t err = mdns_netif_action(staNetif, MDNS_EVENT_ANNOUNCE_IP4);
+    if (err != ESP_OK) {
+        Serial.printf("mDNS announce failed: %s\n", esp_err_to_name(err));
+        return false;
+    }
+    return true;
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -96,12 +145,11 @@ void setup() {
 
     // STA-only: no AP, no radio timesharing — eliminates push delivery delays
     WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false);
     Serial.printf("Connecting STA -> %s ...", lampSsid.c_str());
     if (connectSta(lampSsid)) {
         Serial.printf(" OK  (%s)\n", WiFi.localIP().toString().c_str());
-        MDNS.begin("k7controller");
-        MDNS.addService("http", "tcp", 80);
-        Serial.println("mDNS: http://k7controller.local");
+        startMdns();
     } else {
         Serial.println(" FAILED — running without lamp connection");
     }
@@ -181,15 +229,17 @@ void loop() {
 
     // Reconnect STA + restart mDNS/server if WiFi drops.
     // Check every 10 s — fast enough to minimise outage without hammering the stack.
-    static uint32_t lastCheck    = 0;
-    static uint32_t lastMdns     = 0;
-    static bool     wasConnected = false;
+    static uint32_t lastCheck       = 0;
+    static uint32_t lastMdnsAnnounce = 0;
+    static uint32_t lastMdnsRestart = 0;
+    static bool     wasConnected    = false;
     bool connected = (WiFi.status() == WL_CONNECTED);
 
-    if (millis() - lastCheck > 10000) {
+    if (millis() - lastCheck > WIFI_CHECK_MS) {
         lastCheck = millis();
         if (!connected) {
             wasConnected = false;
+            stopMdns();
             String lampSsid, device;
             if (loadConfig(lampSsid, device)) {
                 Serial.println("STA reconnecting...");
@@ -202,21 +252,29 @@ void loop() {
             wasConnected = true;
             server.close();
             server.begin();
-            MDNS.end();
-            MDNS.begin("k7controller");
-            MDNS.addService("http", "tcp", 80);
-            lastMdns = millis();
+            startMdns();
+            lastMdnsAnnounce = millis();
+            lastMdnsRestart = millis();
             Serial.printf("Reconnected  IP=%s  — server+mDNS restarted\n",
                           WiFi.localIP().toString().c_str());
         }
     }
 
-    // Re-announce mDNS every 10 minutes regardless
-    if (connected && millis() - lastMdns > 600000) {
-        lastMdns = millis();
-        MDNS.end();
-        MDNS.begin("k7controller");
-        MDNS.addService("http", "tcp", 80);
-        Serial.println("mDNS re-announced");
+    // Keep .local fresh without repeatedly tearing down the responder.
+    if (connected && millis() - lastMdnsAnnounce > MDNS_ANNOUNCE_MS) {
+        lastMdnsAnnounce = millis();
+        if (announceMdns()) {
+            Serial.println("mDNS announced");
+        } else {
+            startMdns();
+            lastMdnsRestart = millis();
+        }
+    }
+
+    // Periodic hard refresh in case the ESP32 responder task silently wedged.
+    if (connected && millis() - lastMdnsRestart > MDNS_RESTART_MS) {
+        lastMdnsRestart = millis();
+        startMdns();
+        Serial.println("mDNS restarted");
     }
 }
