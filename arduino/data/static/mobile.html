@@ -568,6 +568,7 @@ let seasonalState = null;
 let maintenanceState = null;
 let rampActiveState = false;
 let warningsState = null;
+let scheduleShiftMinutes = 0;
 
 function chs() { return DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels; }
 function lunarWindow(d) {
@@ -762,7 +763,12 @@ async function saveManual() {
   try {
     const out = Array(6).fill(0);
     chs().forEach((_,i) => { out[i] = manual[i]||0; });
-    await api('POST', '/api/push', {manual: out, schedule, mode: 'manual'});
+    await api('POST', '/api/push', {
+      manual: out,
+      schedule,
+      mode: 'manual',
+      schedule_shift_minutes: scheduleShiftMinutes,
+    });
     mode = 'manual'; applyModeUI(); setOk('Applied');
   } catch(e) { setErr(e.message); }
 }
@@ -784,7 +790,12 @@ async function _autoPushMaster() {
     // Send unscaled schedule; server applies MB when pushing to lamp
     await Promise.all([
       api('POST', '/api/master', {value: masterBrightness}),
-      api('POST', '/api/push', {manual: man, schedule: schedule.map(r => [...r]), mode}),
+      api('POST', '/api/push', {
+        manual: man,
+        schedule: schedule.map(r => [...r]),
+        mode,
+        schedule_shift_minutes: scheduleShiftMinutes,
+      }),
     ]);
   } catch(_) {}
 }
@@ -792,7 +803,7 @@ async function _autoPushMaster() {
 function interpNow() {
   const now = new Date(), h = now.getHours(), m = now.getMinutes();
   const minsNow = h * 60 + m;
-  const shiftedMins = ((minsNow - seasonalShiftNow()) % 1440 + 1440) % 1440;
+  const shiftedMins = ((minsNow - seasonalShiftNow() - scheduleShiftMinutes) % 1440 + 1440) % 1440;
   const lo = schedule[Math.floor(shiftedMins / 60)];
   const hi = schedule[(Math.floor(shiftedMins / 60)+1)%24];
   const frac = (shiftedMins % 60) / 60;
@@ -900,6 +911,7 @@ async function readFromDevice() {
     manual          = s.manual || [0,0,0,0,0,0];
     mode            = s.mode;
     activePresetKey = s.active_preset || '';
+    scheduleShiftMinutes = parseInt(s.schedule_shift_minutes ?? 0) || 0;
     if (rampSt.active && mode === 'manual') mode = 'auto';
     // Restore master — optional endpoint; old firmware may not have it
     try {
@@ -1016,7 +1028,13 @@ async function pushSchedule() {
     const man = Array(6).fill(0);
     chs().forEach((_,i) => { man[i] = manual[i]||0; });
     // Send unscaled schedule; server applies MB when pushing to lamp
-    await api('POST', '/api/push', {manual: man, schedule: schedule.map(r => [...r]), mode, active_preset: activePresetKey});
+    await api('POST', '/api/push', {
+      manual: man,
+      schedule: schedule.map(r => [...r]),
+      mode,
+      active_preset: activePresetKey,
+      schedule_shift_minutes: scheduleShiftMinutes,
+    });
     setOk('Pushed ✓');
   } catch(e) {
     setErr(e.message);

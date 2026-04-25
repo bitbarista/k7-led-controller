@@ -311,26 +311,24 @@ static void buildSiestaDoc(JsonDocument& doc) {
     }
 }
 
-static bool applySiestaDoc(JsonVariantConst src, String* errMsg = nullptr) {
-    bool enabled = gSiestaConfig.enabled;
-    char start[8];
-    strlcpy(start, gSiestaConfig.start, sizeof(start));
-    int duration = gSiestaConfig.durationMins;
-    int intensity = gSiestaConfig.intensity;
+static SiestaConfig siestaConfigFromDoc(JsonVariantConst src) {
+    SiestaConfig cfg = gSiestaConfig;
+    if (src["enabled"].is<bool>())      cfg.enabled      = src["enabled"];
+    if (src["start"].is<const char*>()) strlcpy(cfg.start, src["start"], sizeof(cfg.start));
+    if (src["duration"].is<int>())      cfg.durationMins = max(1, min(720, src["duration"].as<int>()));
+    if (src["intensity"].is<int>())     cfg.intensity    = max(1, min(100, src["intensity"].as<int>()));
+    return cfg;
+}
 
-    if (src["enabled"].is<bool>())      enabled   = src["enabled"];
-    if (src["start"].is<const char*>()) strlcpy(start, src["start"], sizeof(start));
-    if (src["duration"].is<int>())      duration  = max(1, min(720, src["duration"].as<int>()));
-    if (src["intensity"].is<int>())     intensity = max(1, min(100, src["intensity"].as<int>()));
-
-    if (enabled && !gRampActive.load()) {
+static bool validateSiestaConfig(const SiestaConfig& cfg, bool rampActive, String* errMsg = nullptr) {
+    if (cfg.enabled && !rampActive) {
         if (errMsg) *errMsg = "Siesta requires Smooth Ramp";
         return false;
     }
 
-    int startMins = parseHHMM(start);
+    int startMins = parseHHMM(cfg.start);
     int allowedStart = 0, allowedEnd = 0;
-    if (enabled && !siestaTimeAllowed(startMins, duration, &allowedStart, &allowedEnd)) {
+    if (cfg.enabled && !siestaTimeAllowed(startMins, cfg.durationMins, &allowedStart, &allowedEnd)) {
         if (errMsg) {
             char allowedStartStr[8], allowedEndStr[8];
             snprintf(allowedStartStr, sizeof(allowedStartStr), "%02d:%02d", allowedStart / 60, allowedStart % 60);
@@ -347,10 +345,13 @@ static bool applySiestaDoc(JsonVariantConst src, String* errMsg = nullptr) {
         return false;
     }
 
-    gSiestaConfig.enabled = enabled;
-    strlcpy(gSiestaConfig.start, start, sizeof(gSiestaConfig.start));
-    gSiestaConfig.durationMins = duration;
-    gSiestaConfig.intensity = intensity;
+    return true;
+}
+
+static bool applySiestaDoc(JsonVariantConst src, String* errMsg = nullptr) {
+    SiestaConfig cfg = siestaConfigFromDoc(src);
+    if (!validateSiestaConfig(cfg, gRampActive.load(), errMsg)) return false;
+    gSiestaConfig = cfg;
     return true;
 }
 
@@ -495,6 +496,55 @@ void setupApiServer(WebServer& server) {
         if (gFeedActive.load()) stopFeed();
         if (gMaintenanceActive.load()) stopMaintenance();
 
+        JsonDocument profilesDoc;
+        if (backup["profiles"].is<JsonObjectConst>())
+            profilesDoc.set(backup["profiles"].as<JsonVariantConst>());
+
+        if (backup["siesta"].is<JsonObjectConst>()) {
+            String err;
+            uint8_t oldBaseSchedule[K7_SLOTS][8];
+            uint8_t oldLastSchedule[K7_SLOTS][8];
+            memcpy(oldBaseSchedule, gBaseSchedule, sizeof(oldBaseSchedule));
+            memcpy(oldLastSchedule, gLastSchedule, sizeof(oldLastSchedule));
+            int oldScheduleShift = gScheduleShiftMinutes;
+            SeasonalConfig oldSeasonal = gSeasonalConfig;
+            AcclimationConfig oldAcclimation = gAcclimationConfig;
+            SiestaConfig oldSiesta = gSiestaConfig;
+
+            JsonVariantConst state = backup["state"].as<JsonVariantConst>();
+            bool restoredRamp = state["ramp"].is<bool>() ? state["ramp"].as<bool>() : gRampActive.load();
+            if (backup["seasonal"].is<JsonObjectConst>())
+                applySeasonalDoc(backup["seasonal"].as<JsonVariantConst>());
+            if (backup["acclimation"].is<JsonObjectConst>())
+                applyAcclimationDoc(backup["acclimation"].as<JsonVariantConst>());
+            if (state["schedule_shift_minutes"].is<int>())
+                gScheduleShiftMinutes = max(-720, min(720, state["schedule_shift_minutes"].as<int>()));
+            if (state["schedule"].is<JsonArrayConst>()) {
+                JsonArrayConst arr = state["schedule"].as<JsonArrayConst>();
+                for (int h = 0; h < K7_SLOTS && h < (int)arr.size(); h++) {
+                    JsonArrayConst row = arr[h].as<JsonArrayConst>();
+                    for (int c = 0; c < 8 && c < (int)row.size(); c++)
+                        gBaseSchedule[h][c] = (uint8_t)max(0, min(100, row[c].as<int>()));
+                }
+            }
+            rebuildEffectiveSchedule();
+
+            SiestaConfig restoredSiesta = siestaConfigFromDoc(backup["siesta"].as<JsonVariantConst>());
+            bool siestaOk = validateSiestaConfig(restoredSiesta, restoredRamp, &err);
+
+            memcpy(gBaseSchedule, oldBaseSchedule, sizeof(gBaseSchedule));
+            memcpy(gLastSchedule, oldLastSchedule, sizeof(gLastSchedule));
+            gScheduleShiftMinutes = oldScheduleShift;
+            gSeasonalConfig = oldSeasonal;
+            gAcclimationConfig = oldAcclimation;
+            gSiestaConfig = oldSiesta;
+
+            if (!siestaOk) {
+                sendError(server, err.c_str(), 400);
+                return;
+            }
+        }
+
         if (backup["config"].is<JsonObjectConst>()) {
             if (!saveConfigDoc(backup["config"].as<JsonVariantConst>())) {
                 sendError(server, "Failed to save config");
@@ -519,17 +569,11 @@ void setupApiServer(WebServer& server) {
         }
 
         if (backup["siesta"].is<JsonObjectConst>()) {
-            String err;
-            if (!applySiestaDoc(backup["siesta"].as<JsonVariantConst>(), &err)) {
-                sendError(server, err.c_str(), 400);
-                return;
-            }
+            gSiestaConfig = siestaConfigFromDoc(backup["siesta"].as<JsonVariantConst>());
             saveSiestaConfig();
         }
 
-        if (backup["profiles"].is<JsonObjectConst>()) {
-            JsonDocument profilesDoc;
-            profilesDoc.set(backup["profiles"].as<JsonVariantConst>());
+        if (!profilesDoc.isNull()) {
             if (!saveJsonFile(PROFILES_FILE, profilesDoc)) {
                 sendError(server, "Failed to save profiles");
                 return;
