@@ -72,7 +72,7 @@ jobs:
         VERSION=${{ steps.version.outputs.VERSION }}
         BOOT_APP=$(find ~/.platformio -name "boot_app0.bin" | head -1)
         esptool --chip esp32s3 merge_bin \
-          --flash_mode qio --flash_freq 80m --flash_size 4MB \
+          --flash_mode dio --flash_freq 80m --flash_size 4MB \
           -o k7controller-supermini-v${VERSION}.bin \
           0x0      arduino/.pio/build/supermini/bootloader.bin \
           0x8000   arduino/.pio/build/supermini/partitions.bin \
@@ -86,7 +86,7 @@ jobs:
         VERSION=${{ steps.version.outputs.VERSION }}
         BOOT_APP=$(find ~/.platformio -name "boot_app0.bin" | head -1)
         esptool --chip esp32s3 merge_bin \
-          --flash_mode qio --flash_freq 80m --flash_size 8MB \
+          --flash_mode dio --flash_freq 80m --flash_size 8MB \
           -o k7controller-xiao-v${VERSION}.bin \
           0x0      arduino/.pio/build/xiao/bootloader.bin \
           0x8000   arduino/.pio/build/xiao/partitions.bin \
