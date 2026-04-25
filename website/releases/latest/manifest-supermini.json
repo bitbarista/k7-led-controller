@@ -1,12 +1,12 @@
 {
   "name": "K7 LED Controller (SuperMini)",
-  "version": "2.6.7",
+  "version": "2.6.8",
   "new_install_prompt_erase": true,
   "funding_url": "https://github.com/bitbarista/k7-led-controller",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
-      "parts": [{ "path": "k7controller-supermini-v2.6.7.bin", "offset": 0 }]
+      "parts": [{ "path": "k7controller-supermini-v2.6.8.bin", "offset": 0 }]
     }
   ]
 }
