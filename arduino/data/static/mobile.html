@@ -125,7 +125,12 @@ body {
 
 /* ── Now bars ── */
 .now-row { display: flex; align-items: center; gap: 10px; padding: 6px 14px; }
-.now-name { width: 92px; font-size: 0.8rem; font-weight: 500; flex-shrink: 0; }
+.now-name { width: 92px; font-size: 0.8rem; font-weight: 500; flex-shrink: 0; display:flex; align-items:center; gap:6px; min-width:0; }
+.out-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink:0; background: var(--muted); opacity:0.85; }
+.out-dot.out-ok      { background:#3fb950; box-shadow:0 0 4px rgba(63,185,80,0.8); }
+.out-dot.out-pending { background:#d29922; box-shadow:0 0 4px rgba(210,153,34,0.8); }
+.out-dot.out-fail    { background:#f85149; box-shadow:0 0 4px rgba(248,81,73,0.8); }
+.out-dot.out-est     { background:var(--muted); opacity:0.45; }
 .now-track { flex: 1; background: var(--surface2); border-radius: 4px; height: 16px; overflow: hidden; }
 .now-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
 .now-pct { width: 38px; text-align: right; font-size: 0.78rem; font-variant-numeric: tabular-nums; color: var(--muted); }
@@ -838,12 +843,20 @@ function currentNowValues() {
   return interpNow();
 }
 
+function outputStatusClass() {
+  if (!outputStatusState?.has_target && !outputStatusState?.has_sent) return 'out-est';
+  if (!outputStatusState?.last_write_ok && outputStatusState?.has_target) return 'out-fail';
+  if (outputStatusState?.has_sent && outputStatusState?.last_write_ok) return 'out-ok';
+  return 'out-pending';
+}
+
 function buildNowBars() {
   const vals = currentNowValues();
+  const outClass = outputStatusClass();
   document.getElementById('nowBars').innerHTML = chs().map((ch,i) => {
     const c = CH[ch];
     return `<div class="now-row">
-      <span class="now-name">${c.label}</span>
+      <span class="now-name"><span class="out-dot ${outClass}"></span><span>${c.label}</span></span>
       <div class="now-track"><div class="now-fill" id="nf${i}" style="width:${vals[i]}%;background:${c.css}"></div></div>
       <span class="now-pct" id="np${i}">${vals[i]}%</span>
     </div>`;
@@ -851,6 +864,10 @@ function buildNowBars() {
 }
 
 function updateNowBars() {
+  const outClass = outputStatusClass();
+  document.querySelectorAll('#nowBars .out-dot').forEach(dot => {
+    dot.className = `out-dot ${outClass}`;
+  });
   currentNowValues().forEach((v,i) => {
     const f=document.getElementById('nf'+i), p=document.getElementById('np'+i);
     if(f){ f.style.width=v+'%'; p.textContent=v+'%'; }

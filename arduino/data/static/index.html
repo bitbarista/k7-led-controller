@@ -126,6 +126,10 @@ body {
 .now-track { background: var(--surface2); border-radius: 3px; height: 9px; overflow: hidden; }
 .now-fill  { height: 100%; border-radius: 3px; }
 .now-pct   { text-align: right; font-size: 0.76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ch-dot.out-ok      { box-shadow: 0 0 0 2px #3fb950; }
+.ch-dot.out-pending { box-shadow: 0 0 0 2px #d29922; }
+.ch-dot.out-fail    { box-shadow: 0 0 0 2px #f85149; }
+.ch-dot.out-est     { box-shadow: 0 0 0 1px var(--border); }
 
 /* ── chart (fills col-mid) ── */
 #autoPanel {
@@ -855,13 +859,14 @@ function updateNowBars() {
   const title = document.getElementById('nowTitle');
   if (title) title.textContent = `Right now · ${timeStr}`;
   const chs = DEVICES[cfg.device].channels;
+  const outClass = outputStatusClass();
   container.innerHTML = '';
   chs.forEach((ch, ci) => {
     const v = currentNowValue(mins, ci);
     const row = document.createElement('div');
     row.className = 'now-bar-row';
     row.innerHTML = `
-      <div class="ch-dot" style="background:${CH[ch].css}"></div>
+      <div class="ch-dot ${outClass}" style="background:${CH[ch].css}"></div>
       <span style="font-size:0.78rem">${CH[ch].label}</span>
       <div class="now-track"><div class="now-fill" style="width:${v}%;background:${CH[ch].css}"></div></div>
       <span class="now-pct">${v}%</span>`;
@@ -879,6 +884,13 @@ function currentNowValue(mins, ci) {
     return Math.max(0, Math.min(100, parseInt(target[ci] ?? 0) || 0));
   }
   return effectiveValueAtMins(mins, ci);
+}
+
+function outputStatusClass() {
+  if (!outputStatusState?.has_target && !outputStatusState?.has_sent) return 'out-est';
+  if (!outputStatusState?.last_write_ok && outputStatusState?.has_target) return 'out-fail';
+  if (outputStatusState?.has_sent && outputStatusState?.last_write_ok) return 'out-ok';
+  return 'out-pending';
 }
 
 // ── Chart ─────────────────────────────────────────────────────────────────────
