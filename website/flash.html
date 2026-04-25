@@ -85,7 +85,7 @@
                         Compact and inexpensive with 4 MB flash. The most popular choice for a DIY build.
                     </p>
                 </div>
-                <esp-web-install-button manifest="./releases/latest/manifest-supermini.json">
+                <esp-web-install-button id="superminiInstaller" manifest="./releases/latest/manifest-supermini.json">
                     <button slot="activate" class="flash-button text-white font-bold py-4 px-8 rounded-lg text-lg w-full">
                         📥 Install Firmware
                     </button>
@@ -107,7 +107,7 @@
                         8 MB flash and 8 MB PSRAM. Great if you want extra headroom for future features.
                     </p>
                 </div>
-                <esp-web-install-button manifest="./releases/latest/manifest-xiao.json">
+                <esp-web-install-button id="xiaoInstaller" manifest="./releases/latest/manifest-xiao.json">
                     <button slot="activate" class="flash-button text-white font-bold py-4 px-8 rounded-lg text-lg w-full">
                         📥 Install Firmware
                     </button>
@@ -237,6 +237,11 @@
                     document.getElementById('version-info').textContent = rel.tag_name;
                     document.getElementById('release-date').textContent =
                         'Released ' + new Date(rel.published_at).toLocaleDateString();
+                    const cacheKey = encodeURIComponent(rel.tag_name);
+                    document.getElementById('superminiInstaller')
+                        ?.setAttribute('manifest', `./releases/latest/manifest-supermini.json?v=${cacheKey}`);
+                    document.getElementById('xiaoInstaller')
+                        ?.setAttribute('manifest', `./releases/latest/manifest-xiao.json?v=${cacheKey}`);
                 }
             } catch {
                 document.getElementById('version-info').textContent = '—';

@@ -12,6 +12,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -291,3 +293,14 @@ jobs:
         git add website/releases/latest/
         git commit -m "Update flash binaries and manifests for v${{ steps.version.outputs.VERSION }}"
         git push origin master
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v5
+
+    - name: Upload website
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: website/
+
+    - name: Deploy GitHub Pages
+      uses: actions/deploy-pages@v4
