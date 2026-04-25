@@ -98,6 +98,20 @@ jobs:
     - name: Generate manifests
       run: |
         VERSION=${{ steps.version.outputs.VERSION }}
+        BOOT_APP=$(find ~/.platformio -name "boot_app0.bin" | head -1)
+
+        cp arduino/.pio/build/supermini/bootloader.bin  k7controller-supermini-bootloader-v${VERSION}.bin
+        cp arduino/.pio/build/supermini/partitions.bin  k7controller-supermini-partitions-v${VERSION}.bin
+        cp "$BOOT_APP"                                  k7controller-supermini-bootapp-v${VERSION}.bin
+        cp arduino/.pio/build/supermini/firmware.bin    k7controller-supermini-firmware-v${VERSION}.bin
+        cp arduino/.pio/build/supermini/littlefs.bin    k7controller-supermini-littlefs-v${VERSION}.bin
+
+        cp arduino/.pio/build/xiao/bootloader.bin       k7controller-xiao-bootloader-v${VERSION}.bin
+        cp arduino/.pio/build/xiao/partitions.bin       k7controller-xiao-partitions-v${VERSION}.bin
+        cp "$BOOT_APP"                                  k7controller-xiao-bootapp-v${VERSION}.bin
+        cp arduino/.pio/build/xiao/firmware.bin         k7controller-xiao-firmware-v${VERSION}.bin
+        cp arduino/.pio/build/xiao/littlefs.bin         k7controller-xiao-littlefs-v${VERSION}.bin
+
         cat > manifest-supermini.json << EOF
         {
           "name": "K7 LED Controller (SuperMini)",
@@ -107,7 +121,13 @@ jobs:
           "builds": [
             {
               "chipFamily": "ESP32-S3",
-              "parts": [{ "path": "k7controller-supermini-v${VERSION}.bin", "offset": 0 }]
+              "parts": [
+                { "path": "k7controller-supermini-bootloader-v${VERSION}.bin", "offset": 0 },
+                { "path": "k7controller-supermini-partitions-v${VERSION}.bin", "offset": 32768 },
+                { "path": "k7controller-supermini-bootapp-v${VERSION}.bin", "offset": 57344 },
+                { "path": "k7controller-supermini-firmware-v${VERSION}.bin", "offset": 65536 },
+                { "path": "k7controller-supermini-littlefs-v${VERSION}.bin", "offset": 3145728 }
+              ]
             }
           ]
         }
@@ -121,7 +141,13 @@ jobs:
           "builds": [
             {
               "chipFamily": "ESP32-S3",
-              "parts": [{ "path": "k7controller-xiao-v${VERSION}.bin", "offset": 0 }]
+              "parts": [
+                { "path": "k7controller-xiao-bootloader-v${VERSION}.bin", "offset": 0 },
+                { "path": "k7controller-xiao-partitions-v${VERSION}.bin", "offset": 32768 },
+                { "path": "k7controller-xiao-bootapp-v${VERSION}.bin", "offset": 57344 },
+                { "path": "k7controller-xiao-firmware-v${VERSION}.bin", "offset": 65536 },
+                { "path": "k7controller-xiao-littlefs-v${VERSION}.bin", "offset": 3145728 }
+              ]
             }
           ]
         }
@@ -134,6 +160,16 @@ jobs:
         path: |
           k7controller-supermini-v${{ steps.version.outputs.VERSION }}.bin
           k7controller-xiao-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-supermini-bootloader-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-supermini-partitions-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-supermini-bootapp-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-supermini-firmware-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-supermini-littlefs-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-xiao-bootloader-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-xiao-partitions-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-xiao-bootapp-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-xiao-firmware-v${{ steps.version.outputs.VERSION }}.bin
+          k7controller-xiao-littlefs-v${{ steps.version.outputs.VERSION }}.bin
           manifest-supermini.json
           manifest-xiao.json
         retention-days: 90
@@ -204,8 +240,7 @@ jobs:
         rm -f website/releases/latest/k7controller-*.bin
 
         # Copy new binaries and manifests
-        cp "artifacts/k7controller-supermini-v${VERSION}.bin" "website/releases/latest/k7controller-supermini-v${VERSION}.bin"
-        cp "artifacts/k7controller-xiao-v${VERSION}.bin"      "website/releases/latest/k7controller-xiao-v${VERSION}.bin"
+        cp artifacts/k7controller-*.bin website/releases/latest/
 
         cat > website/releases/latest/manifest-supermini.json << EOF
         {
@@ -216,7 +251,13 @@ jobs:
           "builds": [
             {
               "chipFamily": "ESP32-S3",
-              "parts": [{ "path": "k7controller-supermini-v${VERSION}.bin", "offset": 0 }]
+              "parts": [
+                { "path": "k7controller-supermini-bootloader-v${VERSION}.bin", "offset": 0 },
+                { "path": "k7controller-supermini-partitions-v${VERSION}.bin", "offset": 32768 },
+                { "path": "k7controller-supermini-bootapp-v${VERSION}.bin", "offset": 57344 },
+                { "path": "k7controller-supermini-firmware-v${VERSION}.bin", "offset": 65536 },
+                { "path": "k7controller-supermini-littlefs-v${VERSION}.bin", "offset": 3145728 }
+              ]
             }
           ]
         }
@@ -231,7 +272,13 @@ jobs:
           "builds": [
             {
               "chipFamily": "ESP32-S3",
-              "parts": [{ "path": "k7controller-xiao-v${VERSION}.bin", "offset": 0 }]
+              "parts": [
+                { "path": "k7controller-xiao-bootloader-v${VERSION}.bin", "offset": 0 },
+                { "path": "k7controller-xiao-partitions-v${VERSION}.bin", "offset": 32768 },
+                { "path": "k7controller-xiao-bootapp-v${VERSION}.bin", "offset": 57344 },
+                { "path": "k7controller-xiao-firmware-v${VERSION}.bin", "offset": 65536 },
+                { "path": "k7controller-xiao-littlefs-v${VERSION}.bin", "offset": 3145728 }
+              ]
             }
           ]
         }
