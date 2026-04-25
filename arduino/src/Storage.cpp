@@ -7,6 +7,9 @@ static const char* USER_FILES[] = {
     CONFIG_FILE,
     PROFILES_FILE,
     LUNAR_FILE,
+    SIESTA_FILE,
+    ACCLIMATION_FILE,
+    SEASONAL_FILE,
     STATE_FILE,
 };
 

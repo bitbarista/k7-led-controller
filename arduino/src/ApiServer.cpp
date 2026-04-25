@@ -87,15 +87,18 @@ static void buildStateDoc(JsonDocument& doc) {
     doc["ramp"]              = gRampActive.load();
     doc["lunar"]             = gLunarActive.load() && !gLunarStopped.load();
     doc["master_brightness"] = gMasterBrightness;
+    doc["schedule_shift_minutes"] = gScheduleShiftMinutes;
     doc["feed_duration"]     = gFeedDuration;
     doc["feed_intensity"]    = gFeedIntensity;
+    doc["maintenance_duration"]  = gMaintenanceDuration;
+    doc["maintenance_intensity"] = gMaintenanceIntensity;
     doc["auto_mode"]         = gLampAutoMode;
     doc["active_preset"]     = gActivePreset;
 
     auto schedArr = doc["schedule"].to<JsonArray>();
     for (int h = 0; h < K7_SLOTS; h++) {
         auto row = schedArr.add<JsonArray>();
-        for (int c = 0; c < 8; c++) row.add(gLastSchedule[h][c]);
+        for (int c = 0; c < 8; c++) row.add(gBaseSchedule[h][c]);
     }
     auto manArr = doc["manual"].to<JsonArray>();
     for (int i = 0; i < K7_CHANNELS; i++) manArr.add(gLastManual[i]);
@@ -121,6 +124,234 @@ static void applyLunarDoc(JsonVariantConst src) {
     if (src["max_intensity"].is<int>())       gLunarConfig.maxIntensity = max(1, min(100, src["max_intensity"].as<int>()));
     if (src["day_threshold"].is<int>())       gLunarConfig.dayThreshold = max(0, min(100, src["day_threshold"].as<int>()));
     if (src["track_moonrise"].is<bool>())     gLunarConfig.trackMoonrise = src["track_moonrise"];
+}
+
+static void buildAcclimationDoc(JsonDocument& doc) {
+    time_t now = time(nullptr);
+    int currentPct = acclimationPercentNow(now);
+    int elapsedDays = 0;
+    if (gAcclimationConfig.startEpoch > 0 && now > (time_t)gAcclimationConfig.startEpoch)
+        elapsedDays = (int)((now - (time_t)gAcclimationConfig.startEpoch) / 86400);
+    int daysRemaining = max(0, gAcclimationConfig.durationDays - elapsedDays);
+    doc["enabled"]        = gAcclimationConfig.enabled;
+    doc["start_percent"]  = gAcclimationConfig.startPercent;
+    doc["duration_days"]  = gAcclimationConfig.durationDays;
+    doc["start_epoch"]    = (uint32_t)gAcclimationConfig.startEpoch;
+    doc["current_percent"] = currentPct;
+    doc["days_remaining"] = daysRemaining;
+}
+
+static bool applyAcclimationDoc(JsonVariantConst src) {
+    bool enabled = gAcclimationConfig.enabled;
+    int startPercent = gAcclimationConfig.startPercent;
+    int durationDays = gAcclimationConfig.durationDays;
+    uint32_t startEpoch = gAcclimationConfig.startEpoch;
+
+    if (src["enabled"].is<bool>())       enabled = src["enabled"];
+    if (src["start_percent"].is<int>())  startPercent = max(1, min(100, src["start_percent"].as<int>()));
+    if (src["duration_days"].is<int>())  durationDays = max(1, min(180, src["duration_days"].as<int>()));
+    if (src["start_epoch"].is<unsigned long>()) startEpoch = src["start_epoch"].as<unsigned long>();
+    if (enabled && (!gAcclimationConfig.enabled || src["start_percent"].is<int>() || src["duration_days"].is<int>()))
+        startEpoch = (uint32_t)time(nullptr);
+
+    gAcclimationConfig.enabled = enabled;
+    gAcclimationConfig.startPercent = startPercent;
+    gAcclimationConfig.durationDays = durationDays;
+    gAcclimationConfig.startEpoch = startEpoch;
+    return true;
+}
+
+static void buildSeasonalDoc(JsonDocument& doc) {
+    doc["enabled"]            = gSeasonalConfig.enabled;
+    doc["max_shift_minutes"]  = gSeasonalConfig.maxShiftMinutes;
+    doc["current_shift_minutes"] = seasonalShiftMinutesNow();
+}
+
+static bool applySeasonalDoc(JsonVariantConst src) {
+    if (src["enabled"].is<bool>()) gSeasonalConfig.enabled = src["enabled"];
+    if (src["max_shift_minutes"].is<int>())
+        gSeasonalConfig.maxShiftMinutes = max(0, min(180, src["max_shift_minutes"].as<int>()));
+    return true;
+}
+
+static void buildMaintenanceDoc(JsonDocument& doc) {
+    doc["active"]    = gMaintenanceActive.load();
+    doc["remaining"] = maintenanceSecondsRemaining();
+    doc["duration"]  = gMaintenanceDuration;
+    doc["intensity"] = gMaintenanceIntensity;
+}
+
+static void addWarning(JsonArray arr, const char* level, const char* code, const String& message) {
+    auto item = arr.add<JsonObject>();
+    item["level"] = level;
+    item["code"] = code;
+    item["message"] = message;
+}
+
+static void buildWarningsDoc(JsonDocument& doc) {
+    auto items = doc["items"].to<JsonArray>();
+    const int sampleStep = 15;
+    int litSamples = 0;
+    int peakSamples = 0;
+    int peakTotal = 0;
+    int peakChannel = 0;
+    bool darkFlags[1440 / sampleStep] = {};
+    int sampleIndex = 0;
+
+    for (int mins = 0; mins < 1440; mins += sampleStep) {
+        uint8_t ch[K7_CHANNELS];
+        interpolateChannels(gLastSchedule, mins / 60, mins % 60, ch);
+        applyMasterBrightness(ch);
+        int total = 0;
+        int maxCh = 0;
+        for (int i = 0; i < K7_CHANNELS; i++) {
+            total += ch[i];
+            maxCh = max(maxCh, (int)ch[i]);
+        }
+        peakTotal = max(peakTotal, total);
+        peakChannel = max(peakChannel, maxCh);
+        sampleIndex++;
+    }
+
+    const int numSamples = sampleIndex;
+    const int darkMaxChannel = max(3, (int)roundf(peakChannel * 0.08f));
+    const int darkMaxTotal = max(8, (int)roundf(peakTotal * 0.08f));
+    const int daylightMinChannel = max(12, (int)roundf(peakChannel * 0.18f));
+    const int daylightMinTotal = max(24, (int)roundf(peakTotal * 0.18f));
+    int darkRun = 0;
+    int maxDarkRun = 0;
+
+    for (int i = 0; i < numSamples; i++) {
+        int mins = i * sampleStep;
+        uint8_t ch[K7_CHANNELS];
+        interpolateChannels(gLastSchedule, mins / 60, mins % 60, ch);
+        applyMasterBrightness(ch);
+        int total = 0;
+        int maxCh = 0;
+        for (int c = 0; c < K7_CHANNELS; c++) {
+            total += ch[c];
+            maxCh = max(maxCh, (int)ch[c]);
+        }
+        bool isDaylight = (maxCh >= daylightMinChannel) || (total >= daylightMinTotal);
+        bool isTrueDark = (maxCh <= darkMaxChannel) && (total <= darkMaxTotal);
+        darkFlags[i] = isTrueDark;
+        if (isDaylight) litSamples++;
+        if (maxCh >= 90) peakSamples++;
+    }
+
+    for (int i = 0; i < numSamples * 2; i++) {
+        if (darkFlags[i % numSamples]) {
+            darkRun += sampleStep;
+            maxDarkRun = max(maxDarkRun, darkRun);
+        } else {
+            darkRun = 0;
+        }
+    }
+
+    int photoperiodMins = litSamples * sampleStep;
+    if (maxDarkRun < 240) {
+        addWarning(items, "caution", "no_true_dark",
+                   "Main schedule has less than 4 hours of true darkness after ignoring low twilight levels relative to peak output. Lunar is ignored for this check.");
+    }
+    if (photoperiodMins > 14 * 60) {
+        addWarning(items, "check", "long_day",
+                   "Effective daylight period is longer than 14 hours, excluding low twilight levels.");
+    } else if (photoperiodMins > 0 && photoperiodMins < 6 * 60) {
+        addWarning(items, "check", "short_day",
+                   "Effective daylight period is shorter than 6 hours, excluding low twilight levels.");
+    }
+    if (peakSamples * sampleStep >= 240) {
+        addWarning(items, "check", "long_peak",
+                   "At least one channel stays at 90%+ for 4 hours or more.");
+    }
+
+    int acclimationPct = acclimationPercentNow();
+    int combinedPct = (int)roundf(acclimationPct * gMasterBrightness / 100.0f);
+    if (combinedPct < 60) {
+        addWarning(items, "info", "reduced_output",
+                   String("Acclimation and master brightness currently cap the schedule to about ") +
+                   combinedPct + "% of base output before Siesta/Lunar.");
+    }
+
+    if (items.size() == 0) {
+        addWarning(items, "ok", "none", "No obvious schedule issues detected.");
+    }
+    doc["count"] = items.size();
+}
+
+static void buildSiestaDoc(JsonDocument& doc) {
+    char effectiveStart[8], effectiveEnd[8];
+    siestaWindowNow(effectiveStart, effectiveEnd);
+    int baseStartMins = parseHHMM(gSiestaConfig.start);
+    if (baseStartMins < 0) baseStartMins = 13 * 60;
+    char baseEnd[8];
+    snprintf(baseEnd, sizeof(baseEnd), "%02d:%02d",
+             ((baseStartMins + gSiestaConfig.durationMins) / 60) % 24,
+             (baseStartMins + gSiestaConfig.durationMins) % 60);
+    int allowedStart = 0, allowedEnd = 0;
+    bool allowed = siestaTimeAllowed(parseHHMM(gSiestaConfig.start), gSiestaConfig.durationMins,
+                                     &allowedStart, &allowedEnd);
+    doc["enabled"]     = gSiestaConfig.enabled;
+    doc["start"]       = gSiestaConfig.start;
+    doc["end"]         = baseEnd;
+    doc["duration"]    = gSiestaConfig.durationMins;
+    doc["intensity"]   = gSiestaConfig.intensity;
+    doc["active"]      = siestaActiveNow();
+    doc["ramp_active"] = gRampActive.load();
+    doc["requires_ramp"] = true;
+    doc["effective_start"] = effectiveStart;
+    doc["effective_end"]   = effectiveEnd;
+    doc["schedule_shift_minutes"] = gScheduleShiftMinutes;
+    if (allowed || allowedStart != 0 || allowedEnd != 0) {
+        char allowedStartStr[8], allowedEndStr[8];
+        snprintf(allowedStartStr, sizeof(allowedStartStr), "%02d:%02d", allowedStart / 60, allowedStart % 60);
+        snprintf(allowedEndStr, sizeof(allowedEndStr), "%02d:%02d", allowedEnd / 60, allowedEnd % 60);
+        doc["allowed_start"] = allowedStartStr;
+        doc["allowed_end"]   = allowedEndStr;
+    }
+}
+
+static bool applySiestaDoc(JsonVariantConst src, String* errMsg = nullptr) {
+    bool enabled = gSiestaConfig.enabled;
+    char start[8];
+    strlcpy(start, gSiestaConfig.start, sizeof(start));
+    int duration = gSiestaConfig.durationMins;
+    int intensity = gSiestaConfig.intensity;
+
+    if (src["enabled"].is<bool>())      enabled   = src["enabled"];
+    if (src["start"].is<const char*>()) strlcpy(start, src["start"], sizeof(start));
+    if (src["duration"].is<int>())      duration  = max(1, min(720, src["duration"].as<int>()));
+    if (src["intensity"].is<int>())     intensity = max(1, min(100, src["intensity"].as<int>()));
+
+    if (enabled && !gRampActive.load()) {
+        if (errMsg) *errMsg = "Siesta requires Smooth Ramp";
+        return false;
+    }
+
+    int startMins = parseHHMM(start);
+    int allowedStart = 0, allowedEnd = 0;
+    if (enabled && !siestaTimeAllowed(startMins, duration, &allowedStart, &allowedEnd)) {
+        if (errMsg) {
+            char allowedStartStr[8], allowedEndStr[8];
+            snprintf(allowedStartStr, sizeof(allowedStartStr), "%02d:%02d", allowedStart / 60, allowedStart % 60);
+            snprintf(allowedEndStr, sizeof(allowedEndStr), "%02d:%02d", allowedEnd / 60, allowedEnd % 60);
+            *errMsg = "Choose a siesta window inside the schedule's high-light period";
+            if (allowedEnd > allowedStart) {
+                *errMsg += " (";
+                *errMsg += allowedStartStr;
+                *errMsg += "-";
+                *errMsg += allowedEndStr;
+                *errMsg += ")";
+            }
+        }
+        return false;
+    }
+
+    gSiestaConfig.enabled = enabled;
+    strlcpy(gSiestaConfig.start, start, sizeof(gSiestaConfig.start));
+    gSiestaConfig.durationMins = duration;
+    gSiestaConfig.intensity = intensity;
+    return true;
 }
 
 // ── Profiles helpers ──────────────────────────────────────────────────────────
@@ -171,22 +402,7 @@ void setupApiServer(WebServer& server) {
         // This also eliminates any race with a simultaneous /api/push: whichever
         // handler runs second will overwrite the first push in the queue, and the
         // lamp worker always processes the latest queued job.
-        float   mb = gMasterBrightness / 100.0f;
-        uint8_t scaledManual[K7_CHANNELS];
-        uint8_t scaledSched[K7_SLOTS][8];
-        for (int i = 0; i < K7_CHANNELS; i++) {
-            int v = (int)roundf(gLastManual[i] * mb);
-            scaledManual[i] = (uint8_t)(v > 100 ? 100 : v);
-        }
-        for (int h = 0; h < K7_SLOTS; h++) {
-            scaledSched[h][0] = gLastSchedule[h][0];
-            scaledSched[h][1] = gLastSchedule[h][1];
-            for (int c = 0; c < K7_CHANNELS; c++) {
-                int v = (int)roundf(gLastSchedule[h][2 + c] * mb);
-                scaledSched[h][2 + c] = (uint8_t)(v > 100 ? 100 : v);
-            }
-        }
-        queuePush(scaledManual, scaledSched, gLampAutoMode);
+        queueCurrentLampStatePush();
         JsonDocument resp;
         resp["value"] = gMasterBrightness;
         sendJson(server, resp);
@@ -244,6 +460,18 @@ void setupApiServer(WebServer& server) {
         buildLunarDoc(lunarDoc);
         backup["lunar"] = lunarDoc.as<JsonObject>();
 
+        JsonDocument siestaDoc;
+        buildSiestaDoc(siestaDoc);
+        backup["siesta"] = siestaDoc.as<JsonObject>();
+
+        JsonDocument acclimationDoc;
+        buildAcclimationDoc(acclimationDoc);
+        backup["acclimation"] = acclimationDoc.as<JsonObject>();
+
+        JsonDocument seasonalDoc;
+        buildSeasonalDoc(seasonalDoc);
+        backup["seasonal"] = seasonalDoc.as<JsonObject>();
+
         JsonDocument profilesDoc;
         loadProfiles(profilesDoc);
         backup["profiles"] = profilesDoc.as<JsonObject>();
@@ -265,6 +493,7 @@ void setupApiServer(WebServer& server) {
         bool rebootRecommended = false;
         bool applyPush = false;
         if (gFeedActive.load()) stopFeed();
+        if (gMaintenanceActive.load()) stopMaintenance();
 
         if (backup["config"].is<JsonObjectConst>()) {
             if (!saveConfigDoc(backup["config"].as<JsonVariantConst>())) {
@@ -277,6 +506,25 @@ void setupApiServer(WebServer& server) {
         if (backup["lunar"].is<JsonObjectConst>()) {
             applyLunarDoc(backup["lunar"].as<JsonVariantConst>());
             saveLunarConfig();
+        }
+
+        if (backup["acclimation"].is<JsonObjectConst>()) {
+            applyAcclimationDoc(backup["acclimation"].as<JsonVariantConst>());
+            saveAcclimationConfig();
+        }
+
+        if (backup["seasonal"].is<JsonObjectConst>()) {
+            applySeasonalDoc(backup["seasonal"].as<JsonVariantConst>());
+            saveSeasonalConfig();
+        }
+
+        if (backup["siesta"].is<JsonObjectConst>()) {
+            String err;
+            if (!applySiestaDoc(backup["siesta"].as<JsonVariantConst>(), &err)) {
+                sendError(server, err.c_str(), 400);
+                return;
+            }
+            saveSiestaConfig();
         }
 
         if (backup["profiles"].is<JsonObjectConst>()) {
@@ -295,7 +543,7 @@ void setupApiServer(WebServer& server) {
                 for (int h = 0; h < K7_SLOTS && h < (int)arr.size(); h++) {
                     JsonArrayConst row = arr[h].as<JsonArrayConst>();
                     for (int c = 0; c < 8 && c < (int)row.size(); c++)
-                        gLastSchedule[h][c] = (uint8_t)max(0, min(100, row[c].as<int>()));
+                        gBaseSchedule[h][c] = (uint8_t)max(0, min(100, row[c].as<int>()));
                 }
                 applyPush = true;
             }
@@ -307,14 +555,22 @@ void setupApiServer(WebServer& server) {
             }
             if (state["master_brightness"].is<int>())
                 gMasterBrightness = max(0, min(200, state["master_brightness"].as<int>()));
+            if (state["schedule_shift_minutes"].is<int>())
+                gScheduleShiftMinutes = max(-720, min(720, state["schedule_shift_minutes"].as<int>()));
             if (state["feed_duration"].is<int>())
                 gFeedDuration = max(1, min(60, state["feed_duration"].as<int>()));
             if (state["feed_intensity"].is<int>())
                 gFeedIntensity = max(1, min(100, state["feed_intensity"].as<int>()));
+            if (state["maintenance_duration"].is<int>())
+                gMaintenanceDuration = max(1, min(180, state["maintenance_duration"].as<int>()));
+            if (state["maintenance_intensity"].is<int>())
+                gMaintenanceIntensity = max(1, min(100, state["maintenance_intensity"].as<int>()));
             if (state["auto_mode"].is<bool>())
                 gLampAutoMode = state["auto_mode"];
             if (state["active_preset"].is<const char*>())
                 strlcpy(gActivePreset, state["active_preset"], sizeof(gActivePreset));
+
+            rebuildEffectiveSchedule();
 
             if (state["ramp"].is<bool>()) {
                 if (state["ramp"].as<bool>()) startRamp();
@@ -334,7 +590,7 @@ void setupApiServer(WebServer& server) {
         }
 
         if (applyPush)
-            queuePush(gLastManual, gLastSchedule, gLampAutoMode);
+            queueCurrentLampStatePush();
 
         JsonDocument resp;
         resp["ok"] = true;
@@ -350,6 +606,9 @@ void setupApiServer(WebServer& server) {
             time_t ts = (time_t)(doc["timestamp"].as<long long>() / 1000);
             struct timeval tv = {ts, 0};
             settimeofday(&tv, nullptr);
+            rebuildEffectiveSchedule();
+            if (!gFeedActive && !gRampActive && gLampAutoMode)
+                queueCurrentLampStatePush();
         }
         sendOk(server);
     });
@@ -362,16 +621,24 @@ void setupApiServer(WebServer& server) {
         doc["name"]          = gLampName;
         doc["mode"]          = gLampAutoMode ? "auto" : "manual";
         doc["active_preset"] = gActivePreset;
+        doc["schedule_shift_minutes"] = gScheduleShiftMinutes;
         auto schedArr = doc["schedule"].to<JsonArray>();
         for (int h = 0; h < K7_SLOTS; h++) {
             auto row = schedArr.add<JsonArray>();
-            row.add(gLastSchedule[h][0]);
-            row.add(gLastSchedule[h][1]);
+            row.add(gBaseSchedule[h][0]);
+            row.add(gBaseSchedule[h][1]);
             for (int c = 0; c < K7_CHANNELS; c++)
-                row.add(gLastSchedule[h][2+c]);
+                row.add(gBaseSchedule[h][2+c]);
         }
         auto manArr = doc["manual"].to<JsonArray>();
         for (int i = 0; i < K7_CHANNELS; i++) manArr.add(gLastManual[i]);
+        sendJson(server, doc);
+    });
+
+    // ── /api/warnings/status ─────────────────────────────────────────────────
+    server.on("/api/warnings/status", HTTP_GET, [&server]() {
+        JsonDocument doc;
+        buildWarningsDoc(doc);
         sendJson(server, doc);
     });
 
@@ -401,32 +668,18 @@ void setupApiServer(WebServer& server) {
 
         String modeStr    = doc["mode"] | "auto";
         bool userAutoMode = (modeStr != "manual");
+        if (doc["schedule_shift_minutes"].is<int>())
+            gScheduleShiftMinutes = max(-720, min(720, doc["schedule_shift_minutes"].as<int>()));
 
         // Store unscaled base; do NOT apply MB here
-        memcpy(gLastSchedule, sched,  sizeof(sched));
+        memcpy(gBaseSchedule, sched,  sizeof(sched));
         memcpy(gLastManual,   manual, sizeof(manual));
         gLampAutoMode = userAutoMode;
         if (doc["active_preset"].is<const char*>())
             strlcpy(gActivePreset, doc["active_preset"], sizeof(gActivePreset));
+        rebuildEffectiveSchedule();
         saveEffectState();
-
-        // Scale by current MB for the lamp push
-        float   mb = gMasterBrightness / 100.0f;
-        uint8_t scaledManual[K7_CHANNELS];
-        uint8_t scaledSched[K7_SLOTS][8];
-        for (int i = 0; i < K7_CHANNELS; i++) {
-            int v = (int)roundf(manual[i] * mb);
-            scaledManual[i] = (uint8_t)(v > 100 ? 100 : v);
-        }
-        for (int h = 0; h < K7_SLOTS; h++) {
-            scaledSched[h][0] = sched[h][0];
-            scaledSched[h][1] = sched[h][1];
-            for (int c = 0; c < K7_CHANNELS; c++) {
-                int v = (int)roundf(sched[h][2 + c] * mb);
-                scaledSched[h][2 + c] = (uint8_t)(v > 100 ? 100 : v);
-            }
-        }
-        queuePush(scaledManual, scaledSched, userAutoMode);
+        queueCurrentLampStatePush();
         sendOk(server);
     });
 
@@ -503,7 +756,15 @@ void setupApiServer(WebServer& server) {
     });
     server.on("/api/ramp/stop", HTTP_POST, [&server]() {
         stopRamp();
+        if (gSiestaConfig.enabled) {
+            gSiestaConfig.enabled = false;
+            saveSiestaConfig();
+        }
         saveEffectState();
+        sendOk(server);
+    });
+    server.on("/api/ramp/tick", HTTP_POST, [&server]() {
+        if (gRampActive.load()) queueCurrentLampStatePush();
         sendOk(server);
     });
 
@@ -530,6 +791,101 @@ void setupApiServer(WebServer& server) {
     server.on("/api/feed/stop", HTTP_POST, [&server]() {
         stopFeed();
         sendOk(server);
+    });
+
+    // ── /api/maintenance/* ───────────────────────────────────────────────────
+    server.on("/api/maintenance/status", HTTP_GET, [&server]() {
+        JsonDocument doc;
+        buildMaintenanceDoc(doc);
+        sendJson(server, doc);
+    });
+    server.on("/api/maintenance/start", HTTP_POST, [&server]() {
+        JsonDocument doc;
+        deserializeJson(doc, server.arg("plain"));
+        if (doc["duration"].is<int>())
+            gMaintenanceDuration = max(1, min(180, doc["duration"].as<int>()));
+        if (doc["intensity"].is<int>())
+            gMaintenanceIntensity = max(1, min(100, doc["intensity"].as<int>()));
+        startMaintenance();
+        saveEffectState();
+        sendOk(server);
+    });
+    server.on("/api/maintenance/stop", HTTP_POST, [&server]() {
+        stopMaintenance();
+        sendOk(server);
+    });
+
+    // ── /api/siesta/* ─────────────────────────────────────────────────────────
+    server.on("/api/siesta/status", HTTP_GET, [&server]() {
+        JsonDocument doc;
+        buildSiestaDoc(doc);
+        sendJson(server, doc);
+    });
+    server.on("/api/siesta/schedule", HTTP_POST, [&server]() {
+        JsonDocument doc;
+        deserializeJson(doc, server.arg("plain"));
+        String err;
+        if (!applySiestaDoc(doc.as<JsonVariantConst>(), &err)) {
+            sendError(server, err.c_str(), 400);
+            return;
+        }
+        saveSiestaConfig();
+        if (!gFeedActive && !gRampActive) {
+            time_t now = time(nullptr);
+            struct tm* t = localtime(&now);
+            uint8_t ch[K7_CHANNELS];
+            interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
+            applySiestaDimming(ch);
+            applyMasterBrightness(ch);
+            bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
+                           && lunarWindowActiveNow()
+                           && lunarScheduleAllowsNow();
+            if (lunarOn) applyLunarOverlay(ch);
+            withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+        }
+        JsonDocument resp;
+        buildSiestaDoc(resp);
+        sendJson(server, resp);
+    });
+
+    // ── /api/acclimation/* ───────────────────────────────────────────────────
+    server.on("/api/acclimation/status", HTTP_GET, [&server]() {
+        JsonDocument doc;
+        buildAcclimationDoc(doc);
+        sendJson(server, doc);
+    });
+    server.on("/api/acclimation/config", HTTP_POST, [&server]() {
+        JsonDocument doc;
+        deserializeJson(doc, server.arg("plain"));
+        applyAcclimationDoc(doc.as<JsonVariantConst>());
+        saveAcclimationConfig();
+        rebuildEffectiveSchedule();
+        saveEffectState();
+        if (!gFeedActive && !gRampActive && gLampAutoMode)
+            queueCurrentLampStatePush();
+        JsonDocument resp;
+        buildAcclimationDoc(resp);
+        sendJson(server, resp);
+    });
+
+    // ── /api/seasonal/* ──────────────────────────────────────────────────────
+    server.on("/api/seasonal/status", HTTP_GET, [&server]() {
+        JsonDocument doc;
+        buildSeasonalDoc(doc);
+        sendJson(server, doc);
+    });
+    server.on("/api/seasonal/config", HTTP_POST, [&server]() {
+        JsonDocument doc;
+        deserializeJson(doc, server.arg("plain"));
+        applySeasonalDoc(doc.as<JsonVariantConst>());
+        saveSeasonalConfig();
+        rebuildEffectiveSchedule();
+        saveEffectState();
+        if (!gFeedActive && !gRampActive && gLampAutoMode)
+            queueCurrentLampStatePush();
+        JsonDocument resp;
+        buildSeasonalDoc(resp);
+        sendJson(server, resp);
     });
 
     // ── /api/lunar/* ──────────────────────────────────────────────────────────

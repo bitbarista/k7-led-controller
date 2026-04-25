@@ -264,6 +264,11 @@
           <div class="feature-title">Feed mode</div>
           <div class="feature-desc">Timed white boost for feeding, adjustable brightness</div>
         </div>
+        <div class="feature-item">
+          <div class="feature-icon">🛠</div>
+          <div class="feature-title">Maintenance mode</div>
+          <div class="feature-desc">Timed inspection light for tank work with automatic timeout</div>
+        </div>
       </div>
     </div>
 
@@ -400,6 +405,26 @@
         <div class="usage-title">Feed mode</div>
         <div class="usage-desc">Temporarily boosts white lighting for feeding. Tap <strong>Feed mode</strong> to start a countdown timer — the lamp returns to its normal schedule when it expires. Use the ⚙ settings to set the duration (1–60 min, default 15) and white brightness (1–100%, default 80%). A quick press of the <strong>BOOT</strong> button on the board also toggles feed mode.</div>
       </div>
+
+      <div class="usage-item">
+        <div class="usage-title">Maintenance mode</div>
+        <div class="usage-desc">Temporarily switches the lamp to a brighter, more balanced inspection light so you can work in the tank more easily. Tap <strong>Maintenance</strong> to start a countdown timer, then let it expire or tap again to stop it early. Use the ⚙ settings to choose the duration (1–180 min, default 30) and overall profile intensity (1–100%, default 70%). Starting Maintenance mode automatically stops Feed mode, and vice versa.</div>
+      </div>
+
+      <div class="usage-item">
+        <div class="usage-title">Acclimation and Seasonal Shift</div>
+        <div class="usage-desc"><strong>Acclimation</strong> starts the whole schedule dimmer, then recovers back to 100% over the number of days you choose. <strong>Seasonal Shift</strong> moves the whole photoperiod earlier and later across the year without changing the shape of the day. Both modifiers change the real output shown in the controller's <strong>Effective Today</strong> chart view.</div>
+      </div>
+
+      <div class="usage-item">
+        <div class="usage-title">Backups and saved profiles</div>
+        <div class="usage-desc">Use <strong>Export Backup</strong> to download your controller settings, saved profiles, schedule, and lighting options as one JSON file. <strong>Import Backup</strong> restores them later. Saved profiles and settings now live in a protected data area on the controller, so normal firmware updates and web UI flashes do not wipe them. A full erase or factory reset still clears everything.</div>
+      </div>
+
+      <div class="usage-item">
+        <div class="usage-title">Effective Today and Checks</div>
+        <div class="usage-desc">The chart can show either your editable base schedule or <strong>Effective Today</strong>, which includes seasonal shift, acclimation, siesta, lunar limits, and master brightness. The <strong>Checks</strong> panel warns about unusual schedules, but built-in practical reef presets should normally stay clear unless you have changed something significant.</div>
+      </div>
     </div>
 
     <!-- Troubleshooting -->
@@ -424,6 +449,11 @@
       <div class="trouble-item">
         <div class="trouble-q">I updated firmware but the built-in presets still look the same</div>
         <div class="trouble-a">Firmware updates do not overwrite an older schedule already saved on the controller. Reselect the built-in preset you want (for example <strong>Mixed Reef</strong>) and push it once to load the latest preset definition into the controller and the lamp.</div>
+      </div>
+
+      <div class="trouble-item">
+        <div class="trouble-q">I flashed an update and expected my saved profiles to disappear, but they are still there</div>
+        <div class="trouble-a">That is now the intended behaviour. Saved profiles and controller settings are stored separately from the web UI files, so normal firmware updates and filesystem flashes preserve them. Use <strong>Export Backup</strong> before experimenting anyway, and use a factory reset only if you intentionally want to wipe everything.</div>
       </div>
 
       <div class="trouble-item">

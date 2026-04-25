@@ -23,6 +23,8 @@
   --tooltip-text:   #c9d1d9;
   --nowline:        rgba(220,160,20,0.85);
   --nowline-label:  rgba(220,160,20,1);
+  --shiftline:      rgba(56,189,248,0.85);
+  --shiftline-label:rgba(56,189,248,1);
 }
 [data-theme="light"] {
   --bg:             #f6f8fa;
@@ -38,6 +40,8 @@
   --tooltip-text:   #1c2128;
   --nowline:        rgba(180,110,0,0.8);
   --nowline-label:  rgba(180,110,0,1);
+  --shiftline:      rgba(3,105,161,0.8);
+  --shiftline-label:rgba(3,105,161,1);
 }
 * { box-sizing: border-box; }
 body {
@@ -72,6 +76,13 @@ body {
 /* ── cards ── */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; color: var(--text); }
 .card-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.warn-list { display:flex; flex-direction:column; gap:6px; }
+.warn-item { border:1px solid var(--border); border-radius:8px; padding:7px 9px; font-size:0.76rem; line-height:1.35; background:var(--surface2); }
+.warn-item[data-level="caution"] { border-color: rgba(248,81,73,0.4); }
+.warn-item[data-level="check"] { border-color: rgba(210,153,34,0.4); }
+.warn-item[data-level="info"] { border-color: rgba(56,189,248,0.4); }
+.warn-item[data-level="ok"] { border-color: rgba(63,185,80,0.35); }
+.warn-level { font-size:0.68rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); margin-bottom:2px; }
 
 /* ── mode toggle (inside card) ── */
 .mode-row { display: flex; align-items: center; gap: 12px; }
@@ -83,6 +94,7 @@ body {
 .toggle-track.manual { background: #e1a141; }
 .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
 .toggle-switch input:checked ~ .toggle-thumb { transform: translateX(22px); }
+.mode-extra { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
 
 /* ── master / shift ── */
 .master-row { display: grid; grid-template-columns: 54px 1fr 42px; align-items: center; gap: 8px; }
@@ -95,18 +107,19 @@ body {
 .shift-btn:hover { background:var(--hover); }
 .shift-val { min-width:34px; text-align:center; font-size:0.82rem; font-variant-numeric:tabular-nums; }
 
-/* ── channel rows (dot + name + eye + slider + val) ── */
-.ch-row { display: grid; grid-template-columns: 14px 98px 22px 1fr 40px; align-items: center; gap: 7px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+/* ── channel rows (combined current + cap) ── */
+.ch-row { display:grid; grid-template-columns: 14px 92px 22px 1fr 40px; align-items:center; gap:7px; padding:7px 0; border-bottom: 1px solid var(--border); }
 .ch-row:last-child { border-bottom: none; }
 .ch-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
 .ch-name { font-size: 0.83rem; font-weight: 500; }
 .eye { background: transparent; border: none; cursor: pointer; color: var(--muted); font-size: 0.88rem; padding: 0; line-height: 1; }
 .eye.off { opacity: 0.22; }
+[data-theme="light"] .master-slider::-webkit-slider-thumb { background:#57606a; border-color:rgba(0,0,0,0.2); }
 .ch-slider { width:100%; height:6px; -webkit-appearance:none; appearance:none; border-radius:3px; outline:none; cursor:pointer; background:var(--surface2); }
 .ch-slider::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; cursor:pointer; border:2px solid rgba(255,255,255,0.3); }
 .ch-scale-val { text-align:right; font-size:0.8rem; font-variant-numeric:tabular-nums; color:var(--muted); }
 [data-theme="light"] .ch-slider::-webkit-slider-thumb { border-color:rgba(0,0,0,0.2); }
-[data-theme="light"] .master-slider::-webkit-slider-thumb { background:#57606a; border-color:rgba(0,0,0,0.2); }
+#chScaleBar { flex:1; min-height:0; padding-right:4px; }
 
 /* ── now bars ── */
 .now-bar-row { display: grid; grid-template-columns: 14px 1fr 1fr 38px; align-items: center; gap: 7px; padding: 4px 0; }
@@ -121,6 +134,13 @@ body {
   padding: 8px 12px 6px;
 }
 .chart-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; flex-shrink: 0; }
+.chart-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px; flex-shrink:0; }
+.chart-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+.chart-modes { display:flex; gap:6px; }
+.chart-mode-btn { background:var(--surface2); border:1px solid var(--border); color:var(--muted); border-radius:999px; padding:3px 10px; font-size:0.72rem; cursor:pointer; font-family:inherit; }
+.chart-mode-btn.active { color:var(--text); border-color:rgba(59,130,246,0.45); background:rgba(59,130,246,0.14); }
+.chart-shift { display:flex; align-items:center; gap:6px; }
+.chart-shift-label { font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); }
 .chart-canvas-wrap { flex: 1; min-height: 0; position: relative; }
 .chart-canvas-wrap canvas { position: absolute; inset: 0; }
 .color-strip { display: flex; height: 13px; border-radius: 4px; overflow: hidden; gap: 1px; margin-top: 5px; flex-shrink: 0; }
@@ -147,9 +167,17 @@ body {
 /* active states */
 .fx-row-wrap[data-fx="ramp"].active  .fx-tog { border-color:rgba(56,189,248,0.6);  background:rgba(56,189,248,0.14);  color:#38bdf8; }
 .fx-row-wrap[data-fx="feed"].active  .fx-tog { border-color:rgba(249,115,22,0.6);  background:rgba(249,115,22,0.14);  color:#f97316; }
+.fx-row-wrap[data-fx="maintenance"].active  .fx-tog { border-color:rgba(203,213,225,0.65);  background:rgba(203,213,225,0.12);  color:#e2e8f0; }
+.fx-row-wrap[data-fx="siesta"].active .fx-tog { border-color:rgba(56,189,248,0.6);  background:rgba(56,189,248,0.14);  color:#38bdf8; }
+.fx-row-wrap[data-fx="acclimation"].active .fx-tog { border-color:rgba(16,185,129,0.6);  background:rgba(16,185,129,0.14);  color:#10b981; }
+.fx-row-wrap[data-fx="seasonal"].active .fx-tog { border-color:rgba(234,179,8,0.6);  background:rgba(234,179,8,0.14);  color:#eab308; }
 .fx-row-wrap[data-fx="lunar"].active .fx-tog { border-color:rgba(99,102,241,0.6);  background:rgba(99,102,241,0.16);  color:#818cf8; }
 .fx-row-wrap[data-fx="ramp"].active  .fx-name { color:#38bdf8; }
 .fx-row-wrap[data-fx="feed"].active  .fx-name { color:#f97316; }
+.fx-row-wrap[data-fx="maintenance"].active  .fx-name { color:#e2e8f0; }
+.fx-row-wrap[data-fx="siesta"].active .fx-name { color:#38bdf8; }
+.fx-row-wrap[data-fx="acclimation"].active .fx-name { color:#10b981; }
+.fx-row-wrap[data-fx="seasonal"].active .fx-name { color:#eab308; }
 .fx-row-wrap[data-fx="lunar"].active .fx-name { color:#818cf8; }
 
 /* inline settings panel */
@@ -227,27 +255,31 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
         </label>
         <span class="mode-label active" id="lblAuto">Schedule</span>
       </div>
-    </div>
-
-    <!-- Master / Shift -->
-    <div class="card">
-      <div class="card-title">Master</div>
-      <div class="master-row">
-        <span class="master-lbl">Level</span>
-        <input type="range" id="masterSlider" class="master-slider" min="0" max="200" value="100" oninput="onMasterChange()">
-        <span class="master-value" id="masterVal">100%</span>
-      </div>
-      <div class="shift-row">
-        <span class="master-lbl">Shift</span>
-        <button class="shift-btn" onclick="changeShift(-1)">◀</button>
-        <span class="shift-val" id="shiftVal">+0h</span>
-        <button class="shift-btn" onclick="changeShift(+1)">▶</button>
+      <div class="mode-extra fx-row-wrap" data-fx="ramp" id="rampPill">
+        <div class="fx-row">
+          <div class="fx-info">
+            <div class="fx-name">≈ Smooth Ramp</div>
+            <div class="fx-sub" id="rampTick">Inactive</div>
+          </div>
+          <button class="fx-cog" id="rampCfgBtn" onclick="toggleFlyout('ramp')" title="Ramp info">⚙</button>
+          <button class="fx-tog" id="rampBtn" onclick="toggleRamp()" title="Enable smooth per-minute ramping">OFF</button>
+        </div>
+        <div class="fx-flyout" id="rampFlyout">
+          <div class="fx-flyout-row">
+            <span style="font-size:0.8rem;color:var(--muted)">Steps each channel once per minute to match the 24-hour schedule, smoothing abrupt brightness transitions. Last tick is shown below the name above.</span>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Channel brightness (eye + scale slider per channel) -->
     <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column">
       <div class="card-title">Channels</div>
+      <div class="master-row" style="margin-bottom:8px">
+        <span class="master-lbl">Master</span>
+        <input type="range" id="masterSlider" class="master-slider" min="0" max="200" value="100" oninput="onMasterChange()">
+        <span class="master-value" id="masterVal">100%</span>
+      </div>
       <div id="chScaleBar"></div>
       <div style="font-size:0.7rem;color:var(--muted);margin-top:6px">👁 show on chart · slider caps brightness</div>
     </div>
@@ -265,11 +297,31 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
 
     <!-- Auto: chart -->
     <div id="autoPanel">
-      <div class="chart-title">24-Hour Schedule · drag points to edit</div>
+      <div class="chart-top">
+        <div class="chart-title" id="chartTitle">24-Hour Schedule · drag points to edit</div>
+        <div class="chart-controls">
+          <div class="chart-shift">
+            <span class="chart-shift-label">Shift</span>
+            <button class="shift-btn" onclick="changeShift(-1)">◀</button>
+            <span class="shift-val" id="shiftVal">+0h</span>
+            <button class="shift-btn" onclick="changeShift(+1)">▶</button>
+          </div>
+          <div class="chart-modes">
+            <button class="chart-mode-btn active" id="chartBaseBtn" onclick="setChartMode('base')">Base</button>
+            <button class="chart-mode-btn" id="chartEffectiveBtn" onclick="setChartMode('effective')">Effective Today</button>
+          </div>
+        </div>
+      </div>
       <div class="chart-canvas-wrap">
         <canvas id="schedChart"></canvas>
       </div>
       <div class="color-strip" id="colorStrip"></div>
+    </div>
+
+    <!-- Checks -->
+    <div class="card" style="margin-top:10px">
+      <div class="card-title">Checks</div>
+      <div class="warn-list" id="warningsList"></div>
     </div>
 
     <!-- Manual: sliders -->
@@ -289,23 +341,6 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
     <!-- Effects -->
     <div class="card" style="flex:1;min-height:0;overflow-y:auto">
       <div class="card-title">Effects</div>
-
-      <!-- Smooth Ramp -->
-      <div class="fx-row-wrap" data-fx="ramp" id="rampPill">
-        <div class="fx-row">
-          <div class="fx-info">
-            <div class="fx-name">≈ Smooth Ramp</div>
-            <div class="fx-sub" id="rampTick">Inactive</div>
-          </div>
-          <button class="fx-cog" id="rampCfgBtn" onclick="toggleFlyout('ramp')" title="Ramp info">⚙</button>
-          <button class="fx-tog" id="rampBtn" onclick="toggleRamp()" title="Enable smooth per-minute ramping">OFF</button>
-        </div>
-        <div class="fx-flyout" id="rampFlyout">
-          <div class="fx-flyout-row">
-            <span style="font-size:0.8rem;color:var(--muted)">Steps each channel once per minute to match the 24-hour schedule, smoothing abrupt brightness transitions. Last tick is shown below the name above.</span>
-          </div>
-        </div>
-      </div>
 
       <!-- Feed mode -->
       <div class="fx-row-wrap" data-fx="feed" id="feedPill">
@@ -328,6 +363,120 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
             <input type="number" id="feedIntensity" class="lm-intensity" min="1" max="100" value="80" onchange="onFeedIntensityChange()">
             <span style="font-size:0.82rem;color:var(--muted)">%</span>
           </div>
+        </div>
+      </div>
+
+      <!-- Maintenance mode -->
+      <div class="fx-row-wrap" data-fx="maintenance" id="maintenancePill">
+        <div class="fx-row">
+          <div class="fx-info">
+            <div class="fx-name">🛠 Maintenance</div>
+            <div class="fx-sub" id="maintenanceSub">Off</div>
+          </div>
+          <button class="fx-cog" id="maintenanceCfgBtn" onclick="toggleFlyout('maintenance')" title="Maintenance settings">⚙</button>
+          <button class="fx-tog" id="maintenanceBtn" onclick="toggleMaintenance()" title="Temporarily switch to a balanced inspection light for tank work">OFF</button>
+        </div>
+        <div class="fx-flyout" id="maintenanceFlyout">
+          <div class="fx-flyout-row">
+            <span style="font-size:0.82rem;color:var(--muted)">Duration</span>
+            <input type="number" id="maintenanceDuration" class="lm-intensity" min="1" max="180" value="30" onchange="onMaintenanceDurationChange()">
+            <span style="font-size:0.82rem;color:var(--muted)">min</span>
+          </div>
+          <div class="fx-flyout-row">
+            <span style="font-size:0.82rem;color:var(--muted)">Profile intensity</span>
+            <input type="number" id="maintenanceIntensity" class="lm-intensity" min="1" max="100" value="70" onchange="onMaintenanceIntensityChange()">
+            <span style="font-size:0.82rem;color:var(--muted)">%</span>
+          </div>
+          <div class="fx-phase" id="maintenanceHint" style="margin-top:4px">Balanced inspection light with automatic timeout. Maintenance mode temporarily overrides Feed mode.</div>
+        </div>
+      </div>
+
+      <!-- Siesta -->
+      <div class="fx-row-wrap" data-fx="siesta" id="siestaPill">
+        <div class="fx-row">
+          <div class="fx-info">
+            <div class="fx-name">🌤 Siesta</div>
+            <div class="fx-sub" id="siestaSub">Off</div>
+          </div>
+          <button class="fx-cog" id="siestaCfgBtn" onclick="toggleFlyout('siesta')" title="Midday dimming settings">⚙</button>
+          <button class="fx-tog" id="siestaBtn" onclick="toggleSiesta()" title="Temporarily dim the schedule during the brightest part of the day">OFF</button>
+        </div>
+        <div class="fx-flyout" id="siestaFlyout">
+          <div class="fx-flyout-row">
+            <label class="ls-label" title="Auto-run a midday dimming period every day">
+              <input type="checkbox" id="siEnabled" onchange="onSiestaChange()"> Auto-schedule
+            </label>
+          </div>
+          <div class="ls-time-wrap" id="siTimeWrap" style="display:none">
+            <span style="min-width:92px">Base time</span>
+            <input type="time" id="siStart" class="time-input" onchange="onSiestaChange()" title="Siesta start">
+          </div>
+          <div class="fx-flyout-row" id="siDurationWrap" style="display:none">
+            <span style="font-size:0.82rem;color:var(--muted)">Duration</span>
+            <input type="number" id="siDuration" class="lm-intensity" min="15" max="480" step="15" value="90" onchange="onSiestaChange()">
+            <span style="font-size:0.82rem;color:var(--muted)">min</span>
+          </div>
+          <div class="fx-flyout-row" id="siIntensityWrap" style="display:none">
+            <span style="font-size:0.82rem;color:var(--muted)">Dim by</span>
+            <input type="number" id="siIntensity" class="lm-intensity" min="1" max="90" value="25" onchange="onSiestaChange()">
+            <span style="font-size:0.82rem;color:var(--muted)">%</span>
+          </div>
+          <div class="fx-phase" id="siHint" style="margin-top:4px"></div>
+        </div>
+      </div>
+
+      <!-- Acclimation -->
+      <div class="fx-row-wrap" data-fx="acclimation" id="acclimationPill">
+        <div class="fx-row">
+          <div class="fx-info">
+            <div class="fx-name">🪸 Acclimation</div>
+            <div class="fx-sub" id="acclimationSub">Off</div>
+          </div>
+          <button class="fx-cog" id="acclimationCfgBtn" onclick="toggleFlyout('acclimation')" title="Acclimation settings">⚙</button>
+          <button class="fx-tog" id="acclimationBtn" onclick="toggleAcclimation()" title="Reduce the full schedule, then recover gradually over days">OFF</button>
+        </div>
+        <div class="fx-flyout" id="acclimationFlyout">
+          <div class="fx-flyout-row">
+            <label class="ls-label">
+              <input type="checkbox" id="acEnabled" onchange="onAcclimationChange()"> Enable acclimation
+            </label>
+          </div>
+          <div class="fx-flyout-row">
+            <span style="font-size:0.82rem;color:var(--muted)">Start at</span>
+            <input type="number" id="acStartPercent" class="lm-intensity" min="1" max="100" value="70" onchange="onAcclimationChange()">
+            <span style="font-size:0.82rem;color:var(--muted)">%</span>
+          </div>
+          <div class="fx-flyout-row">
+            <span style="font-size:0.82rem;color:var(--muted)">Recover over</span>
+            <input type="number" id="acDurationDays" class="lm-intensity" min="1" max="180" value="21" onchange="onAcclimationChange()">
+            <span style="font-size:0.82rem;color:var(--muted)">days</span>
+          </div>
+          <div class="fx-phase" id="acHint" style="margin-top:4px"></div>
+        </div>
+      </div>
+
+      <!-- Seasonal Shift -->
+      <div class="fx-row-wrap" data-fx="seasonal" id="seasonalPill">
+        <div class="fx-row">
+          <div class="fx-info">
+            <div class="fx-name">🌤 Seasonal Shift</div>
+            <div class="fx-sub" id="seasonalSub">Off</div>
+          </div>
+          <button class="fx-cog" id="seasonalCfgBtn" onclick="toggleFlyout('seasonal')" title="Seasonal shift settings">⚙</button>
+          <button class="fx-tog" id="seasonalBtn" onclick="toggleSeasonal()" title="Move the whole photoperiod earlier and later across the year">OFF</button>
+        </div>
+        <div class="fx-flyout" id="seasonalFlyout">
+          <div class="fx-flyout-row">
+            <label class="ls-label">
+              <input type="checkbox" id="ssEnabled" onchange="onSeasonalChange()"> Enable seasonal shift
+            </label>
+          </div>
+          <div class="fx-flyout-row">
+            <span style="font-size:0.82rem;color:var(--muted)">Max shift</span>
+            <input type="number" id="ssMaxShift" class="lm-intensity" min="0" max="180" value="60" onchange="onSeasonalChange()">
+            <span style="font-size:0.82rem;color:var(--muted)">min</span>
+          </div>
+          <div class="fx-phase" id="ssHint" style="margin-top:4px"></div>
         </div>
       </div>
 
@@ -448,6 +597,13 @@ let channelBrightness = {};
 let manual   = [0,0,0,0,0,0];
 let chart    = null;
 let lunarState = null;
+let siestaState = null;
+let acclimationState = null;
+let seasonalState = null;
+let maintenanceState = null;
+let rampActiveState = false;
+let chartMode = 'base';
+let warningsState = null;
 let previewTimer = null;
 let presets       = {};
 let savedProfiles = {};
@@ -462,6 +618,18 @@ function setStatus(state, msg) {
 function setBusy(msg='Working…') { setStatus('busy', msg); }
 function setOk(msg)  { setStatus('ok',    msg); }
 function setErr(msg) { setStatus('error', msg); }
+
+function renderWarnings(d) {
+  warningsState = d;
+  const list = document.getElementById('warningsList');
+  if (!list) return;
+  const items = d?.items || [];
+  list.innerHTML = items.map(item => `
+    <div class="warn-item" data-level="${item.level || 'info'}">
+      <div class="warn-level">${item.level || 'info'}</div>
+      <div>${item.message || ''}</div>
+    </div>`).join('');
+}
 
 async function api(method, url, body) {
   const opts = { method, headers:{'Content-Type':'application/json'} };
@@ -516,11 +684,16 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   try {
-    const [s, rampStatus, masterData, feedStatus] = await Promise.all([
+    const [s, rampStatus, masterData, feedStatus, maintenanceStatus, siestaStatus, acclimationStatus, seasonalStatus, warnings] = await Promise.all([
       api('GET', '/api/state'),
       api('GET', '/api/ramp/status'),
       api('GET', '/api/master'),
       api('GET', '/api/feed/status'),
+      api('GET', '/api/maintenance/status'),
+      api('GET', '/api/siesta/status'),
+      api('GET', '/api/acclimation/status'),
+      api('GET', '/api/seasonal/status'),
+      api('GET', '/api/warnings/status'),
     ]);
     mode            = s.mode;
     activePresetKey = s.active_preset || '';
@@ -542,6 +715,12 @@ async function readFromDevice() {
       }
     }
     if (s.manual) manual = s.manual;
+    if (typeof s.schedule_shift_minutes === 'number') {
+      dayShift = ((Math.round(s.schedule_shift_minutes / 60) % 24) + 24) % 24;
+      const sv = document.getElementById('shiftVal');
+      if (sv) sv.textContent = shiftLabel();
+      localStorage.setItem('k7-dayShift', String(dayShift));
+    }
     updateChart();
     updateColorStrip();
     updateNowBars();
@@ -552,6 +731,11 @@ async function readFromDevice() {
       if (feedStatus.duration  != null) document.getElementById('feedDuration').value  = feedStatus.duration;
       if (feedStatus.intensity != null) document.getElementById('feedIntensity').value = feedStatus.intensity;
     }
+    applyMaintenanceUI(maintenanceStatus);
+    applySiestaUI(siestaStatus);
+    applyAcclimationUI(acclimationStatus);
+    applySeasonalUI(seasonalStatus);
+    renderWarnings(warnings);
   } catch(e) {
     setErr(e.message);
   } finally {
@@ -564,8 +748,7 @@ function buildPushBase() {
   const chs   = DEVICES[cfg.device].channels;
   const peaks = chs.map((_, ci) => Math.max(1, ...scheduleBase.map(row => row[2 + ci])));
   return Array.from({length: 24}, (_, h) => {
-    const srcH = ((h - dayShift) % 24 + 24) % 24;
-    const src  = scheduleBase[srcH];
+    const src  = scheduleBase[h];
     const r    = [h, src[1]];
     chs.forEach((ch, ci) => {
       if (hiddenChannels.has(ch)) { r.push(0); return; }
@@ -582,7 +765,13 @@ async function pushSchedule() {
   document.getElementById('pushBtn').disabled = true;
   try {
     const pushBase = buildPushBase();
-    await api('POST','/api/push', { manual, schedule: pushBase, mode, active_preset: activePresetKey });
+    await api('POST','/api/push', {
+      manual,
+      schedule: pushBase,
+      mode,
+      active_preset: activePresetKey,
+      schedule_shift_minutes: signedShiftMinutes(),
+    });
     setOk('Pushed successfully');
   } catch(e) {
     setErr(e.message);
@@ -595,7 +784,12 @@ async function pushSchedule() {
 async function saveManual() {
   setBusy('Saving…');
   try {
-    await api('POST','/api/push', { manual, schedule: scheduleBase, mode:'manual' });
+    await api('POST','/api/push', {
+      manual,
+      schedule: scheduleBase,
+      mode:'manual',
+      schedule_shift_minutes: signedShiftMinutes(),
+    });
     mode = 'manual';
     applyModeUI();
     setOk('Manual mode saved');
@@ -627,7 +821,7 @@ function clearSchedule() {
 function getHourColor(h) {
   let r = 0, g = 0, b = 0;
   DEVICES[cfg.device].channels.forEach((ch, ci) => {
-    const pct = schedule[h][2 + ci] / 100;
+    const pct = displayValueForHour(h, ci) / 100;
     const [lr, lg, lb] = LIGHT_RGB[ch];
     r += lr * pct; g += lg * pct; b += lb * pct;
   });
@@ -653,28 +847,14 @@ function updateNowBars() {
   const container = document.getElementById('nowBars');
   if (!container) return;
   const now   = new Date();
-  const hours = now.getHours() + now.getMinutes() / 60;
-  const h0    = Math.floor(hours);
-  const h1    = (h0 + 1) % 24;
-  const frac  = hours - h0;
+  const mins  = now.getHours() * 60 + now.getMinutes();
   const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const title = document.getElementById('nowTitle');
   if (title) title.textContent = `Right now · ${timeStr}`;
   const chs = DEVICES[cfg.device].channels;
-  let lunarFloor = 0, lunarWin = null;
-  if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
-    lunarFloor = lunarState.max_intensity * lunarState.illumination / 100;
-    lunarWin   = lunarWindow(lunarState);
-  }
   container.innerHTML = '';
   chs.forEach((ch, ci) => {
-    const v0 = schedule[h0][2 + ci];
-    const v1 = schedule[h1][2 + ci];
-    let v  = Math.round(v0 + frac * (v1 - v0));
-    if (lunarWin && lunarFloor > 0 && _hourInLunarWindow(h0, lunarWin.start, lunarWin.end)) {
-      if (ch === 'royal_blue') v = Math.max(v, Math.round(lunarFloor));
-      else if (ch === 'blue' && cfg.device !== 'k7mini') v = Math.max(v, Math.round(lunarFloor * 0.7));
-    }
+    const v = effectiveValueAtMins(mins, ci);
     const row = document.createElement('div');
     row.className = 'now-bar-row';
     row.innerHTML = `
@@ -691,7 +871,8 @@ const nowLinePlugin = {
   id: 'nowLine',
   afterDraw(chart) {
     const now   = new Date();
-    const hours = now.getHours() + now.getMinutes() / 60;
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const hours = nowMins / 60;
     const xs    = chart.scales.x;
     const ys    = chart.scales.y;
     const h  = Math.floor(hours);
@@ -707,6 +888,22 @@ const nowLinePlugin = {
     ctx.setLineDash([]);
     ctx.font = '600 11px system-ui,sans-serif'; ctx.fillStyle = cssVar('--nowline-label');
     ctx.textAlign = 'center'; ctx.fillText(label, x, ys.top - 5);
+    const shiftMins = signedShiftMinutes();
+    if (shiftMins !== 0) {
+      const shifted = _wrapMins(nowMins - shiftMins);
+      const shiftedHours = shifted / 60;
+      const sh = Math.floor(shiftedHours);
+      const sx1 = xs.getPixelForValue(sh);
+      const sx2 = sh < 23 ? xs.getPixelForValue(sh + 1) : sx1;
+      const sx = sx1 + (shiftedHours - sh) * (sx2 - sx1);
+      const shiftedLabel = `${String(Math.floor(shifted / 60)).padStart(2,'0')}:${String(shifted % 60).padStart(2,'0')}`;
+      ctx.beginPath();
+      ctx.moveTo(sx, ys.top); ctx.lineTo(sx, ys.bottom);
+      ctx.strokeStyle = cssVar('--shiftline'); ctx.lineWidth = 1.5; ctx.setLineDash([6,3]); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = cssVar('--shiftline-label');
+      ctx.fillText(shiftedLabel, sx, ys.top - 18);
+    }
     ctx.restore();
   }
 };
@@ -737,7 +934,41 @@ function toggleTheme() {
   updateChart();
 }
 
+function setChartMode(mode) {
+  chartMode = mode === 'effective' ? 'effective' : 'base';
+  document.getElementById('chartBaseBtn')?.classList.toggle('active', chartMode === 'base');
+  document.getElementById('chartEffectiveBtn')?.classList.toggle('active', chartMode === 'effective');
+  const title = document.getElementById('chartTitle');
+  if (title) title.textContent = chartMode === 'effective'
+    ? 'Effective Output Today · yellow = real time, blue = shifted schedule time'
+    : '24-Hour Schedule · drag points to edit';
+  localStorage.setItem('k7-chartMode', chartMode);
+  updateChart();
+  updateColorStrip();
+}
+
 function initChart() {
+  const dragDataConfig = {
+    round: 0, showTooltip: true, dragX: false,
+    onDrag: function(e, datasetIndex, index, value) {
+      if (chartMode !== 'base') return false;
+      const ds  = chart.data.datasets[datasetIndex];
+      if (!ds || !ds.channelKey) return value;
+      const ch   = ds.channelKey;
+      const chs  = DEVICES[cfg.device].channels;
+      const ci   = chs.indexOf(ch);
+      const cap  = channelBrightness[ch] ?? 100;
+      const m    = masterBrightness / 100;
+      const vmax = Math.min(100, Math.round(cap * m));
+      const v    = Math.max(0, Math.min(vmax, Math.round(value)));
+      schedule[index][2 + ci] = v;
+      const peak = Math.max(1, ...scheduleBase.filter((_,i)=>i!==index).map(row=>row[2+ci]));
+      scheduleBase[index][2 + ci] = (cap * m > 0) ? Math.min(100, Math.round(v * peak / (cap * m))) : 0;
+      updateColorStrip();
+      updateNowBars();
+      return v;
+    },
+  };
   const ctx = document.getElementById('schedChart').getContext('2d');
   chart = new Chart(ctx, {
     type: 'line',
@@ -754,48 +985,170 @@ function initChart() {
           borderWidth: 1,
           callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%` }
         },
-        dragData: {
-          round: 0, showTooltip: true, dragX: false,
-          onDrag: function(e, datasetIndex, index, value) {
-            const ds  = chart.data.datasets[datasetIndex];
-            if (!ds || !ds.channelKey) return value;
-            const ch   = ds.channelKey;
-            const chs  = DEVICES[cfg.device].channels;
-            const ci   = chs.indexOf(ch);
-            const cap  = channelBrightness[ch] ?? 100;
-            const m    = masterBrightness / 100;
-            const vmax = Math.min(100, Math.round(cap * m));
-            const v    = Math.max(0, Math.min(vmax, Math.round(value)));
-            schedule[index][2 + ci] = v;
-            const peak = Math.max(1, ...scheduleBase.filter((_,i)=>i!==index).map(row=>row[2+ci]));
-            scheduleBase[index][2 + ci] = (cap * m > 0) ? Math.min(100, Math.round(v * peak / (cap * m))) : 0;
-            updateColorStrip();
-            updateNowBars();
-            return v;
-          },
-        },
+        dragData: dragDataConfig,
       },
       scales: {
         x: { ticks:{ color:cssVar('--muted'), font:{size:11} }, grid:{ color:cssVar('--chart-grid') } },
-        y: { min:0, max:100,
-             ticks:{ color:cssVar('--muted'), font:{size:11}, callback: v=>v+'%' },
+        y: { min:0, max:105,
+             ticks:{ color:cssVar('--muted'), font:{size:11}, callback: v => v <= 100 ? v+'%' : '' },
              grid:{ color:cssVar('--chart-grid') } }
       },
       elements: { point:{ radius:4, hoverRadius:6, hitRadius:20 }, line:{ borderWidth:2 } },
     }
   });
+  chart._dragDataConfig = dragDataConfig;
 }
 
-function _hourInLunarWindow(h, start, end) {
-  const sH = parseInt(start.split(':')[0]);
-  const eH = parseInt(end.split(':')[0]);
-  if (sH <= eH) return h >= sH && h < eH;
-  return h >= sH || h < eH;
+function _minsInWindow(mins, start, end) {
+  const [sH, sM] = String(start || '00:00').split(':').map(Number);
+  const [eH, eM] = String(end || '00:00').split(':').map(Number);
+  const s = sH * 60 + sM;
+  const e = eH * 60 + eM;
+  if (s <= e) return mins >= s && mins < e;
+  return mins >= s || mins < e;
+}
+
+function _wrapMins(mins) {
+  mins %= 1440;
+  if (mins < 0) mins += 1440;
+  return mins;
+}
+
+function signedShiftHours() {
+  return dayShift <= 12 ? dayShift : dayShift - 24;
+}
+
+function signedShiftMinutes() {
+  return signedShiftHours() * 60;
+}
+
+function shiftLabel() {
+  const h = signedShiftHours();
+  return h === 0 ? '+0h' : h > 0 ? `+${h}h` : `${h}h`;
+}
+
+function siestaWindow(d) {
+  const localShiftMins = signedShiftMinutes();
+  const serverShiftMins = parseInt(d?.schedule_shift_minutes ?? localShiftMins) || 0;
+  const previewOffsetMins = localShiftMins - serverShiftMins;
+  if (d?.effective_start || d?.effective_end) {
+    const startRaw = d.effective_start || d.start || '13:00';
+    const endRaw = d.effective_end || d.end || '14:30';
+    if (previewOffsetMins === 0) {
+      return { start: startRaw, end: endRaw };
+    }
+    const startMins = _wrapMins(parseHHMM(startRaw) + previewOffsetMins);
+    const endMins = _wrapMins(parseHHMM(endRaw) + previewOffsetMins);
+    return {
+      start: `${String(Math.floor(startMins / 60)).padStart(2,'0')}:${String(startMins % 60).padStart(2,'0')}`,
+      end: `${String(Math.floor(endMins / 60)).padStart(2,'0')}:${String(endMins % 60).padStart(2,'0')}`,
+    };
+  }
+  const start = d?.start || '13:00';
+  const mins = parseInt(d?.duration ?? d?.duration_mins ?? 90) || 90;
+  const startTotal = _wrapMins(parseHHMM(start) + localShiftMins);
+  const endTotal = _wrapMins(startTotal + mins);
+  return {
+    start: `${String(Math.floor(startTotal / 60)).padStart(2,'0')}:${String(startTotal % 60).padStart(2,'0')}`,
+    end: `${String(Math.floor(endTotal / 60)).padStart(2,'0')}:${String(endTotal % 60).padStart(2,'0')}`
+  };
+}
+
+function siestaBaseWindow(d) {
+  const start = d?.start || '13:00';
+  if (d?.end) return { start, end: d.end };
+  const durationMins = parseInt(d?.duration ?? d?.duration_mins ?? 90) || 90;
+  const endMins = _wrapMins(parseHHMM(start) + durationMins);
+  const end = `${String(Math.floor(endMins / 60)).padStart(2,'0')}:${String(endMins % 60).padStart(2,'0')}`;
+  return { start, end };
+}
+
+function chartSiestaFactorAt(mins) {
+  if (!siestaState || !(siestaState.enabled || siestaState.active)) return 1;
+  const win = siestaBaseWindow(siestaState);
+  if (!_minsInWindow(mins, win.start, win.end)) return 1;
+  const depth = parseInt(siestaState.intensity ?? 25) || 0;
+  return Math.max(0, (100 - depth) / 100);
+}
+
+function seasonalShiftNow() {
+  return parseInt(seasonalState?.current_shift_minutes ?? 0) || 0;
+}
+
+function acclimationPercentNow() {
+  return parseInt(acclimationState?.current_percent ?? 100) || 100;
+}
+
+function siestaFactorAt(mins) {
+  if (!siestaState || !(siestaState.enabled || siestaState.active)) return 1;
+  const win = siestaWindow(siestaState);
+  if (!_minsInWindow(mins, win.start, win.end)) return 1;
+  const depth = parseInt(siestaState.intensity ?? 25) || 0;
+  return Math.max(0, (100 - depth) / 100);
+}
+
+function applySiestaForTime(value, mins) {
+  return Math.round(value * siestaFactorAt(mins));
+}
+
+function effectiveValueAtMins(mins, ci) {
+  const shiftedMins = _wrapMins(mins - seasonalShiftNow() - signedShiftMinutes());
+  const h0 = Math.floor(shiftedMins / 60) % 24;
+  const h1 = (h0 + 1) % 24;
+  const frac = (shiftedMins % 60) / 60;
+  let v = Math.round(schedule[h0][2 + ci] + frac * (schedule[h1][2 + ci] - schedule[h0][2 + ci]));
+  v = Math.round(v * acclimationPercentNow() / 100);
+  v = applySiestaForTime(v, mins);
+  let lunarFloor = 0, lunarWin = null;
+  if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
+    lunarFloor = lunarState.max_intensity * lunarState.illumination / 100;
+    lunarWin   = lunarWindow(lunarState);
+  }
+  if (lunarWin && lunarFloor > 0 && _minsInWindow(mins, lunarWin.start, lunarWin.end)) {
+    const ch = DEVICES[cfg.device].channels[ci];
+    if (ch === 'royal_blue') v = Math.max(v, Math.round(lunarFloor));
+    else if (ch === 'blue' && cfg.device !== 'k7mini') v = Math.max(v, Math.round(lunarFloor * 0.7));
+  }
+  return v;
+}
+
+function chartEffectiveValueAtMins(mins, ci) {
+  const shiftedMins = _wrapMins(mins - seasonalShiftNow());
+  const h0 = Math.floor(shiftedMins / 60) % 24;
+  const h1 = (h0 + 1) % 24;
+  const frac = (shiftedMins % 60) / 60;
+  let v = Math.round(schedule[h0][2 + ci] + frac * (schedule[h1][2 + ci] - schedule[h0][2 + ci]));
+  v = Math.round(v * acclimationPercentNow() / 100);
+  v = Math.round(v * chartSiestaFactorAt(mins));
+  let lunarFloor = 0, lunarWin = null;
+  if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
+    lunarFloor = lunarState.max_intensity * lunarState.illumination / 100;
+    lunarWin   = lunarWindow(lunarState);
+  }
+  if (lunarWin && lunarFloor > 0 && _minsInWindow(mins, lunarWin.start, lunarWin.end)) {
+    const ch = DEVICES[cfg.device].channels[ci];
+    if (ch === 'royal_blue') v = Math.max(v, Math.round(lunarFloor));
+    else if (ch === 'blue' && cfg.device !== 'k7mini') v = Math.max(v, Math.round(lunarFloor * 0.7));
+  }
+  return Math.min(100, Math.max(0, v));
+}
+
+function effectiveValueForHour(h, ci) {
+  return chartEffectiveValueAtMins(h * 60, ci);
+}
+
+function displayValueForHour(h, ci) {
+  return chartMode === 'effective' ? effectiveValueForHour(h, ci) : (schedule[h]?.[2 + ci] ?? 0);
 }
 
 function updateChart() {
+  if (!chart) return;
   const chs   = DEVICES[cfg.device].channels;
   const light = document.documentElement.getAttribute('data-theme') === 'light';
+  chart.options.plugins.dragData = chartMode === 'base' ? chart._dragDataConfig : false;
+  chart.options.elements.point.radius = chartMode === 'base' ? 4 : 0;
+  chart.options.elements.point.hoverRadius = chartMode === 'base' ? 6 : 4;
+  chart.options.elements.point.hitRadius = chartMode === 'base' ? 20 : 8;
   let lunarFloor = 0, lunarFullMoon = 0, lunarWin = null;
   if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
     lunarFloor    = lunarState.max_intensity * lunarState.illumination / 100;
@@ -815,12 +1168,7 @@ function updateChart() {
       }
       const datasets = [{
         label: CH[ch].label, channelKey: ch,
-        data: schedule.map((row, h) => {
-          const v = row[2 + ci];
-          if (lunarContrib > 0 && _hourInLunarWindow(h, lunarWin.start, lunarWin.end))
-            return Math.max(v, Math.round(lunarContrib));
-          return v;
-        }),
+        data: schedule.map((row, h) => chartMode === 'effective' ? effectiveValueForHour(h, ci) : row[2 + ci]),
         borderColor: lineColor, backgroundColor: `rgba(${r},${g},${b},0.18)`,
         fill: true, tension: 0.35,
       }];
@@ -830,7 +1178,7 @@ function updateChart() {
         const fmVal = ch === 'royal_blue' ? lunarFullMoon : Math.round(lunarFullMoon * 0.7);
         datasets.push({
           label: CH[ch].label + ' (full moon)', channelKey: ch,
-          data: schedule.map((_, h) => _hourInLunarWindow(h, lunarWin.start, lunarWin.end) ? fmVal : null),
+          data: schedule.map((_, h) => _minsInWindow(h * 60, lunarWin.start, lunarWin.end) ? fmVal : null),
           borderColor: lineColor, borderDash: [4,4], borderWidth: 1,
           backgroundColor: 'transparent', fill: false, tension: 0, pointRadius: 0, spanGaps: false,
         });
@@ -922,7 +1270,7 @@ function applyMaster() {
   const chs = DEVICES[cfg.device].channels;
   const peaks = chs.map((_,ci) => Math.max(1, ...scheduleBase.map(row => row[2+ci])));
   for (let h = 0; h < 24; h++) {
-    const srcH = ((h - dayShift) % 24 + 24) % 24;
+    const srcH = h;
     for (let ci = 0; ci < 6; ci++) {
       if (ci < chs.length) {
         const ch  = chs[ci];
@@ -948,12 +1296,15 @@ function resetMaster() {
 
 function changeShift(delta) {
   dayShift = ((dayShift + delta) % 24 + 24) % 24;
-  const d = dayShift;
-  document.getElementById('shiftVal').textContent = d === 0 ? '+0h' : d <= 12 ? `+${d}h` : `-${24-d}h`;
+  document.getElementById('shiftVal').textContent = shiftLabel();
   localStorage.setItem('k7-dayShift', dayShift);
   applyMaster(); updateChart(); updateColorStrip(); updateNowBars();
+  if (siestaState) applySiestaUI(siestaState);
   clearTimeout(_masterTimer);
-  _masterTimer = setTimeout(_autoPushMaster, 400);
+  _masterTimer = setTimeout(async () => {
+    await _autoPushMaster();
+    if (rampActiveState) api('POST', '/api/ramp/tick').catch(() => {});
+  }, 400);
 }
 
 let _masterTimer = null;
@@ -969,12 +1320,18 @@ async function _autoPushMaster() {
   try {
     const pushBase = buildPushBase();
     await api('POST','/api/master', {value: masterBrightness});
-    await api('POST','/api/push',   {manual, schedule: pushBase, mode});
+    await api('POST','/api/push',   {
+      manual,
+      schedule: pushBase,
+      mode,
+      schedule_shift_minutes: signedShiftMinutes(),
+    });
   } catch(_) {}
 }
 
 // ── Smooth ramp ───────────────────────────────────────────────────────────────
 function setRampBtn(active, lastTick) {
+  rampActiveState = !!active;
   const pill = document.getElementById('rampPill');
   const btn  = document.getElementById('rampBtn');
   const tick = document.getElementById('rampTick');
@@ -986,6 +1343,11 @@ function setRampBtn(active, lastTick) {
     const ago = Math.round((Date.now() / 1000) - lastTick);
     tick.textContent = 'Active · ' + (ago < 5 ? 'just now' : `${ago}s ago`);
   } else { tick.textContent = active ? 'Active' : 'Inactive'; }
+  setSiestaAvailability(active);
+  if (siestaState) {
+    setSiestaBtn(active && !!(siestaState.enabled || siestaState.active));
+    updateSiestaHint(siestaState);
+  }
 }
 
 async function toggleRamp() {
@@ -1045,6 +1407,265 @@ async function toggleFeed() {
 function onFeedDurationChange()  { /* applied on next start */ }
 function onFeedIntensityChange() { /* applied on next start */ }
 
+// ── Maintenance mode ──────────────────────────────────────────────────────────
+let maintenanceCountdownInterval = null;
+let maintenanceRemaining = 0;
+
+function setMaintenanceBtn(active) {
+  document.getElementById('maintenancePill').classList.toggle('active', active);
+  const btn = document.getElementById('maintenanceBtn');
+  btn.textContent = active ? 'ON' : 'OFF';
+  btn.title = active ? 'Maintenance mode active — click to stop' : 'Temporarily switch to a balanced inspection light for tank work';
+}
+
+function updateMaintenanceSub(secs, intensity) {
+  const sub = document.getElementById('maintenanceSub');
+  if (!sub) return;
+  if (secs <= 0) { sub.textContent = 'Off'; return; }
+  const m = Math.floor(secs / 60), s = secs % 60;
+  sub.textContent = `${m}:${String(s).padStart(2,'0')} remaining · ${intensity ?? 70}%`;
+}
+
+function startMaintenanceCountdown(secs, intensity) {
+  clearInterval(maintenanceCountdownInterval);
+  maintenanceRemaining = secs;
+  updateMaintenanceSub(maintenanceRemaining, intensity);
+  maintenanceCountdownInterval = setInterval(() => {
+    maintenanceRemaining = Math.max(0, maintenanceRemaining - 1);
+    updateMaintenanceSub(maintenanceRemaining, document.getElementById('maintenanceIntensity').value);
+    if (maintenanceRemaining === 0) {
+      clearInterval(maintenanceCountdownInterval);
+      maintenanceCountdownInterval = null;
+      setMaintenanceBtn(false);
+    }
+  }, 1000);
+}
+
+function applyMaintenanceUI(d) {
+  maintenanceState = d;
+  if (!d) return;
+  if (d.duration != null) document.getElementById('maintenanceDuration').value = d.duration;
+  if (d.intensity != null) document.getElementById('maintenanceIntensity').value = d.intensity;
+  setMaintenanceBtn(!!d.active);
+  if (d.active) {
+    startMaintenanceCountdown(d.remaining ?? ((d.duration ?? 30) * 60), d.intensity ?? 70);
+  } else {
+    clearInterval(maintenanceCountdownInterval);
+    maintenanceCountdownInterval = null;
+    maintenanceRemaining = 0;
+    updateMaintenanceSub(0, d.intensity ?? 70);
+  }
+}
+
+async function toggleMaintenance() {
+  const active = document.getElementById('maintenancePill').classList.contains('active');
+  setMaintenanceBtn(!active);
+  try {
+    if (active) {
+      clearInterval(maintenanceCountdownInterval);
+      maintenanceCountdownInterval = null;
+      maintenanceRemaining = 0;
+      updateMaintenanceSub(0);
+      await api('POST', '/api/maintenance/stop');
+    } else {
+      const duration = parseInt(document.getElementById('maintenanceDuration').value) || 30;
+      const intensity = parseInt(document.getElementById('maintenanceIntensity').value) || 70;
+      await api('POST', '/api/maintenance/start', { duration, intensity });
+      clearInterval(feedCountdownInterval);
+      feedCountdownInterval = null;
+      feedRemaining = 0;
+      updateFeedSub(0);
+      setFeedBtn(false);
+      startMaintenanceCountdown(duration * 60, intensity);
+    }
+  } catch (e) {
+    setMaintenanceBtn(active);
+    setErr(e.message);
+  }
+}
+
+function onMaintenanceDurationChange() { /* applied on next start */ }
+function onMaintenanceIntensityChange() { /* applied on next start */ }
+
+// ── Siesta ────────────────────────────────────────────────────────────────────
+function updateSiestaHint(d) {
+  const hint = document.getElementById('siHint');
+  if (!hint) return;
+  if (!rampActiveState) {
+    hint.textContent = 'Requires Smooth Ramp. The lamp native schedule is too coarse for midday dimming on its own.';
+    return;
+  }
+  const allowedStart = d?.allowed_start || '12:00';
+  const allowedEnd = d?.allowed_end || '16:00';
+  const win = siestaWindow(d || {});
+  const base = siestaBaseWindow(d || {});
+  if (d?.enabled || d?.active) {
+    hint.textContent = `Allowed high-light window ${allowedStart}-${allowedEnd}; base ${base.start}-${base.end}; today ${win.start}-${win.end} · dim by ${d?.intensity ?? 25}%`;
+  } else {
+    hint.textContent = `Choose a base siesta fully inside the high-light window ${allowedStart}-${allowedEnd}`;
+  }
+}
+
+function setSiestaAvailability(enabled) {
+  ['siestaBtn','siEnabled','siStart','siDuration','siIntensity'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !enabled;
+  });
+}
+
+function setSiestaBtn(active) {
+  const pill = document.getElementById('siestaPill');
+  const btn  = document.getElementById('siestaBtn');
+  pill.classList.toggle('active', active);
+  btn.textContent = active ? 'ON' : 'OFF';
+  btn.title = active ? 'Siesta dimming active — click to stop' : 'Temporarily dim the schedule during the brightest part of the day';
+}
+
+function applySiestaUI(d) {
+  siestaState = d;
+  setSiestaAvailability(rampActiveState);
+  setSiestaBtn(rampActiveState && !!(d.enabled || d.active));
+  document.getElementById('siEnabled').checked = !!d.enabled;
+  document.getElementById('siStart').value = d.start || '13:00';
+  _setIfUnfocused('siDuration', el => { el.value = d.duration ?? d.duration_mins ?? 90; });
+  _setIfUnfocused('siIntensity', el => { el.value = d.intensity ?? 25; });
+  document.getElementById('siTimeWrap').style.display = d.enabled ? '' : 'none';
+  document.getElementById('siDurationWrap').style.display = d.enabled ? '' : 'none';
+  document.getElementById('siIntensityWrap').style.display = d.enabled ? '' : 'none';
+  const win = siestaWindow(d || {});
+  const base = siestaBaseWindow(d || {});
+  document.getElementById('siestaSub').textContent = d.active
+    ? `Dimming now · ${win.start}-${win.end} · -${d.intensity ?? 25}%`
+    : d.enabled
+      ? `Base ${base.start} · today ${win.start}-${win.end}`
+      : 'Off';
+  updateSiestaHint(d);
+  updateChart();
+  updateColorStrip();
+  updateNowBars();
+}
+
+async function loadSiestaStatus() {
+  try { applySiestaUI(await api('GET', '/api/siesta/status')); } catch(_) {}
+}
+
+async function toggleSiesta() {
+  if (!rampActiveState) return;
+  const enabled = !!document.getElementById('siEnabled').checked;
+  document.getElementById('siEnabled').checked = !enabled;
+  try {
+    await onSiestaChange();
+  } catch(e) {
+    document.getElementById('siEnabled').checked = enabled;
+    setErr(e.message);
+  }
+}
+
+async function onSiestaChange() {
+  if (!rampActiveState) return;
+  const si = {
+    enabled: document.getElementById('siEnabled').checked,
+    start: document.getElementById('siStart').value,
+    duration: parseInt(document.getElementById('siDuration').value) || 90,
+    intensity: parseInt(document.getElementById('siIntensity').value) || 25,
+  };
+  document.getElementById('siTimeWrap').style.display = si.enabled ? '' : 'none';
+  document.getElementById('siDurationWrap').style.display = si.enabled ? '' : 'none';
+  document.getElementById('siIntensityWrap').style.display = si.enabled ? '' : 'none';
+  await api('POST', '/api/siesta/schedule', si);
+  await loadSiestaStatus();
+}
+
+// ── Acclimation ───────────────────────────────────────────────────────────────
+function updateAcclimationHint(d) {
+  const hint = document.getElementById('acHint');
+  if (!hint) return;
+  if (d?.enabled) hint.textContent = `Today runs at ${d.current_percent ?? 100}% of the base schedule. Recovery completes over ${d.duration_days ?? 21} days.`;
+  else hint.textContent = 'Starts dimmer, then recovers gradually back to 100% over the chosen number of days.';
+}
+
+function setAcclimationBtn(active) {
+  const pill = document.getElementById('acclimationPill');
+  const btn  = document.getElementById('acclimationBtn');
+  pill.classList.toggle('active', active);
+  btn.textContent = active ? 'ON' : 'OFF';
+}
+
+function applyAcclimationUI(d) {
+  acclimationState = d;
+  setAcclimationBtn(!!d.enabled);
+  document.getElementById('acEnabled').checked = !!d.enabled;
+  _setIfUnfocused('acStartPercent', el => { el.value = d.start_percent ?? 70; });
+  _setIfUnfocused('acDurationDays', el => { el.value = d.duration_days ?? 21; });
+  document.getElementById('acclimationSub').textContent = d.enabled
+    ? `Today ${d.current_percent ?? 100}% · ${d.days_remaining ?? 0}d left`
+    : 'Off';
+  updateAcclimationHint(d);
+  updateChart();
+  updateColorStrip();
+  updateNowBars();
+}
+
+async function toggleAcclimation() {
+  const enabled = !!document.getElementById('acEnabled').checked;
+  document.getElementById('acEnabled').checked = !enabled;
+  await onAcclimationChange();
+}
+
+async function onAcclimationChange() {
+  const body = {
+    enabled: document.getElementById('acEnabled').checked,
+    start_percent: parseInt(document.getElementById('acStartPercent').value) || 70,
+    duration_days: parseInt(document.getElementById('acDurationDays').value) || 21,
+  };
+  applyAcclimationUI(await api('POST', '/api/acclimation/config', body));
+}
+
+// ── Seasonal Shift ────────────────────────────────────────────────────────────
+function updateSeasonalHint(d) {
+  const hint = document.getElementById('ssHint');
+  if (!hint) return;
+  const shift = parseInt(d?.current_shift_minutes ?? 0) || 0;
+  const sign = shift >= 0 ? '+' : '';
+  if (d?.enabled) hint.textContent = `Today the whole schedule is shifted ${sign}${shift} minutes. Positive is later; negative is earlier.`;
+  else hint.textContent = 'Moves the whole photoperiod earlier and later across the year without changing day length.';
+}
+
+function setSeasonalBtn(active) {
+  const pill = document.getElementById('seasonalPill');
+  const btn  = document.getElementById('seasonalBtn');
+  pill.classList.toggle('active', active);
+  btn.textContent = active ? 'ON' : 'OFF';
+}
+
+function applySeasonalUI(d) {
+  seasonalState = d;
+  setSeasonalBtn(!!d.enabled);
+  document.getElementById('ssEnabled').checked = !!d.enabled;
+  _setIfUnfocused('ssMaxShift', el => { el.value = d.max_shift_minutes ?? 60; });
+  const shift = parseInt(d.current_shift_minutes ?? 0) || 0;
+  const sign = shift >= 0 ? '+' : '';
+  document.getElementById('seasonalSub').textContent = d.enabled ? `Today ${sign}${shift} min` : 'Off';
+  updateSeasonalHint(d);
+  updateChart();
+  updateColorStrip();
+  updateNowBars();
+}
+
+async function toggleSeasonal() {
+  const enabled = !!document.getElementById('ssEnabled').checked;
+  document.getElementById('ssEnabled').checked = !enabled;
+  await onSeasonalChange();
+}
+
+async function onSeasonalChange() {
+  const body = {
+    enabled: document.getElementById('ssEnabled').checked,
+    max_shift_minutes: parseInt(document.getElementById('ssMaxShift').value) || 0,
+  };
+  applySeasonalUI(await api('POST', '/api/seasonal/config', body));
+}
+
 // ── Lunar cycle ───────────────────────────────────────────────────────────────
 const MOON_EMOJIS = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
 function moonEmoji(phase) { return MOON_EMOJIS[Math.round(phase * 8) % 8]; }
@@ -1073,13 +1694,13 @@ function setLunarBtn(active) {
   const btn  = document.getElementById('lunarBtn');
   pill.classList.toggle('active', active);
   btn.textContent = active ? 'ON' : 'OFF';
-  btn.title = active ? 'Lunar cycle active — click to stop'
+  btn.title = active ? 'Lunar cycle enabled — click to stop'
                      : 'Vary royal blue channel intensity with the lunar cycle';
 }
 
 function applyLunarUI(d) {
   lunarState = d;
-  setLunarBtn(d.active);
+  setLunarBtn(!!(d.enabled || d.active));
   document.getElementById('lmEnabled').checked = !!d.enabled;
   document.getElementById('lmTrackMoonrise').checked = !!d.track_moonrise;
   document.getElementById('lmStart').value     = d.start || '18:30';
@@ -1147,11 +1768,16 @@ function _setIfUnfocused(id, setter) {
 
 async function pollEffectStates() {
   try {
-    const [ramp, feed, lunar, master] = await Promise.all([
+    const [ramp, feed, maintenance, siesta, acclimation, seasonal, lunar, master, warnings] = await Promise.all([
       api('GET', '/api/ramp/status'),
       api('GET', '/api/feed/status'),
+      api('GET', '/api/maintenance/status'),
+      api('GET', '/api/siesta/status'),
+      api('GET', '/api/acclimation/status'),
+      api('GET', '/api/seasonal/status'),
       api('GET', '/api/lunar/status'),
       api('GET', '/api/master'),
+      api('GET', '/api/warnings/status'),
     ]);
     const masterSlider = document.getElementById('masterSlider');
     if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
@@ -1168,9 +1794,54 @@ async function pollEffectStates() {
     } else if (!feed.active && document.getElementById('feedPill').classList.contains('active')) {
       setFeedBtn(false); clearInterval(feedCountdownInterval); feedCountdownInterval = null; feedRemaining = 0; updateFeedSub(0);
     }
+    if (maintenance.active) {
+      setMaintenanceBtn(true);
+      if (!maintenanceCountdownInterval || maintenanceRemaining === 0) startMaintenanceCountdown(maintenance.remaining, maintenance.intensity);
+      _setIfUnfocused('maintenanceDuration', el => { el.value = maintenance.duration ?? 30; });
+      _setIfUnfocused('maintenanceIntensity', el => { el.value = maintenance.intensity ?? 70; });
+    } else if (!maintenance.active && document.getElementById('maintenancePill').classList.contains('active')) {
+      setMaintenanceBtn(false); clearInterval(maintenanceCountdownInterval); maintenanceCountdownInterval = null; maintenanceRemaining = 0; updateMaintenanceSub(0, maintenance.intensity ?? 70);
+    }
+    siestaState = siesta;
+    setSiestaAvailability(ramp.active);
+    setSiestaBtn(ramp.active && !!(siesta.enabled || siesta.active));
+    _setIfUnfocused('siEnabled',   el => { el.checked = !!siesta.enabled; });
+    _setIfUnfocused('siStart',     el => { el.value = siesta.start || '13:00'; });
+    _setIfUnfocused('siDuration',  el => { el.value = siesta.duration ?? siesta.duration_mins ?? 90; });
+    _setIfUnfocused('siIntensity', el => { el.value = siesta.intensity ?? 25; });
+    document.getElementById('siTimeWrap').style.display = siesta.enabled ? '' : 'none';
+    document.getElementById('siDurationWrap').style.display = siesta.enabled ? '' : 'none';
+    document.getElementById('siIntensityWrap').style.display = siesta.enabled ? '' : 'none';
+    const siWin = siestaWindow(siesta || {});
+    const siBase = siestaBaseWindow(siesta || {});
+    document.getElementById('siestaSub').textContent = siesta.active
+      ? `Dimming now · ${siWin.start}-${siWin.end} · -${siesta.intensity ?? 25}%`
+      : siesta.enabled
+        ? `Base ${siBase.start} · today ${siWin.start}-${siWin.end}`
+        : 'Off';
+    updateSiestaHint(siesta);
+    acclimationState = acclimation;
+    setAcclimationBtn(!!acclimation.enabled);
+    _setIfUnfocused('acEnabled', el => { el.checked = !!acclimation.enabled; });
+    _setIfUnfocused('acStartPercent', el => { el.value = acclimation.start_percent ?? 70; });
+    _setIfUnfocused('acDurationDays', el => { el.value = acclimation.duration_days ?? 21; });
+    document.getElementById('acclimationSub').textContent = acclimation.enabled
+      ? `Today ${acclimation.current_percent ?? 100}% · ${acclimation.days_remaining ?? 0}d left`
+      : 'Off';
+    updateAcclimationHint(acclimation);
+    seasonalState = seasonal;
+    setSeasonalBtn(!!seasonal.enabled);
+    _setIfUnfocused('ssEnabled', el => { el.checked = !!seasonal.enabled; });
+    _setIfUnfocused('ssMaxShift', el => { el.value = seasonal.max_shift_minutes ?? 60; });
+    const seasonalShift = parseInt(seasonal.current_shift_minutes ?? 0) || 0;
+    const seasonalSign = seasonalShift >= 0 ? '+' : '';
+    document.getElementById('seasonalSub').textContent = seasonal.enabled ? `Today ${seasonalSign}${seasonalShift} min` : 'Off';
+    updateSeasonalHint(seasonal);
     lunarState = lunar;
     updateNowBars();
-    setLunarBtn(lunar.active);
+    updateColorStrip();
+    updateChart();
+    setLunarBtn(!!(lunar.enabled || lunar.active));
     _setIfUnfocused('lmEnabled',      el => { el.checked = !!lunar.enabled; });
     _setIfUnfocused('lmTrackMoonrise',el => { el.checked = !!lunar.track_moonrise; });
     _setIfUnfocused('lmStart',        el => { el.value = lunar.start || '18:30'; });
@@ -1188,6 +1859,7 @@ async function pollEffectStates() {
       document.getElementById('lunarTonight').textContent =
         `${moonEmoji(lunar.phase||0)} ${lunar.phase_name} · ${win.start}-${win.end} · blue tonight: ${tonight}%`;
     }
+    renderWarnings(warnings);
   } catch(_) {}
 }
 
@@ -1344,11 +2016,13 @@ async function init() {
   document.getElementById('themeBtn').textContent = savedTheme === 'light' ? '🌙' : '☀';
   const savedShift = parseInt(localStorage.getItem('k7-dayShift') || '0', 10);
   if (savedShift) {
-    dayShift = savedShift;
+    dayShift = ((savedShift % 24) + 24) % 24;
     const sv = document.getElementById('shiftVal');
-    if (sv) sv.textContent = dayShift <= 12 ? `+${dayShift}h` : `-${24-dayShift}h`;
+    if (sv) sv.textContent = shiftLabel();
   }
+  chartMode = localStorage.getItem('k7-chartMode') === 'effective' ? 'effective' : 'base';
   initChart();
+  setChartMode(chartMode);
   try {
     const c = await api('GET','/api/config');
     cfg = c;
@@ -1372,8 +2046,8 @@ async function init() {
   setInterval(pollEffectStates, 5000);
   loadLunarStatus();
   setInterval(loadLunarStatus, 60000);
+  setInterval(() => { if (chart) chart.render(); }, 1000);
   setInterval(() => {
-    if (chart) chart.update('none');
     updateColorStrip();
     updateNowBars();
   }, 60000);
@@ -1382,11 +2056,11 @@ async function init() {
 // ── Cross-tab sync ────────────────────────────────────────────────────────────
 window.addEventListener('storage', e => {
   if (e.key === 'k7-dayShift') {
-    dayShift = parseInt(e.newValue || '0', 10);
-    const d = dayShift;
+    dayShift = ((parseInt(e.newValue || '0', 10) % 24) + 24) % 24;
     const sv = document.getElementById('shiftVal');
-    if (sv) sv.textContent = d===0?'+0h':d<=12?`+${d}h`:`-${24-d}h`;
+    if (sv) sv.textContent = shiftLabel();
     applyMaster(); updateChart(); updateColorStrip();
+    if (siestaState) applySiestaUI(siestaState);
   }
   if (e.key === 'k7-hiddenChannels') {
     hiddenChannels.clear();

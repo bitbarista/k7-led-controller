@@ -113,6 +113,7 @@ void setup() {
         if (lamp.connect()) {
             LampState state;
             if (lamp.readAll(state)) {
+                memcpy(gBaseSchedule, state.schedule, sizeof(gBaseSchedule));
                 memcpy(gLastSchedule, state.schedule, sizeof(gLastSchedule));
                 memcpy(gLastManual,   state.manual,   sizeof(gLastManual));
                 strlcpy(gLampName, state.name, sizeof(gLampName));
@@ -133,7 +134,8 @@ void setup() {
             int           count = isPro ? NUM_PRO_PRESETS : NUM_MINI_PRESETS;
             for (int i = 0; i < count; i++) {
                 if (strcmp(list[i].id, "mixed") == 0) {
-                    buildSchedule(list[i], gLastSchedule);
+                    buildSchedule(list[i], gBaseSchedule);
+                    memcpy(gLastSchedule, gBaseSchedule, sizeof(gLastSchedule));
                     Serial.println("No schedule from lamp — using Mixed Reef default");
                     break;
                 }
@@ -148,6 +150,8 @@ void setup() {
 
     // Restore previously active effects (after server is up)
     loadEffectState();
+    if (!UserDataFS.exists(STATE_FILE))
+        rebuildEffectiveSchedule();
     startEffectSchedulers();
     startLampWorker();
 }

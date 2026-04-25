@@ -130,6 +130,30 @@ body {
 .now-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
 .now-pct { width: 38px; text-align: right; font-size: 0.78rem; font-variant-numeric: tabular-nums; color: var(--muted); }
 
+/* ── Warnings ── */
+.warn-list { padding: 10px 14px 14px; display: grid; gap: 8px; }
+.warn-item {
+  border: 1px solid var(--border);
+  border-left: 4px solid #4b5563;
+  border-radius: 8px;
+  background: var(--surface2);
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.warn-item[data-level="caution"] { border-left-color: #ef4444; }
+.warn-item[data-level="check"] { border-left-color: #f59e0b; }
+.warn-item[data-level="info"] { border-left-color: #38bdf8; }
+.warn-item[data-level="ok"] { border-left-color: #22c55e; }
+.warn-level {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
 /* ── Expander ── */
 .expander {
   display: flex; align-items: center; justify-content: space-between;
@@ -170,6 +194,9 @@ body {
 }
 .fx-tog.on-ramp  { border-color: rgba(56,189,248,0.6);  background: rgba(56,189,248,0.12);  color: #38bdf8; }
 .fx-tog.on-feed  { border-color: rgba(249,115,22,0.6);  background: rgba(249,115,22,0.12);  color: #f97316; }
+.fx-tog.on-maintenance { border-color: rgba(203,213,225,0.65); background: rgba(203,213,225,0.12); color: #e2e8f0; }
+.fx-tog.on-acclimation { border-color: rgba(16,185,129,0.6); background: rgba(16,185,129,0.12); color: #10b981; }
+.fx-tog.on-seasonal { border-color: rgba(234,179,8,0.6); background: rgba(234,179,8,0.12); color: #eab308; }
 .fx-tog.on-lunar { border-color: rgba(99,102,241,0.6);  background: rgba(99,102,241,0.15);  color: #818cf8; }
 .fx-set-toggle {
   padding: 0 14px 10px; font-size: 0.75rem; color: var(--muted); cursor: pointer; user-select: none;
@@ -277,6 +304,11 @@ button:disabled { opacity: 0.4; }
   </div>
 </div>
 
+<div class="card" style="margin-top:10px">
+  <div class="card-hd">Checks</div>
+  <div class="warn-list" id="warningsList"></div>
+</div>
+
 <!-- Effects -->
 <div class="card" style="margin-top:10px">
   <div class="card-hd" style="padding-bottom:4px">Effects</div>
@@ -313,6 +345,120 @@ button:disabled { opacity: 0.4; }
         <input type="number" id="feedIntensity" class="num-in" min="1" max="100" value="80">
         <span style="color:var(--muted);font-size:0.82rem">%</span>
       </div>
+    </div>
+  </div>
+
+  <!-- Maintenance mode -->
+  <div class="fx-card">
+    <div class="fx-main">
+      <div class="fx-info">
+        <div class="fx-name">🛠 Maintenance</div>
+        <div class="fx-sub" id="maintenanceSub">Off</div>
+      </div>
+      <button class="fx-tog" id="maintenanceBtn" onclick="toggleMaintenance()">OFF</button>
+    </div>
+    <div class="fx-set-toggle" onclick="toggleFxSet('maintenanceSettings')">⚙ Settings ▾</div>
+    <div class="fx-settings" id="maintenanceSettings">
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">Duration</span>
+        <input type="number" id="maintenanceDuration" class="num-in" min="1" max="180" value="30">
+        <span style="color:var(--muted);font-size:0.82rem">min</span>
+      </div>
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">Profile intensity</span>
+        <input type="number" id="maintenanceIntensity" class="num-in" min="1" max="100" value="70">
+        <span style="color:var(--muted);font-size:0.82rem">%</span>
+      </div>
+      <div style="font-size:0.75rem;color:var(--muted);margin:0 4px 8px">Balanced inspection light with automatic timeout. Maintenance mode temporarily overrides Feed mode.</div>
+    </div>
+  </div>
+
+  <!-- Siesta -->
+  <div class="fx-card">
+    <div class="fx-main">
+      <div class="fx-info">
+        <div class="fx-name">🌤 Siesta</div>
+        <div class="fx-sub" id="siestaSub">Off</div>
+      </div>
+      <button class="fx-tog" id="siestaBtn" onclick="toggleSiesta()">OFF</button>
+    </div>
+    <div class="fx-set-toggle" onclick="toggleFxSet('siesta')">⚙ Settings ▾</div>
+    <div class="fx-settings" id="siestaSettings">
+      <div class="set-row">
+        <label class="chk-lbl">
+          <input type="checkbox" id="siEnabled" onchange="onSiestaChange()"> Auto-schedule
+        </label>
+      </div>
+      <div class="set-row" id="siTimeRow" style="display:none">
+        <span style="color:var(--muted);font-size:0.82rem;min-width:86px">Base time</span>
+        <input type="time" id="siStart" class="time-in" onchange="onSiestaChange()">
+      </div>
+      <div class="set-row" id="siDurationRow" style="display:none">
+        <span style="color:var(--muted);font-size:0.82rem">Duration</span>
+        <input type="number" id="siDuration" class="num-in" min="15" max="480" step="15" value="90" onchange="onSiestaChange()">
+        <span style="color:var(--muted);font-size:0.82rem">min</span>
+      </div>
+      <div class="set-row" id="siIntensityRow" style="display:none">
+        <span style="color:var(--muted);font-size:0.82rem">Dim by</span>
+        <input type="number" id="siIntensity" class="num-in" min="1" max="90" value="25" onchange="onSiestaChange()">
+        <span style="color:var(--muted);font-size:0.82rem">%</span>
+      </div>
+      <div id="siHint" style="font-size:0.75rem;color:var(--muted);margin:0 4px 8px"></div>
+    </div>
+  </div>
+
+  <!-- Acclimation -->
+  <div class="fx-card">
+    <div class="fx-main">
+      <div class="fx-info">
+        <div class="fx-name">🪸 Acclimation</div>
+        <div class="fx-sub" id="acclimationSub">Off</div>
+      </div>
+      <button class="fx-tog" id="acclimationBtn" onclick="toggleAcclimation()">OFF</button>
+    </div>
+    <div class="fx-set-toggle" onclick="toggleFxSet('acclimation')">⚙ Settings ▾</div>
+    <div class="fx-settings" id="acclimationSettings">
+      <div class="set-row">
+        <label class="chk-lbl">
+          <input type="checkbox" id="acEnabled" onchange="onAcclimationChange()"> Enable acclimation
+        </label>
+      </div>
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">Start at</span>
+        <input type="number" id="acStartPercent" class="num-in" min="1" max="100" value="70" onchange="onAcclimationChange()">
+        <span style="color:var(--muted);font-size:0.82rem">%</span>
+      </div>
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">Recover over</span>
+        <input type="number" id="acDurationDays" class="num-in" min="1" max="180" value="21" onchange="onAcclimationChange()">
+        <span style="color:var(--muted);font-size:0.82rem">days</span>
+      </div>
+      <div id="acHint" style="font-size:0.75rem;color:var(--muted);margin:0 4px 8px"></div>
+    </div>
+  </div>
+
+  <!-- Seasonal -->
+  <div class="fx-card">
+    <div class="fx-main">
+      <div class="fx-info">
+        <div class="fx-name">🌤 Seasonal Shift</div>
+        <div class="fx-sub" id="seasonalSub">Off</div>
+      </div>
+      <button class="fx-tog" id="seasonalBtn" onclick="toggleSeasonal()">OFF</button>
+    </div>
+    <div class="fx-set-toggle" onclick="toggleFxSet('seasonal')">⚙ Settings ▾</div>
+    <div class="fx-settings" id="seasonalSettings">
+      <div class="set-row">
+        <label class="chk-lbl">
+          <input type="checkbox" id="ssEnabled" onchange="onSeasonalChange()"> Enable seasonal shift
+        </label>
+      </div>
+      <div class="set-row">
+        <span style="color:var(--muted);font-size:0.82rem">Max shift</span>
+        <input type="number" id="ssMaxShift" class="num-in" min="0" max="180" value="60" onchange="onSeasonalChange()">
+        <span style="color:var(--muted);font-size:0.82rem">min</span>
+      </div>
+      <div id="ssHint" style="font-size:0.75rem;color:var(--muted);margin:0 4px 8px"></div>
     </div>
   </div>
 
@@ -416,6 +562,12 @@ let presets  = {};
 let savedProfiles = {};
 let activePresetKey = '';  // e.g. "preset:mixed" or "profile:My Tank"
 let lunarState = null;
+let siestaState = null;
+let acclimationState = null;
+let seasonalState = null;
+let maintenanceState = null;
+let rampActiveState = false;
+let warningsState = null;
 
 function chs() { return DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels; }
 function lunarWindow(d) {
@@ -423,6 +575,109 @@ function lunarWindow(d) {
     start: d?.effective_start || d?.start || '18:30',
     end:   d?.effective_end   || d?.end   || '06:30',
   };
+}
+
+function siestaWindow(d) {
+  if (d?.effective_start || d?.effective_end) {
+    return {
+      start: d.effective_start || d.start || '13:00',
+      end: d.effective_end || d.end || '14:30'
+    };
+  }
+  const start = d?.start || '13:00';
+  const mins = parseInt(d?.duration ?? d?.duration_mins ?? 90) || 90;
+  const [h, m] = start.split(':').map(Number);
+  const endTotal = (h * 60 + m + mins) % 1440;
+  return {
+    start,
+    end: `${String(Math.floor(endTotal / 60)).padStart(2,'0')}:${String(endTotal % 60).padStart(2,'0')}`
+  };
+}
+
+function siestaBaseWindow(d) {
+  const start = d?.start || '13:00';
+  const end = d?.end || siestaWindow({start, duration: d?.duration ?? d?.duration_mins ?? 90}).end;
+  return { start, end };
+}
+
+function seasonalShiftNow() {
+  return parseInt(seasonalState?.current_shift_minutes ?? 0) || 0;
+}
+
+function acclimationPercentNow() {
+  return parseInt(acclimationState?.current_percent ?? 100) || 100;
+}
+
+function renderWarnings(d) {
+  warningsState = d;
+  const list = document.getElementById('warningsList');
+  if (!list) return;
+  const items = d?.items || [];
+  list.innerHTML = items.map(item => `
+    <div class="warn-item" data-level="${item.level || 'info'}">
+      <div class="warn-level">${item.level || 'info'}</div>
+      <div>${item.message || ''}</div>
+    </div>`).join('');
+}
+
+function _minsInWindow(mins, start, end) {
+  const [sH, sM] = String(start || '00:00').split(':').map(Number);
+  const [eH, eM] = String(end || '00:00').split(':').map(Number);
+  const s = sH * 60 + sM;
+  const e = eH * 60 + eM;
+  if (s <= e) return mins >= s && mins < e;
+  return mins >= s || mins < e;
+}
+
+function siestaFactorAt(mins) {
+  if (!siestaState || !(siestaState.enabled || siestaState.active)) return 1;
+  const win = siestaWindow(siestaState);
+  if (!_minsInWindow(mins, win.start, win.end)) return 1;
+  const depth = parseInt(siestaState.intensity ?? 25) || 0;
+  return Math.max(0, (100 - depth) / 100);
+}
+
+function updateAcclimationHint(d) {
+  const hint = document.getElementById('acHint');
+  if (!hint) return;
+  hint.textContent = d?.enabled
+    ? `Today runs at ${d.current_percent ?? 100}% of the base schedule. Recovery completes over ${d.duration_days ?? 21} days.`
+    : 'Starts dimmer, then recovers gradually back to 100% over the chosen number of days.';
+}
+
+function updateSeasonalHint(d) {
+  const hint = document.getElementById('ssHint');
+  if (!hint) return;
+  const shift = parseInt(d?.current_shift_minutes ?? 0) || 0;
+  const sign = shift >= 0 ? '+' : '';
+  hint.textContent = d?.enabled
+    ? `Today the whole schedule is shifted ${sign}${shift} minutes. Positive is later; negative is earlier.`
+    : 'Moves the whole photoperiod earlier and later across the year without changing day length.';
+}
+
+function updateSiestaHint(d) {
+  const hint = document.getElementById('siHint');
+  if (!hint) return;
+  if (!rampActiveState) {
+    hint.textContent = 'Requires Smooth Ramp. The lamp native schedule is too coarse for midday dimming on its own.';
+    return;
+  }
+  const allowedStart = d?.allowed_start || '12:00';
+  const allowedEnd = d?.allowed_end || '16:00';
+  const win = siestaWindow(d || {});
+  const base = siestaBaseWindow(d || {});
+  if (d?.enabled || d?.active) {
+    hint.textContent = `Allowed high-light window ${allowedStart}-${allowedEnd}; base ${base.start}-${base.end}; today ${win.start}-${win.end} · dim by ${d?.intensity ?? 25}%`;
+  } else {
+    hint.textContent = `Choose a base siesta fully inside the high-light window ${allowedStart}-${allowedEnd}`;
+  }
+}
+
+function setSiestaAvailability(enabled) {
+  ['siestaBtn','siEnabled','siStart','siDuration','siIntensity'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !enabled;
+  });
 }
 
 function updateLunarHint(d) {
@@ -536,19 +791,21 @@ async function _autoPushMaster() {
 
 function interpNow() {
   const now = new Date(), h = now.getHours(), m = now.getMinutes();
-  const lo = schedule[h], hi = schedule[(h+1)%24];
+  const minsNow = h * 60 + m;
+  const shiftedMins = ((minsNow - seasonalShiftNow()) % 1440 + 1440) % 1440;
+  const lo = schedule[Math.floor(shiftedMins / 60)];
+  const hi = schedule[(Math.floor(shiftedMins / 60)+1)%24];
+  const frac = (shiftedMins % 60) / 60;
   let lunarFloor = 0, lunarWin = null;
   if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
     lunarFloor = lunarState.max_intensity * lunarState.illumination / 100;
     lunarWin   = lunarWindow(lunarState);
   }
-  const inLunarWin = lunarWin && lunarFloor > 0 && (() => {
-    const sH = parseInt(lunarWin.start), eH = parseInt(lunarWin.end);
-    return sH <= eH ? (h >= sH && h < eH) : (h >= sH || h < eH);
-  })();
+  const inLunarWin = lunarWin && lunarFloor > 0 && _minsInWindow(minsNow, lunarWin.start, lunarWin.end);
   return chs().map((ch, i) => {
-    const raw = (lo[2+i]||0) + (m/60)*((hi[2+i]||0)-(lo[2+i]||0));
-    let v = Math.min(100, Math.round(raw * masterBrightness / 100));
+    const raw = (lo[2+i]||0) + frac*((hi[2+i]||0)-(lo[2+i]||0));
+    const acclimated = raw * acclimationPercentNow() / 100;
+    let v = Math.min(100, Math.round(acclimated * siestaFactorAt(minsNow) * masterBrightness / 100));
     if (inLunarWin) {
       if (ch === 'royal_blue') v = Math.max(v, Math.round(lunarFloor));
       else if (ch === 'blue' && cfg.device !== 'k7mini') v = Math.max(v, Math.round(lunarFloor * 0.7));
@@ -625,12 +882,17 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   try {
-    const [cfgData, s, rampSt, feedSt, lunarSt] = await Promise.all([
+    const [cfgData, s, rampSt, feedSt, maintenanceSt, siestaSt, acclimationSt, seasonalSt, lunarSt, warnings] = await Promise.all([
       api('GET', '/api/config'),
       api('GET', '/api/state'),
       api('GET', '/api/ramp/status'),
       api('GET', '/api/feed/status'),
+      api('GET', '/api/maintenance/status'),
+      api('GET', '/api/siesta/status'),
+      api('GET', '/api/acclimation/status'),
+      api('GET', '/api/seasonal/status'),
       api('GET', '/api/lunar/status'),
+      api('GET', '/api/warnings/status'),
     ]);
 
     cfg             = cfgData;
@@ -660,6 +922,55 @@ async function readFromDevice() {
     if (feedSt.active) startFeedCountdown(feedSt.remaining);
     else updateFeedSub(0);
 
+    // Maintenance
+    maintenanceState = maintenanceSt;
+    setMaintenanceBtn(maintenanceSt.active);
+    document.getElementById('maintenanceDuration').value = maintenanceSt.duration ?? 30;
+    document.getElementById('maintenanceIntensity').value = maintenanceSt.intensity ?? 70;
+    if (maintenanceSt.active) startMaintenanceCountdown(maintenanceSt.remaining, maintenanceSt.intensity ?? 70);
+    else updateMaintenanceSub(0, maintenanceSt.intensity ?? 70);
+
+    // Siesta
+    siestaState = siestaSt;
+    setSiestaAvailability(rampSt.active);
+    setSiestaBtn(rampSt.active && !!(siestaSt.enabled || siestaSt.active));
+    document.getElementById('siEnabled').checked = !!siestaSt.enabled;
+    document.getElementById('siStart').value = siestaSt.start || '13:00';
+    document.getElementById('siDuration').value = siestaSt.duration ?? siestaSt.duration_mins ?? 90;
+    document.getElementById('siIntensity').value = siestaSt.intensity ?? 25;
+    document.getElementById('siTimeRow').style.display = siestaSt.enabled ? '' : 'none';
+    document.getElementById('siDurationRow').style.display = siestaSt.enabled ? '' : 'none';
+    document.getElementById('siIntensityRow').style.display = siestaSt.enabled ? '' : 'none';
+    const siWin = siestaWindow(siestaSt || {});
+    const siBase = siestaBaseWindow(siestaSt || {});
+    document.getElementById('siestaSub').textContent = siestaSt.active
+      ? `Dimming now · ${siWin.start}-${siWin.end} · -${siestaSt.intensity ?? 25}%`
+      : siestaSt.enabled
+        ? `Base ${siBase.start} · today ${siWin.start}-${siWin.end}`
+        : 'Off';
+    updateSiestaHint(siestaSt);
+
+    // Acclimation
+    acclimationState = acclimationSt;
+    setAcclimationBtn(!!acclimationSt.enabled);
+    document.getElementById('acEnabled').checked = !!acclimationSt.enabled;
+    document.getElementById('acStartPercent').value = acclimationSt.start_percent ?? 70;
+    document.getElementById('acDurationDays').value = acclimationSt.duration_days ?? 21;
+    document.getElementById('acclimationSub').textContent = acclimationSt.enabled
+      ? `Today ${acclimationSt.current_percent ?? 100}% · ${acclimationSt.days_remaining ?? 0}d left`
+      : 'Off';
+    updateAcclimationHint(acclimationSt);
+
+    // Seasonal
+    seasonalState = seasonalSt;
+    setSeasonalBtn(!!seasonalSt.enabled);
+    document.getElementById('ssEnabled').checked = !!seasonalSt.enabled;
+    document.getElementById('ssMaxShift').value = seasonalSt.max_shift_minutes ?? 60;
+    const sShift = parseInt(seasonalSt.current_shift_minutes ?? 0) || 0;
+    const sSign = sShift >= 0 ? '+' : '';
+    document.getElementById('seasonalSub').textContent = seasonalSt.enabled ? `Today ${sSign}${sShift} min` : 'Off';
+    updateSeasonalHint(seasonalSt);
+
     // Ramp
     setRampBtn(rampSt.active);
     document.getElementById('rampSub').textContent = rampSt.active
@@ -668,7 +979,7 @@ async function readFromDevice() {
 
     // Lunar
     lunarState = lunarSt;
-    setLunarBtn(lunarSt.active);
+    setLunarBtn(!!(lunarSt.enabled || lunarSt.active));
     const MOON = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
     const win = lunarWindow(lunarSt);
     document.getElementById('lunarSub').textContent =
@@ -685,6 +996,8 @@ async function readFromDevice() {
     document.getElementById('lmTimeRow').style.display = lunarSt.enabled ? '' : 'none';
     document.getElementById('lmClampRow').style.display = lunarSt.enabled && lunarSt.track_moonrise ? '' : 'none';
     updateLunarHint(lunarSt);
+    updateNowBars();
+    renderWarnings(warnings);
 
     await loadPresetsProfiles();
     setOk((cfg.device==='k7mini' ? 'K7 Mini' : 'K7 Pro') + ' · ' + mode);
@@ -714,23 +1027,55 @@ async function pushSchedule() {
 
 // ── Effects ──────────────────────────────────────────────────────────────
 // Suppress poll overwriting optimistic toggle state for this many ms.
-const _suppress = { ramp: 0, lunar: 0 };
+const _suppress = { ramp: 0, siesta: 0, lunar: 0 };
 function _suppressPoll(key) { _suppress[key] = Date.now() + 4000; }
 function _pollOk(key)       { return Date.now() >= _suppress[key]; }
 
 function setRampBtn(on) {
+  rampActiveState = !!on;
   const b = document.getElementById('rampBtn');
   b.textContent = on ? 'ON' : 'OFF';
   b.className = 'fx-tog' + (on ? ' on-ramp' : '');
+  setSiestaAvailability(on);
+  if (siestaState) {
+    setSiestaBtn(on && !!(siestaState.enabled || siestaState.active));
+    updateSiestaHint(siestaState);
+  }
 }
 
 let feedCountdownInterval = null;
 let feedRemaining = 0;
+let maintenanceCountdownInterval = null;
+let maintenanceRemaining = 0;
 
 function setFeedBtn(on) {
   const b = document.getElementById('feedBtn');
   b.textContent = on ? 'ON' : 'OFF';
   b.className = 'fx-tog' + (on ? ' on-feed' : '');
+}
+
+function setMaintenanceBtn(on) {
+  const b = document.getElementById('maintenanceBtn');
+  b.textContent = on ? 'ON' : 'OFF';
+  b.className = 'fx-tog' + (on ? ' on-maintenance' : '');
+}
+
+function setSiestaBtn(on) {
+  const b = document.getElementById('siestaBtn');
+  b.textContent = on ? 'ON' : 'OFF';
+  b.className = 'fx-tog' + (on ? ' on-ramp' : '');
+}
+
+function setAcclimationBtn(on) {
+  const b = document.getElementById('acclimationBtn');
+  b.textContent = on ? 'ON' : 'OFF';
+  b.className = 'fx-tog' + (on ? ' on-acclimation' : '');
+}
+
+function setSeasonalBtn(on) {
+  const b = document.getElementById('seasonalBtn');
+  b.textContent = on ? 'ON' : 'OFF';
+  b.className = 'fx-tog' + (on ? ' on-seasonal' : '');
 }
 
 function updateFeedSub(secs) {
@@ -741,6 +1086,14 @@ function updateFeedSub(secs) {
   sub.textContent = `${m}:${String(s).padStart(2,'0')} remaining`;
 }
 
+function updateMaintenanceSub(secs, intensity) {
+  const sub = document.getElementById('maintenanceSub');
+  if (!sub) return;
+  if (secs <= 0) { sub.textContent = 'Off'; return; }
+  const m = Math.floor(secs / 60), s = secs % 60;
+  sub.textContent = `${m}:${String(s).padStart(2,'0')} remaining · ${intensity ?? 70}%`;
+}
+
 function startFeedCountdown(secs) {
   clearInterval(feedCountdownInterval);
   feedRemaining = secs;
@@ -749,6 +1102,21 @@ function startFeedCountdown(secs) {
     feedRemaining = Math.max(0, feedRemaining - 1);
     updateFeedSub(feedRemaining);
     if (feedRemaining === 0) { clearInterval(feedCountdownInterval); feedCountdownInterval = null; setFeedBtn(false); }
+  }, 1000);
+}
+
+function startMaintenanceCountdown(secs, intensity) {
+  clearInterval(maintenanceCountdownInterval);
+  maintenanceRemaining = secs;
+  updateMaintenanceSub(maintenanceRemaining, intensity);
+  maintenanceCountdownInterval = setInterval(() => {
+    maintenanceRemaining = Math.max(0, maintenanceRemaining - 1);
+    updateMaintenanceSub(maintenanceRemaining, document.getElementById('maintenanceIntensity').value);
+    if (maintenanceRemaining === 0) {
+      clearInterval(maintenanceCountdownInterval);
+      maintenanceCountdownInterval = null;
+      setMaintenanceBtn(false);
+    }
   }, 1000);
 }
 
@@ -766,6 +1134,51 @@ async function toggleFeed() {
       startFeedCountdown(duration * 60);
     }
   } catch(e) { setFeedBtn(on); setErr(e.message); }
+}
+
+async function toggleMaintenance() {
+  const on = document.getElementById('maintenanceBtn').classList.contains('on-maintenance');
+  setMaintenanceBtn(!on);
+  try {
+    if (on) {
+      clearInterval(maintenanceCountdownInterval); maintenanceCountdownInterval = null; maintenanceRemaining = 0; updateMaintenanceSub(0);
+      await api('POST', '/api/maintenance/stop');
+    } else {
+      const duration  = parseInt(document.getElementById('maintenanceDuration').value)  || 30;
+      const intensity = parseInt(document.getElementById('maintenanceIntensity').value) || 70;
+      await api('POST', '/api/maintenance/start', { duration, intensity });
+      clearInterval(feedCountdownInterval); feedCountdownInterval = null; feedRemaining = 0; updateFeedSub(0); setFeedBtn(false);
+      startMaintenanceCountdown(duration * 60, intensity);
+    }
+  } catch(e) { setMaintenanceBtn(on); setErr(e.message); }
+}
+
+async function toggleSiesta() {
+  if (!rampActiveState) return;
+  const on = document.getElementById('siEnabled').checked;
+  document.getElementById('siEnabled').checked = !on;
+  setSiestaBtn(!on);
+  _suppressPoll('siesta');
+  try {
+    await onSiestaChange();
+  } catch(e) {
+    document.getElementById('siEnabled').checked = on;
+    setSiestaBtn(on);
+    _suppress.siesta = 0;
+    setErr(e.message);
+  }
+}
+
+async function toggleAcclimation() {
+  const on = document.getElementById('acEnabled').checked;
+  document.getElementById('acEnabled').checked = !on;
+  await onAcclimationChange();
+}
+
+async function toggleSeasonal() {
+  const on = document.getElementById('ssEnabled').checked;
+  document.getElementById('ssEnabled').checked = !on;
+  await onSeasonalChange();
 }
 
 function setLunarBtn(on) {
@@ -813,6 +1226,62 @@ async function onLmChange() {
       day_threshold: parseInt(document.getElementById('lmDayThreshold').value)||0,
     });
   } catch(_) {}
+}
+
+async function onSiestaChange() {
+  if (!rampActiveState) return;
+  const en = document.getElementById('siEnabled').checked;
+  document.getElementById('siTimeRow').style.display = en ? '' : 'none';
+  document.getElementById('siDurationRow').style.display = en ? '' : 'none';
+  document.getElementById('siIntensityRow').style.display = en ? '' : 'none';
+  await api('POST', '/api/siesta/schedule', {
+    enabled: en,
+    start: document.getElementById('siStart').value,
+    duration: parseInt(document.getElementById('siDuration').value) || 90,
+    intensity: parseInt(document.getElementById('siIntensity').value) || 25,
+  });
+  const siesta = await api('GET', '/api/siesta/status');
+  siestaState = siesta;
+  setSiestaAvailability(rampActiveState);
+  setSiestaBtn(rampActiveState && !!(siesta.enabled || siesta.active));
+  const win = siestaWindow(siesta);
+  const base = siestaBaseWindow(siesta);
+  document.getElementById('siestaSub').textContent = siesta.active
+    ? `Dimming now · ${win.start}-${win.end} · -${siesta.intensity ?? 25}%`
+    : siesta.enabled
+      ? `Base ${base.start} · today ${win.start}-${win.end}`
+      : 'Off';
+  updateSiestaHint(siesta);
+  updateNowBars();
+}
+
+async function onAcclimationChange() {
+  const acclimation = await api('POST', '/api/acclimation/config', {
+    enabled: document.getElementById('acEnabled').checked,
+    start_percent: parseInt(document.getElementById('acStartPercent').value) || 70,
+    duration_days: parseInt(document.getElementById('acDurationDays').value) || 21,
+  });
+  acclimationState = acclimation;
+  setAcclimationBtn(!!acclimation.enabled);
+  document.getElementById('acclimationSub').textContent = acclimation.enabled
+    ? `Today ${acclimation.current_percent ?? 100}% · ${acclimation.days_remaining ?? 0}d left`
+    : 'Off';
+  updateAcclimationHint(acclimation);
+  updateNowBars();
+}
+
+async function onSeasonalChange() {
+  const seasonal = await api('POST', '/api/seasonal/config', {
+    enabled: document.getElementById('ssEnabled').checked,
+    max_shift_minutes: parseInt(document.getElementById('ssMaxShift').value) || 0,
+  });
+  seasonalState = seasonal;
+  setSeasonalBtn(!!seasonal.enabled);
+  const shift = parseInt(seasonal.current_shift_minutes ?? 0) || 0;
+  const sign = shift >= 0 ? '+' : '';
+  document.getElementById('seasonalSub').textContent = seasonal.enabled ? `Today ${sign}${shift} min` : 'Off';
+  updateSeasonalHint(seasonal);
+  updateNowBars();
 }
 
 // ── Profiles & presets ───────────────────────────────────────────────────
@@ -948,12 +1417,17 @@ function _setIfUnfocused(id, setter) {
 
 async function pollEffectStates() {
   try {
-    const [ramp, feed, lunar, master, stateData] = await Promise.all([
+    const [ramp, feed, maintenance, siesta, acclimation, seasonal, lunar, master, stateData, warnings] = await Promise.all([
       api('GET', '/api/ramp/status'),
       api('GET', '/api/feed/status'),
+      api('GET', '/api/maintenance/status'),
+      api('GET', '/api/siesta/status'),
+      api('GET', '/api/acclimation/status'),
+      api('GET', '/api/seasonal/status'),
       api('GET', '/api/lunar/status'),
       api('GET', '/api/master'),
       api('GET', '/api/state'),
+      api('GET', '/api/warnings/status'),
     ]);
     const masterSlider = document.getElementById('masterSlider');
     if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
@@ -966,6 +1440,9 @@ async function pollEffectStates() {
       if (document.getElementById('schedCollapse').classList.contains('open'))
         updateSchedTable();
     }
+    siestaState = siesta;
+    acclimationState = acclimation;
+    seasonalState = seasonal;
     lunarState = lunar;
     updateNowBars();
     // feedDuration/feedIntensity are "start" settings — only loaded on readFromDevice
@@ -975,14 +1452,56 @@ async function pollEffectStates() {
     } else if (!feed.active && document.getElementById('feedBtn').classList.contains('on-feed')) {
       setFeedBtn(false); clearInterval(feedCountdownInterval); feedCountdownInterval = null; feedRemaining = 0; updateFeedSub(0);
     }
+    if (maintenance.active) {
+      setMaintenanceBtn(true);
+      if (!maintenanceCountdownInterval || maintenanceRemaining === 0) startMaintenanceCountdown(maintenance.remaining, maintenance.intensity ?? 70);
+      _setIfUnfocused('maintenanceDuration', el => { el.value = maintenance.duration ?? 30; });
+      _setIfUnfocused('maintenanceIntensity', el => { el.value = maintenance.intensity ?? 70; });
+    } else if (!maintenance.active && document.getElementById('maintenanceBtn').classList.contains('on-maintenance')) {
+      setMaintenanceBtn(false); clearInterval(maintenanceCountdownInterval); maintenanceCountdownInterval = null; maintenanceRemaining = 0; updateMaintenanceSub(0, maintenance.intensity ?? 70);
+    }
     if (_pollOk('ramp')) {
       setRampBtn(ramp.active);
       document.getElementById('rampSub').textContent = ramp.active
         ? (ramp.last_tick ? 'Last tick: ' + new Date(ramp.last_tick*1000).toLocaleTimeString() : 'Running…')
         : 'Inactive';
     }
+    if (_pollOk('siesta')) {
+      setSiestaAvailability(ramp.active);
+      setSiestaBtn(ramp.active && !!(siesta.enabled || siesta.active));
+      _setIfUnfocused('siEnabled', el => { el.checked = !!siesta.enabled; });
+      _setIfUnfocused('siStart', el => { el.value = siesta.start || '13:00'; });
+      _setIfUnfocused('siDuration', el => { el.value = siesta.duration ?? siesta.duration_mins ?? 90; });
+      _setIfUnfocused('siIntensity', el => { el.value = siesta.intensity ?? 25; });
+      document.getElementById('siTimeRow').style.display = siesta.enabled ? '' : 'none';
+      document.getElementById('siDurationRow').style.display = siesta.enabled ? '' : 'none';
+      document.getElementById('siIntensityRow').style.display = siesta.enabled ? '' : 'none';
+      const siWin = siestaWindow(siesta || {});
+      const siBase = siestaBaseWindow(siesta || {});
+      document.getElementById('siestaSub').textContent = siesta.active
+        ? `Dimming now · ${siWin.start}-${siWin.end} · -${siesta.intensity ?? 25}%`
+        : siesta.enabled
+          ? `Base ${siBase.start} · today ${siWin.start}-${siWin.end}`
+          : 'Off';
+      updateSiestaHint(siesta);
+    }
+    setAcclimationBtn(!!acclimation.enabled);
+    _setIfUnfocused('acEnabled', el => { el.checked = !!acclimation.enabled; });
+    _setIfUnfocused('acStartPercent', el => { el.value = acclimation.start_percent ?? 70; });
+    _setIfUnfocused('acDurationDays', el => { el.value = acclimation.duration_days ?? 21; });
+    document.getElementById('acclimationSub').textContent = acclimation.enabled
+      ? `Today ${acclimation.current_percent ?? 100}% · ${acclimation.days_remaining ?? 0}d left`
+      : 'Off';
+    updateAcclimationHint(acclimation);
+    setSeasonalBtn(!!seasonal.enabled);
+    _setIfUnfocused('ssEnabled', el => { el.checked = !!seasonal.enabled; });
+    _setIfUnfocused('ssMaxShift', el => { el.value = seasonal.max_shift_minutes ?? 60; });
+    const seasonalShift = parseInt(seasonal.current_shift_minutes ?? 0) || 0;
+    const seasonalSign = seasonalShift >= 0 ? '+' : '';
+    document.getElementById('seasonalSub').textContent = seasonal.enabled ? `Today ${seasonalSign}${seasonalShift} min` : 'Off';
+    updateSeasonalHint(seasonal);
     if (_pollOk('lunar')) {
-      setLunarBtn(lunar.active);
+      setLunarBtn(!!(lunar.enabled || lunar.active));
       _setIfUnfocused('lmEnabled',  el => { el.checked = !!lunar.enabled; });
       _setIfUnfocused('lmTrackMoonrise', el => { el.checked = !!lunar.track_moonrise; });
       _setIfUnfocused('lmStart',    el => { el.value = lunar.start || '18:30'; });
@@ -999,6 +1518,7 @@ async function pollEffectStates() {
     const win = lunarWindow(lunar);
     document.getElementById('lunarSub').textContent =
       MOON[Math.round((lunar.phase||0)*8)%8] + ' ' + (lunar.phase_name||'') + ' · ' + win.start + '-' + win.end + ' · ' + (lunar.illumination||0) + '%';
+    renderWarnings(warnings);
   } catch(_) {}
 }
 setInterval(pollEffectStates, 5000);

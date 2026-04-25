@@ -25,6 +25,9 @@ static constexpr uint16_t    LAMP_PORT          = 8266;
 static constexpr const char* CONFIG_FILE   = "/config.json";
 static constexpr const char* PROFILES_FILE = "/profiles.json";
 static constexpr const char* LUNAR_FILE    = "/lunar_schedule.json";
+static constexpr const char* SIESTA_FILE   = "/siesta_config.json";
+static constexpr const char* ACCLIMATION_FILE = "/acclimation_config.json";
+static constexpr const char* SEASONAL_FILE    = "/seasonal_config.json";
 static constexpr const char* STATE_FILE    = "/state.json";
 
 // ── Lamp protocol ─────────────────────────────────────────────────────────────

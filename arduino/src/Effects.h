@@ -11,6 +11,8 @@ extern char              gLampHost[32];
 extern char              gDevice[16];          // "k7mini" or "k7pro"
 
 extern int               gMasterBrightness;   // 0-200
+extern int               gScheduleShiftMinutes; // whole-schedule UI shift, minutes
+extern uint8_t           gBaseSchedule[K7_SLOTS][8];
 extern uint8_t           gLastSchedule[K7_SLOTS][8];
 extern uint8_t           gLastManual[K7_CHANNELS];
 extern char              gLampName[12];        // cached from boot read
@@ -24,15 +26,19 @@ extern char              gActivePreset[64];    // e.g. "preset:mixed" or "profil
 extern std::atomic<bool> gRampActive;
 extern std::atomic<bool> gLunarActive;
 extern std::atomic<bool> gFeedActive;
+extern std::atomic<bool> gMaintenanceActive;
 
 extern std::atomic<bool> gLunarStopped;
 
 extern int gFeedDuration;   // minutes, 1-60
 extern int gFeedIntensity;  // white channel %, 1-100
+extern int gMaintenanceDuration;   // minutes, 1-180
+extern int gMaintenanceIntensity;  // overall profile %, 1-100
 
 extern time_t gRampLastTick;  // unix time of last ramp fire, 0 if never
 
 int feedSecondsRemaining();
+int maintenanceSecondsRemaining();
 
 // ── Schedule config (persisted in JSON files) ─────────────────────────────────
 struct LunarConfig {
@@ -48,6 +54,31 @@ struct LunarConfig {
 
 extern LunarConfig gLunarConfig;
 
+struct SiestaConfig {
+    bool enabled       = false;
+    char start[8]      = "13:00";
+    int  durationMins  = 90;
+    int  intensity     = 25;  // percentage reduction
+};
+
+extern SiestaConfig gSiestaConfig;
+
+struct AcclimationConfig {
+    bool      enabled       = false;
+    int       startPercent  = 70;
+    int       durationDays  = 21;
+    uint32_t  startEpoch    = 0;
+};
+
+extern AcclimationConfig gAcclimationConfig;
+
+struct SeasonalConfig {
+    bool enabled         = false;
+    int  maxShiftMinutes = 60;
+};
+
+extern SeasonalConfig gSeasonalConfig;
+
 // ── Helpers (used by both effects and ApiServer) ──────────────────────────────
 void interpolateChannels(const uint8_t sched[K7_SLOTS][8], int h, int m,
                          uint8_t out[K7_CHANNELS]);
@@ -58,8 +89,18 @@ bool inTimeWindow(const char* start, const char* end);
 void lunarWindowNow(char start[8], char end[8], int* shiftMinutes = nullptr);
 bool lunarWindowActiveNow();
 bool lunarScheduleAllowsNow();
+bool siestaActiveNow();
+bool siestaTimeAllowed(int startMins, int durationMins,
+                       int* outAllowedStart = nullptr,
+                       int* outAllowedEnd = nullptr);
+void siestaWindowNow(char start[8], char end[8]);
+int  acclimationPercentNow(time_t now = time(nullptr));
+int  seasonalShiftMinutesNow(time_t now = time(nullptr));
+void rebuildEffectiveSchedule(time_t now = time(nullptr));
+void queueCurrentLampStatePush();
 
 void applyLunarOverlay(uint8_t ch[K7_CHANNELS]);
+void applySiestaDimming(uint8_t ch[K7_CHANNELS]);
 void applyMasterBrightness(uint8_t ch[K7_CHANNELS]);
 
 // Make one K7 TCP connection, run fn(lamp), close.
@@ -88,6 +129,9 @@ void startLampWorker();
 // ── Persistence ───────────────────────────────────────────────────────────────
 void loadEffectConfigs();
 void saveLunarConfig();
+void saveSiestaConfig();
+void saveAcclimationConfig();
+void saveSeasonalConfig();
 void saveEffectState();
 void loadEffectState();
 
@@ -99,6 +143,9 @@ void stopRamp();
 
 void startFeed();
 void stopFeed();
+
+void startMaintenance();
+void stopMaintenance();
 
 void startLunar();
 void stopLunar();
