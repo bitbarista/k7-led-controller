@@ -58,6 +58,9 @@ body {
 }
 .mode-lbl { font-size: 0.9rem; font-weight: 600; color: var(--muted); }
 .mode-lbl.on { color: var(--text); }
+.mode-ramp { background: var(--surface); border-bottom: 1px solid var(--border); }
+.mode-ramp .fx-card { border-top: 0; }
+.mode-ramp .fx-main { padding: 10px 14px; }
 .tog { position: relative; width: 54px; height: 28px; cursor: pointer; }
 .tog input { opacity: 0; width: 0; height: 0; }
 .tog-track { position: absolute; inset: 0; border-radius: 14px; background: #4169e1; transition: background 0.2s; }
@@ -273,6 +276,18 @@ button:disabled { opacity: 0.4; }
   <span class="mode-lbl on" id="lblAuto">Schedule</span>
 </div>
 
+<div class="mode-ramp">
+  <div class="fx-card">
+    <div class="fx-main">
+      <div class="fx-info">
+        <div class="fx-name">≈ Smooth Ramp</div>
+        <div class="fx-sub" id="rampSub">Inactive</div>
+      </div>
+      <button class="fx-tog" id="rampBtn" onclick="toggleRamp()">OFF</button>
+    </div>
+  </div>
+</div>
+
 <!-- Manual panel -->
 <div id="manualPanel" style="display:none">
   <div class="card">
@@ -317,17 +332,6 @@ button:disabled { opacity: 0.4; }
 <!-- Effects -->
 <div class="card" style="margin-top:10px">
   <div class="card-hd" style="padding-bottom:4px">Effects</div>
-
-  <!-- Ramp -->
-  <div class="fx-card">
-    <div class="fx-main">
-      <div class="fx-info">
-        <div class="fx-name">≈ Smooth Ramp</div>
-        <div class="fx-sub" id="rampSub">Inactive</div>
-      </div>
-      <button class="fx-tog" id="rampBtn" onclick="toggleRamp()">OFF</button>
-    </div>
-  </div>
 
   <!-- Feed mode -->
   <div class="fx-card">
