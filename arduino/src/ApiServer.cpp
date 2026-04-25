@@ -104,6 +104,24 @@ static void buildStateDoc(JsonDocument& doc) {
     for (int i = 0; i < K7_CHANNELS; i++) manArr.add(gLastManual[i]);
 }
 
+static void buildOutputStatusDoc(JsonDocument& doc) {
+    OutputStatus st;
+    getOutputStatus(st);
+    uint32_t nowMs = millis();
+    doc["source"] = st.source;
+    doc["last_write_ok"] = st.lastWriteOk;
+    doc["target_age_ms"] = st.targetMs ? (uint32_t)(nowMs - st.targetMs) : 0;
+    doc["sent_age_ms"] = st.sentMs ? (uint32_t)(nowMs - st.sentMs) : 0;
+    doc["has_target"] = st.targetMs != 0;
+    doc["has_sent"] = st.sentMs != 0;
+    auto target = doc["target"].to<JsonArray>();
+    auto sent = doc["sent"].to<JsonArray>();
+    for (int i = 0; i < K7_CHANNELS; i++) {
+        target.add(st.target[i]);
+        sent.add(st.sent[i]);
+    }
+}
+
 static void buildLunarDoc(JsonDocument& doc) {
     doc["enabled"]        = gLunarConfig.enabled;
     doc["start"]          = gLunarConfig.start;
@@ -686,6 +704,12 @@ void setupApiServer(WebServer& server) {
         sendJson(server, doc);
     });
 
+    server.on("/api/output/status", HTTP_GET, [&server]() {
+        JsonDocument doc;
+        buildOutputStatusDoc(doc);
+        sendJson(server, doc);
+    });
+
     // ── /api/push ─────────────────────────────────────────────────────────────
     // The client sends the UNSCALED (base) schedule and raw manual values.
     // MB scaling is applied here so gLastSchedule never holds MB-tainted values.
@@ -885,7 +909,7 @@ void setupApiServer(WebServer& server) {
                            && lunarWindowActiveNow()
                            && lunarScheduleAllowsNow();
             if (lunarOn) applyLunarOverlay(ch);
-            withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+            sendHandLuminance("siesta", ch);
         }
         JsonDocument resp;
         buildSiestaDoc(resp);

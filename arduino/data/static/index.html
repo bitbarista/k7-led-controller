@@ -604,6 +604,7 @@ let maintenanceState = null;
 let rampActiveState = false;
 let chartMode = 'base';
 let warningsState = null;
+let outputStatusState = null;
 let previewTimer = null;
 let presets       = {};
 let savedProfiles = {};
@@ -684,7 +685,7 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   try {
-    const [s, rampStatus, masterData, feedStatus, maintenanceStatus, siestaStatus, acclimationStatus, seasonalStatus, warnings] = await Promise.all([
+    const [s, rampStatus, masterData, feedStatus, maintenanceStatus, siestaStatus, acclimationStatus, seasonalStatus, warnings, outputStatus] = await Promise.all([
       api('GET', '/api/state'),
       api('GET', '/api/ramp/status'),
       api('GET', '/api/master'),
@@ -694,9 +695,11 @@ async function readFromDevice() {
       api('GET', '/api/acclimation/status'),
       api('GET', '/api/seasonal/status'),
       api('GET', '/api/warnings/status'),
+      api('GET', '/api/output/status').catch(() => null),
     ]);
     mode            = s.mode;
     activePresetKey = s.active_preset || '';
+    outputStatusState = outputStatus;
     if (rampStatus.active && mode === 'manual') mode = 'auto';
     setRampBtn(rampStatus.active, rampStatus.last_tick);
     applyModeUI();
@@ -854,7 +857,7 @@ function updateNowBars() {
   const chs = DEVICES[cfg.device].channels;
   container.innerHTML = '';
   chs.forEach((ch, ci) => {
-    const v = effectiveValueAtMins(mins, ci);
+    const v = currentNowValue(mins, ci);
     const row = document.createElement('div');
     row.className = 'now-bar-row';
     row.innerHTML = `
@@ -864,6 +867,18 @@ function updateNowBars() {
       <span class="now-pct">${v}%</span>`;
     container.appendChild(row);
   });
+}
+
+function currentNowValue(mins, ci) {
+  const sent = outputStatusState?.sent;
+  if (outputStatusState?.has_sent && Array.isArray(sent)) {
+    return Math.max(0, Math.min(100, parseInt(sent[ci] ?? 0) || 0));
+  }
+  const target = outputStatusState?.target;
+  if (outputStatusState?.has_target && Array.isArray(target)) {
+    return Math.max(0, Math.min(100, parseInt(target[ci] ?? 0) || 0));
+  }
+  return effectiveValueAtMins(mins, ci);
 }
 
 // ── Chart ─────────────────────────────────────────────────────────────────────
@@ -1768,7 +1783,7 @@ function _setIfUnfocused(id, setter) {
 
 async function pollEffectStates() {
   try {
-    const [ramp, feed, maintenance, siesta, acclimation, seasonal, lunar, master, warnings] = await Promise.all([
+    const [ramp, feed, maintenance, siesta, acclimation, seasonal, lunar, master, warnings, outputStatus] = await Promise.all([
       api('GET', '/api/ramp/status'),
       api('GET', '/api/feed/status'),
       api('GET', '/api/maintenance/status'),
@@ -1778,7 +1793,9 @@ async function pollEffectStates() {
       api('GET', '/api/lunar/status'),
       api('GET', '/api/master'),
       api('GET', '/api/warnings/status'),
+      api('GET', '/api/output/status').catch(() => null),
     ]);
+    outputStatusState = outputStatus;
     const masterSlider = document.getElementById('masterSlider');
     if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
       masterBrightness = master.value;

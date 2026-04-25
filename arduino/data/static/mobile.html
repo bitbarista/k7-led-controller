@@ -569,6 +569,7 @@ let maintenanceState = null;
 let rampActiveState = false;
 let warningsState = null;
 let scheduleShiftMinutes = 0;
+let outputStatusState = null;
 
 function chs() { return DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels; }
 function lunarWindow(d) {
@@ -825,8 +826,20 @@ function interpNow() {
   });
 }
 
+function currentNowValues() {
+  const sent = outputStatusState?.sent;
+  if (outputStatusState?.has_sent && Array.isArray(sent)) {
+    return chs().map((_, i) => Math.max(0, Math.min(100, parseInt(sent[i] ?? 0) || 0)));
+  }
+  const target = outputStatusState?.target;
+  if (outputStatusState?.has_target && Array.isArray(target)) {
+    return chs().map((_, i) => Math.max(0, Math.min(100, parseInt(target[i] ?? 0) || 0)));
+  }
+  return interpNow();
+}
+
 function buildNowBars() {
-  const vals = interpNow();
+  const vals = currentNowValues();
   document.getElementById('nowBars').innerHTML = chs().map((ch,i) => {
     const c = CH[ch];
     return `<div class="now-row">
@@ -838,7 +851,7 @@ function buildNowBars() {
 }
 
 function updateNowBars() {
-  interpNow().forEach((v,i) => {
+  currentNowValues().forEach((v,i) => {
     const f=document.getElementById('nf'+i), p=document.getElementById('np'+i);
     if(f){ f.style.width=v+'%'; p.textContent=v+'%'; }
   });
@@ -893,7 +906,7 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   try {
-    const [cfgData, s, rampSt, feedSt, maintenanceSt, siestaSt, acclimationSt, seasonalSt, lunarSt, warnings] = await Promise.all([
+    const [cfgData, s, rampSt, feedSt, maintenanceSt, siestaSt, acclimationSt, seasonalSt, lunarSt, warnings, outputStatus] = await Promise.all([
       api('GET', '/api/config'),
       api('GET', '/api/state'),
       api('GET', '/api/ramp/status'),
@@ -904,6 +917,7 @@ async function readFromDevice() {
       api('GET', '/api/seasonal/status'),
       api('GET', '/api/lunar/status'),
       api('GET', '/api/warnings/status'),
+      api('GET', '/api/output/status').catch(() => null),
     ]);
 
     cfg             = cfgData;
@@ -912,6 +926,7 @@ async function readFromDevice() {
     mode            = s.mode;
     activePresetKey = s.active_preset || '';
     scheduleShiftMinutes = parseInt(s.schedule_shift_minutes ?? 0) || 0;
+    outputStatusState = outputStatus;
     if (rampSt.active && mode === 'manual') mode = 'auto';
     // Restore master — optional endpoint; old firmware may not have it
     try {
@@ -1435,7 +1450,7 @@ function _setIfUnfocused(id, setter) {
 
 async function pollEffectStates() {
   try {
-    const [ramp, feed, maintenance, siesta, acclimation, seasonal, lunar, master, stateData, warnings] = await Promise.all([
+    const [ramp, feed, maintenance, siesta, acclimation, seasonal, lunar, master, stateData, warnings, outputStatus] = await Promise.all([
       api('GET', '/api/ramp/status'),
       api('GET', '/api/feed/status'),
       api('GET', '/api/maintenance/status'),
@@ -1446,7 +1461,9 @@ async function pollEffectStates() {
       api('GET', '/api/master'),
       api('GET', '/api/state'),
       api('GET', '/api/warnings/status'),
+      api('GET', '/api/output/status').catch(() => null),
     ]);
+    outputStatusState = outputStatus;
     const masterSlider = document.getElementById('masterSlider');
     if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
       masterBrightness = master.value;

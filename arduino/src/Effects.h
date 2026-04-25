@@ -40,6 +40,15 @@ extern time_t gRampLastTick;  // unix time of last ramp fire, 0 if never
 int feedSecondsRemaining();
 int maintenanceSecondsRemaining();
 
+struct OutputStatus {
+    uint8_t target[K7_CHANNELS] = {};
+    uint8_t sent[K7_CHANNELS] = {};
+    uint32_t targetMs = 0;
+    uint32_t sentMs = 0;
+    bool lastWriteOk = false;
+    char source[16] = "unknown";
+};
+
 // ── Schedule config (persisted in JSON files) ─────────────────────────────────
 struct LunarConfig {
     bool    enabled      = false;
@@ -106,6 +115,8 @@ void applyMasterBrightness(uint8_t ch[K7_CHANNELS]);
 // Make one K7 TCP connection, run fn(lamp), close.
 // Must only be called from FreeRTOS tasks, NOT from HTTP handlers.
 bool withLamp(const std::function<void(K7Lamp&)>& fn);
+bool sendHandLuminance(const char* source, const uint8_t ch[K7_CHANNELS]);
+void getOutputStatus(OutputStatus& out);
 
 // ── Async lamp worker ─────────────────────────────────────────────────────────
 // All lamp TCP is handled by a background task so HTTP handlers never block.

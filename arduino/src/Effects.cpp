@@ -39,6 +39,8 @@ LunarConfig gLunarConfig;
 SiestaConfig gSiestaConfig;
 AcclimationConfig gAcclimationConfig;
 SeasonalConfig gSeasonalConfig;
+static OutputStatus gOutputStatus;
+static portMUX_TYPE gOutputStatusMux = portMUX_INITIALIZER_UNLOCKED;
 
 // ── Task handles ──────────────────────────────────────────────────────────────
 static TaskHandle_t hRamp  = nullptr;
@@ -85,9 +87,11 @@ static void buildMaintenanceChannels(uint8_t out[K7_CHANNELS]) {
 
 static void restoreScheduledOutputNow() {
     uint8_t    restored[K7_CHANNELS];
+    const char* source = "auto";
     if (!gLampAutoMode) {
         memcpy(restored, gLastManual, K7_CHANNELS);
         applyMasterBrightness(restored);
+        source = "manual";
     } else {
         time_t     now = time(nullptr);
         struct tm* t   = localtime(&now);
@@ -97,9 +101,12 @@ static void restoreScheduledOutputNow() {
         bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
                        && lunarWindowActiveNow()
                        && lunarScheduleAllowsNow();
-        if (lunarOn) applyLunarOverlay(restored);
+        if (lunarOn) {
+            applyLunarOverlay(restored);
+            source = "lunar";
+        }
     }
-    withLamp([&](K7Lamp& lamp) { lamp.handLuminance(restored); });
+    sendHandLuminance(source, restored);
 }
 
 int parseHHMM(const char* s) {
@@ -405,6 +412,37 @@ bool withLamp(const std::function<void(K7Lamp&)>& fn) {
     return ok;
 }
 
+static void recordOutputTarget(const char* source, const uint8_t ch[K7_CHANNELS]) {
+    portENTER_CRITICAL(&gOutputStatusMux);
+    memcpy(gOutputStatus.target, ch, K7_CHANNELS);
+    gOutputStatus.targetMs = millis();
+    strlcpy(gOutputStatus.source, source ? source : "unknown", sizeof(gOutputStatus.source));
+    portEXIT_CRITICAL(&gOutputStatusMux);
+}
+
+static void recordOutputResult(const uint8_t ch[K7_CHANNELS], bool ok) {
+    portENTER_CRITICAL(&gOutputStatusMux);
+    gOutputStatus.lastWriteOk = ok;
+    if (ok) {
+        memcpy(gOutputStatus.sent, ch, K7_CHANNELS);
+        gOutputStatus.sentMs = millis();
+    }
+    portEXIT_CRITICAL(&gOutputStatusMux);
+}
+
+bool sendHandLuminance(const char* source, const uint8_t ch[K7_CHANNELS]) {
+    recordOutputTarget(source, ch);
+    bool ok = withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+    recordOutputResult(ch, ok);
+    return ok;
+}
+
+void getOutputStatus(OutputStatus& out) {
+    portENTER_CRITICAL(&gOutputStatusMux);
+    out = gOutputStatus;
+    portEXIT_CRITICAL(&gOutputStatusMux);
+}
+
 // ── Persistence ───────────────────────────────────────────────────────────────
 void loadEffectConfigs() {
     if (UserDataFS.exists(LUNAR_FILE)) {
@@ -621,10 +659,14 @@ static void lampWorkerTask(void*) {
             } else {
                 memcpy(ch, push.manual, K7_CHANNELS);
             }
+            const char* source = gMaintenanceActive ? "maintenance" : (push.autoMode ? "auto" : "manual");
+            if (push.autoMode && (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
+                && lunarWindowActiveNow() && lunarScheduleAllowsNow())
+                source = "lunar";
 
             // handLuminance only — CMD_ALL_SET blocks the lamp for ~2.5 s and
             // resets its output; schedule persistence lives in LittleFS.
-            bool pushed = withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+            bool pushed = sendHandLuminance(source, ch);
             Serial.printf("[lamp] push withLamp=%s\n", pushed ? "ok" : "FAIL");
             if (!pushed) xQueueSend(hPushQueue, &push, 0);
             vTaskDelay(pdMS_TO_TICKS(400));
@@ -700,9 +742,13 @@ static void rampTask(void*) {
             bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
                            && lunarWindowActiveNow()
                            && lunarScheduleAllowsNow();
-            if (lunarOn) applyLunarOverlay(ch);
+            const char* source = "ramp";
+            if (lunarOn) {
+                applyLunarOverlay(ch);
+                source = "lunar";
+            }
             if (!haveLast || memcmp(lastSent, ch, K7_CHANNELS) != 0) {
-                if (withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); })) {
+                if (sendHandLuminance(source, ch)) {
                     memcpy(lastSent, ch, K7_CHANNELS);
                     haveLast = true;
                 }
@@ -743,7 +789,7 @@ static void lunarTask(void*) {
             applySiestaDimming(ch);
             applyMasterBrightness(ch);
             applyLunarOverlay(ch);
-            withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+            sendHandLuminance("lunar", ch);
         }
         time_t     now = time(nullptr);
         struct tm* t   = localtime(&now);
@@ -785,7 +831,7 @@ void lunarApplyNow() {
     applySiestaDimming(ch);
     applyMasterBrightness(ch);
     applyLunarOverlay(ch);
-    withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+    sendHandLuminance("lunar", ch);
 }
 
 void lunarRestoreNow() {
@@ -795,9 +841,7 @@ void lunarRestoreNow() {
     interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
     applySiestaDimming(ch);
     applyMasterBrightness(ch);
-    withLamp([&](K7Lamp& lamp) {
-        lamp.handLuminance(ch);
-    });
+    sendHandLuminance("auto", ch);
 }
 
 // ── Feed mode ─────────────────────────────────────────────────────────────────
@@ -824,7 +868,7 @@ static void feedTask(void*) {
     memcpy(ch, isPro ? FEED_PRO : FEED_MINI, K7_CHANNELS);
     ch[isPro ? 3 : 0] = (uint8_t)max(0, min(100, gFeedIntensity));
     applyMasterBrightness(ch);
-    withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+    sendHandLuminance("feed", ch);
 
     while (gFeedActive && (int32_t)(gFeedEndMs - millis()) > 0)
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -856,7 +900,7 @@ static void maintenanceTask(void*) {
     uint8_t ch[K7_CHANNELS];
     buildMaintenanceChannels(ch);
     applyMasterBrightness(ch);
-    withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+    sendHandLuminance("maintenance", ch);
 
     while (gMaintenanceActive && (int32_t)(gMaintenanceEndMs - millis()) > 0)
         vTaskDelay(pdMS_TO_TICKS(1000));
