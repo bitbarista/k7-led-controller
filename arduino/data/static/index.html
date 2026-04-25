@@ -122,14 +122,15 @@ body {
 #chScaleBar { flex:1; min-height:0; padding-right:4px; }
 
 /* ── now bars ── */
-.now-bar-row { display: grid; grid-template-columns: 14px 1fr 1fr 38px; align-items: center; gap: 7px; padding: 4px 0; }
+.now-bar-row { display: grid; grid-template-columns: 14px 1fr 7px 1fr 38px; align-items: center; gap: 7px; padding: 4px 0; }
 .now-track { background: var(--surface2); border-radius: 3px; height: 9px; overflow: hidden; }
 .now-fill  { height: 100%; border-radius: 3px; }
 .now-pct   { text-align: right; font-size: 0.76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.ch-dot.out-ok      { box-shadow: 0 0 0 2px #3fb950; }
-.ch-dot.out-pending { box-shadow: 0 0 0 2px #d29922; }
-.ch-dot.out-fail    { box-shadow: 0 0 0 2px #f85149; }
-.ch-dot.out-est     { box-shadow: 0 0 0 1px var(--border); }
+.out-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: 0.85; }
+.out-dot.out-ok      { background:#3fb950; box-shadow:0 0 4px rgba(63,185,80,0.8); }
+.out-dot.out-pending { background:#d29922; box-shadow:0 0 4px rgba(210,153,34,0.8); }
+.out-dot.out-fail    { background:#f85149; box-shadow:0 0 4px rgba(248,81,73,0.8); }
+.out-dot.out-est     { background:var(--muted); opacity:0.45; }
 
 /* ── chart (fills col-mid) ── */
 #autoPanel {
@@ -866,8 +867,9 @@ function updateNowBars() {
     const row = document.createElement('div');
     row.className = 'now-bar-row';
     row.innerHTML = `
-      <div class="ch-dot ${outClass}" style="background:${CH[ch].css}"></div>
+      <div class="ch-dot" style="background:${CH[ch].css}"></div>
       <span style="font-size:0.78rem">${CH[ch].label}</span>
+      <span class="out-dot ${outClass}"></span>
       <div class="now-track"><div class="now-fill" style="width:${v}%;background:${CH[ch].css}"></div></div>
       <span class="now-pct">${v}%</span>`;
     container.appendChild(row);

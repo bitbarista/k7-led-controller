@@ -125,7 +125,7 @@ body {
 
 /* ── Now bars ── */
 .now-row { display: flex; align-items: center; gap: 10px; padding: 6px 14px; }
-.now-name { width: 92px; font-size: 0.8rem; font-weight: 500; flex-shrink: 0; display:flex; align-items:center; gap:6px; min-width:0; }
+.now-name { width: 92px; font-size: 0.8rem; font-weight: 500; flex-shrink: 0; min-width:0; }
 .out-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink:0; background: var(--muted); opacity:0.85; }
 .out-dot.out-ok      { background:#3fb950; box-shadow:0 0 4px rgba(63,185,80,0.8); }
 .out-dot.out-pending { background:#d29922; box-shadow:0 0 4px rgba(210,153,34,0.8); }
@@ -856,7 +856,8 @@ function buildNowBars() {
   document.getElementById('nowBars').innerHTML = chs().map((ch,i) => {
     const c = CH[ch];
     return `<div class="now-row">
-      <span class="now-name"><span class="out-dot ${outClass}"></span><span>${c.label}</span></span>
+      <span class="now-name">${c.label}</span>
+      <span class="out-dot ${outClass}"></span>
       <div class="now-track"><div class="now-fill" id="nf${i}" style="width:${vals[i]}%;background:${c.css}"></div></div>
       <span class="now-pct" id="np${i}">${vals[i]}%</span>
     </div>`;
