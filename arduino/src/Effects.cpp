@@ -59,6 +59,19 @@ void interpolateChannels(const uint8_t sched[K7_SLOTS][8], int h, int m,
     }
 }
 
+static void interpolateChannelsAt(time_t now, uint8_t out[K7_CHANNELS]) {
+    struct tm t;
+    localtime_r(&now, &t);
+    const uint8_t* lo = gLastSchedule[t.tm_hour % K7_SLOTS];
+    const uint8_t* hi = gLastSchedule[(t.tm_hour + 1) % K7_SLOTS];
+    float frac = (t.tm_min * 60 + t.tm_sec) / 3600.0f;
+    for (int i = 0; i < K7_CHANNELS; i++) {
+        float v = lo[2 + i] + frac * ((int)hi[2 + i] - (int)lo[2 + i]);
+        int iv = (int)roundf(v);
+        out[i] = (uint8_t)max(0, min(100, iv));
+    }
+}
+
 static void buildMaintenanceChannels(uint8_t out[K7_CHANNELS]) {
     static const uint8_t MAINT_MINI[K7_CHANNELS] = {100, 40, 50,  0,  0, 0};
     static const uint8_t MAINT_PRO [K7_CHANNELS] = { 15, 30, 40, 100, 55, 5};
@@ -673,25 +686,32 @@ void startLampWorker() {
 
 // ── Ramp ──────────────────────────────────────────────────────────────────────
 static void rampTask(void*) {
-    while (gRampActive) {
-        time_t     now = time(nullptr);
-        struct tm* t   = localtime(&now);
+    static const uint32_t RAMP_UPDATE_MS = 10000;
+    uint8_t lastSent[K7_CHANNELS] = {};
+    bool haveLast = false;
 
+    while (gRampActive) {
         if (!gFeedActive && !gMaintenanceActive) {
             gRampLastTick = time(nullptr);
             uint8_t ch[K7_CHANNELS];
-            interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
+            interpolateChannelsAt(gRampLastTick, ch);
             applySiestaDimming(ch);
             applyMasterBrightness(ch);
             bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
                            && lunarWindowActiveNow()
                            && lunarScheduleAllowsNow();
             if (lunarOn) applyLunarOverlay(ch);
-            withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); });
+            if (!haveLast || memcmp(lastSent, ch, K7_CHANNELS) != 0) {
+                if (withLamp([&](K7Lamp& lamp) { lamp.handLuminance(ch); })) {
+                    memcpy(lastSent, ch, K7_CHANNELS);
+                    haveLast = true;
+                }
+            }
+        } else {
+            haveLast = false;
         }
 
-        int sleepSecs = max(1, 60 - t->tm_sec);
-        for (int i = 0; i < sleepSecs * 2 && gRampActive; i++)
+        for (int i = 0; i < (int)(RAMP_UPDATE_MS / 500) && gRampActive; i++)
             vTaskDelay(pdMS_TO_TICKS(500));
     }
     hRamp = nullptr;
