@@ -1023,7 +1023,7 @@ async function readFromDevice() {
     // Ramp
     setRampBtn(rampSt.active);
     document.getElementById('rampSub').textContent = rampSt.active
-      ? (rampSt.last_tick ? 'Last tick: ' + new Date(rampSt.last_tick*1000).toLocaleTimeString() : 'Running…')
+      ? (rampSt.last_tick ? 'Last tick: ' + formatControllerClock(rampSt.last_tick) : 'Running…')
       : 'Inactive';
 
     // Lunar
@@ -1520,7 +1520,7 @@ async function pollEffectStates() {
     if (_pollOk('ramp')) {
       setRampBtn(ramp.active);
       document.getElementById('rampSub').textContent = ramp.active
-        ? (ramp.last_tick ? 'Last tick: ' + new Date(ramp.last_tick*1000).toLocaleTimeString() : 'Running…')
+        ? (ramp.last_tick ? 'Last tick: ' + formatControllerClock(ramp.last_tick) : 'Running…')
         : 'Inactive';
     }
     if (_pollOk('siesta')) {
@@ -1579,6 +1579,11 @@ async function pollEffectStates() {
   } catch(_) {}
 }
 setInterval(pollEffectStates, 5000);
+
+function formatControllerClock(epochSeconds) {
+  const d = new Date(epochSeconds * 1000);
+  return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')}`;
+}
 
 // ── Init ─────────────────────────────────────────────────────────────────
 (async function() {
