@@ -49,6 +49,10 @@ Either board draws ~80 mA and can run from any USB phone charger.
 
 Full setup and usage guide: **[bitbarista.github.io/k7-led-controller/guide.html](https://bitbarista.github.io/k7-led-controller/guide.html)**
 
+## Support
+
+If this project has helped you, you can support my open source work on **[Ko-fi](https://ko-fi.com/bitbarista)**.
+
 ---
 
 ## Flashing

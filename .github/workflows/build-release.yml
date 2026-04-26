@@ -121,7 +121,7 @@ jobs:
           "name": "K7 LED Controller (SuperMini)",
           "version": "${VERSION}",
           "new_install_prompt_erase": true,
-          "funding_url": "https://github.com/bitbarista/k7-led-controller",
+          "funding_url": "https://ko-fi.com/bitbarista",
           "builds": [
             {
               "chipFamily": "ESP32-S3",
@@ -141,7 +141,7 @@ jobs:
           "name": "K7 LED Controller (XIAO)",
           "version": "${VERSION}",
           "new_install_prompt_erase": true,
-          "funding_url": "https://github.com/bitbarista/k7-led-controller",
+          "funding_url": "https://ko-fi.com/bitbarista",
           "builds": [
             {
               "chipFamily": "ESP32-S3",
@@ -233,6 +233,8 @@ jobs:
           5. Browse to **http://k7controller.local**
 
           > To reset to setup mode, hold the BOOT button on the board while powering on for 3 seconds.
+
+          If the project has helped you, you can support the developer on [Ko-fi](https://ko-fi.com/bitbarista).
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -251,7 +253,7 @@ jobs:
           "name": "K7 LED Controller (SuperMini)",
           "version": "${VERSION}",
           "new_install_prompt_erase": true,
-          "funding_url": "https://github.com/bitbarista/k7-led-controller",
+          "funding_url": "https://ko-fi.com/bitbarista",
           "builds": [
             {
               "chipFamily": "ESP32-S3",
@@ -272,7 +274,7 @@ jobs:
           "name": "K7 LED Controller (XIAO)",
           "version": "${VERSION}",
           "new_install_prompt_erase": true,
-          "funding_url": "https://github.com/bitbarista/k7-led-controller",
+          "funding_url": "https://ko-fi.com/bitbarista",
           "builds": [
             {
               "chipFamily": "ESP32-S3",

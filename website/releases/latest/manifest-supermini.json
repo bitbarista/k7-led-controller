@@ -2,7 +2,7 @@
   "name": "K7 LED Controller (SuperMini)",
   "version": "2.6.12",
   "new_install_prompt_erase": true,
-  "funding_url": "https://github.com/bitbarista/k7-led-controller",
+  "funding_url": "https://ko-fi.com/bitbarista",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
