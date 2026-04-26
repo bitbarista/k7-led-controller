@@ -267,11 +267,11 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
             <div class="fx-sub" id="rampTick">Inactive</div>
           </div>
           <button class="fx-cog" id="rampCfgBtn" onclick="toggleFlyout('ramp')" title="Ramp info">⚙</button>
-          <button class="fx-tog" id="rampBtn" onclick="toggleRamp()" title="Enable smooth per-minute ramping">OFF</button>
+          <button class="fx-tog" id="rampBtn" onclick="toggleRamp()" title="Enable smooth ramping">OFF</button>
         </div>
         <div class="fx-flyout" id="rampFlyout">
           <div class="fx-flyout-row">
-            <span style="font-size:0.8rem;color:var(--muted)">Steps each channel once per minute to match the 24-hour schedule, smoothing abrupt brightness transitions. Last tick is shown below the name above.</span>
+            <span style="font-size:0.8rem;color:var(--muted)">Updates each channel about every 10 seconds to follow the 24-hour schedule, smoothing abrupt brightness transitions. The last tick time is shown below the name above.</span>
           </div>
         </div>
       </div>
@@ -1367,10 +1367,9 @@ function setRampBtn(active, lastTick) {
   pill.classList.toggle('active', active);
   btn.textContent = active ? 'ON' : 'OFF';
   btn.title = active ? 'Smooth ramp active — click to stop'
-                     : 'Enable smooth per-minute ramping';
+                     : 'Enable smooth ramping';
   if (active && lastTick) {
-    const ago = Math.round((Date.now() / 1000) - lastTick);
-    tick.textContent = 'Active · ' + (ago < 5 ? 'just now' : `${ago}s ago`);
+    tick.textContent = 'Last tick: ' + new Date(lastTick * 1000).toLocaleTimeString();
   } else { tick.textContent = active ? 'Active' : 'Inactive'; }
   setSiestaAvailability(active);
   if (siestaState) {

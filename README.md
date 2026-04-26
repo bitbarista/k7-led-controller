@@ -6,7 +6,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-c51a4a)
-![Firmware](https://img.shields.io/badge/firmware-v2.6.12-0369a1)
+![Firmware](https://img.shields.io/badge/firmware-v2.6.13-0369a1)
 <a href="https://ko-fi.com/bitbarista" target="_blank"><img src="https://img.shields.io/badge/Ko--fi-Support%20the%20Project-FF5E5B?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
 
 </div>
