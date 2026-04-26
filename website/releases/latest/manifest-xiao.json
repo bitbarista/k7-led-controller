@@ -1,17 +1,17 @@
 {
   "name": "K7 LED Controller (XIAO)",
-  "version": "2.6.10",
+  "version": "2.6.11",
   "new_install_prompt_erase": true,
   "funding_url": "https://github.com/bitbarista/k7-led-controller",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "k7controller-xiao-bootloader-v2.6.10.bin", "offset": 0 },
-        { "path": "k7controller-xiao-partitions-v2.6.10.bin", "offset": 32768 },
-        { "path": "k7controller-xiao-bootapp-v2.6.10.bin", "offset": 57344 },
-        { "path": "k7controller-xiao-firmware-v2.6.10.bin", "offset": 65536 },
-        { "path": "k7controller-xiao-littlefs-v2.6.10.bin", "offset": 3145728 }
+        { "path": "k7controller-xiao-bootloader-v2.6.11.bin", "offset": 0 },
+        { "path": "k7controller-xiao-partitions-v2.6.11.bin", "offset": 32768 },
+        { "path": "k7controller-xiao-bootapp-v2.6.11.bin", "offset": 57344 },
+        { "path": "k7controller-xiao-firmware-v2.6.11.bin", "offset": 65536 },
+        { "path": "k7controller-xiao-littlefs-v2.6.11.bin", "offset": 3145728 }
       ]
     }
   ]
