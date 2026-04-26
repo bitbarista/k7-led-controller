@@ -59,12 +59,14 @@ jobs:
 
     - name: Build SuperMini firmware + filesystem
       run: |
+        export PATH="$HOME/.platformio/packages/tool-mklittlefs:$PATH"
         cd arduino
         pio run -e supermini
         pio run -e supermini -t buildfs
 
     - name: Build XIAO firmware + filesystem
       run: |
+        export PATH="$HOME/.platformio/packages/tool-mklittlefs:$PATH"
         cd arduino
         pio run -e xiao
         pio run -e xiao -t buildfs
