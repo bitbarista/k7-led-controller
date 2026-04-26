@@ -4,6 +4,7 @@
 #include <LittleFS.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
+#include <esp_idf_version.h>
 #include <esp_netif.h>
 #include "Config.h"
 #include "Effects.h"
@@ -90,6 +91,7 @@ static bool startMdns() {
 static bool announceMdns() {
     if (!sMdnsRunning) return startMdns();
 
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
     esp_netif_t* staNetif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (!staNetif) {
         Serial.println("mDNS announce failed: no STA netif");
@@ -102,6 +104,11 @@ static bool announceMdns() {
         return false;
     }
     return true;
+#else
+    // Older ESP32 Arduino cores do not expose mdns_netif_action(), so the
+    // closest reliable refresh is to recreate the responder.
+    return startMdns();
+#endif
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -260,7 +267,8 @@ void loop() {
         }
     }
 
-    // Keep .local fresh without repeatedly tearing down the responder.
+    // Keep .local fresh. Newer ESP32 cores can announce without tearing down
+    // the responder; older cores fall back to a lightweight restart.
     if (connected && millis() - lastMdnsAnnounce > MDNS_ANNOUNCE_MS) {
         lastMdnsAnnounce = millis();
         if (announceMdns()) {
