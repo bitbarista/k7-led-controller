@@ -2,6 +2,15 @@
 
 An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED aquarium lamps.
 
+<div align="center">
+
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Platform](https://img.shields.io/badge/platform-ESP32--S3-c51a4a)
+![Firmware](https://img.shields.io/badge/firmware-v2.6.12-0369a1)
+<a href="https://ko-fi.com/bitbarista" target="_blank"><img src="https://img.shields.io/badge/Ko--fi-Support%20the%20Project-FF5E5B?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
+
+</div>
+
 > This is an independent, community-developed project. It is not affiliated with or endorsed by Noo-Psyche.
 
 ![K7 LED Controller UI](docs/screenshot.png)
@@ -51,7 +60,13 @@ Full setup and usage guide: **[bitbarista.github.io/k7-led-controller/guide.html
 
 ## Support
 
-If this project has helped you, you can support my open source work on **[Ko-fi](https://ko-fi.com/bitbarista)**.
+K7 LED Controller is a spare-time open source project. If it has helped with your reef lighting setup, you can support continued development and testing.
+
+<div align="center">
+
+<a href="https://ko-fi.com/bitbarista" target="_blank"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support on Ko-fi"></a>
+
+</div>
 
 ---
 

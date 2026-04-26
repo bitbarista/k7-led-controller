@@ -39,6 +39,19 @@
     .nav-links  { display: flex; align-items: center; gap: 1rem; }
     .nav-link   { font-size: 0.875rem; color: #0369a1; text-decoration: none; white-space: nowrap; }
     .nav-link:hover { text-decoration: underline; }
+    .support-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 2.25rem;
+      padding: 0 0.85rem;
+      border-radius: 999px;
+      background: #ff5e5b;
+      color: #fff;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(255,94,91,0.25);
+    }
+    .support-link:hover { text-decoration: none; background: #e24c49; }
 
     main {
       max-width: 780px;
@@ -72,6 +85,13 @@
       color: #475569;
       max-width: 520px;
       margin: 0 auto;
+    }
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-top: 1.25rem;
+      flex-wrap: wrap;
     }
 
     /* ── Cards ── */
@@ -227,7 +247,7 @@
       </a>
       <div class="nav-links">
         <a href="flash.html" class="nav-link">Flash firmware</a>
-        <a href="https://ko-fi.com/bitbarista" class="nav-link">Support</a>
+        <a href="https://ko-fi.com/bitbarista" class="nav-link support-link">Ko-fi</a>
       </div>
     </div>
   </header>
@@ -238,6 +258,9 @@
     <div class="hero">
       <h2>Setup Guide</h2>
       <p>Everything you need to get your K7 lamp under full control — no technical knowledge required.</p>
+      <div class="hero-actions">
+        <a href="https://ko-fi.com/bitbarista" class="support-link">Support on Ko-fi</a>
+      </div>
     </div>
 
     <!-- What is this -->
