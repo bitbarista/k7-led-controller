@@ -17,14 +17,14 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 - Day-shift control to slide the entire schedule forward or back (e.g. peak at 18:00 instead of midday)
 - Save and reload your own named profiles (stored on the controller, persists across sessions)
 - Manual mode with live preview
-- **Smooth Ramp** — sends per-minute interpolated brightness values so transitions are smooth rather than stepped
+- **Smooth Ramp** — sends interpolated brightness values about every 10 seconds so transitions are smooth rather than stepped
 - **Feed mode** — timed white brightness boost for feeding; adjustable intensity (1–100 %) and duration (1–60 min); also triggered by a quick press of the BOOT button on the board
 - **Maintenance mode** — timed balanced inspection light for tank work, with adjustable profile intensity (1–100 %) and duration (1–180 min)
-- **Lunar Cycle** — varies the royal blue channel over the 29.5-day synodic cycle, with either a fixed nightly window or a moonrise/moonset-shifted window anchored to full-moon times, plus optional night clamping and schedule-aware cutoff
+- **Lunar** — varies the royal blue channel over the 29.5-day synodic cycle, with either a fixed nightly window or a moonrise/moonset-shifted window anchored to full-moon times, plus optional night clamping and schedule-aware cutoff
 - **Siesta** — optional midday dimming window for a coral rest/algae-control break; requires Smooth Ramp
 - **Acclimation** — start the whole schedule dimmer, then recover gradually over a chosen number of days
 - **Seasonal Shift** — move the whole photoperiod earlier and later across the year without changing day length
-- **Effective Today** chart view and schedule-aware checks so you can see the real computed output and catch odd combinations before they surprise you
+- **Effective Today** chart view, firmware-backed Right Now output bars, and schedule-aware checks so you can see the real computed output and catch odd combinations before they surprise you
 - Backup export/import and persistent userdata storage so profiles and settings survive normal firmware and UI flashes
 - Supports K7 Mini (3 channels) and K7 Pro (6 channels)
 
