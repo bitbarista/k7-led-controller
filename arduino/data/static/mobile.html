@@ -1072,12 +1072,25 @@ async function pushSchedule() {
       active_preset: activePresetKey,
       schedule_shift_minutes: scheduleShiftMinutes,
     });
-    setOk('Pushed ✓');
+    if (activePresetDisablesLunar()) {
+      const lunar = await api('GET', '/api/lunar/status');
+      lunarState = lunar;
+      setLunarBtn(!!(lunar.enabled || lunar.active));
+      setOk('Pushed ✓ · Lunar disabled');
+    } else {
+      setOk('Pushed ✓');
+    }
   } catch(e) {
     setErr(e.message);
   } finally {
     document.getElementById('pushBtn').disabled = false;
   }
+}
+
+function activePresetDisablesLunar() {
+  if (!activePresetKey || !activePresetKey.startsWith('preset:')) return false;
+  const p = presets[activePresetKey.slice(7)];
+  return !!p?.disable_lunar;
 }
 
 // ── Effects ──────────────────────────────────────────────────────────────

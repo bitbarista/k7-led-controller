@@ -24,6 +24,18 @@ static void sendError(WebServer& srv, const char* msg, int code = 500) {
     srv.send(code, "application/json", j);
 }
 
+static const Preset* findPresetByActiveKey(const char* activeKey) {
+    if (!activeKey || strncmp(activeKey, "preset:", 7) != 0) return nullptr;
+    const char* id = activeKey + 7;
+    bool isPro = (strcmp(gDevice, "k7pro") == 0);
+    const Preset* list = isPro ? PRO_PRESETS : MINI_PRESETS;
+    uint8_t cnt = isPro ? NUM_PRO_PRESETS : NUM_MINI_PRESETS;
+    for (uint8_t i = 0; i < cnt; i++) {
+        if (strcmp(list[i].id, id) == 0) return &list[i];
+    }
+    return nullptr;
+}
+
 static bool loadJsonFile(const char* path, JsonDocument& doc) {
     doc.clear();
     if (!UserDataFS.exists(path)) return false;
@@ -743,8 +755,16 @@ void setupApiServer(WebServer& server) {
         memcpy(gBaseSchedule, sched,  sizeof(sched));
         memcpy(gLastManual,   manual, sizeof(manual));
         gLampAutoMode = userAutoMode;
-        if (doc["active_preset"].is<const char*>())
-            strlcpy(gActivePreset, doc["active_preset"], sizeof(gActivePreset));
+        const char* activePreset = doc["active_preset"].is<const char*>() ? doc["active_preset"].as<const char*>() : nullptr;
+        if (activePreset)
+            strlcpy(gActivePreset, activePreset, sizeof(gActivePreset));
+        const Preset* preset = findPresetByActiveKey(activePreset);
+        if (preset && preset->disableLunar) {
+            gLunarConfig.enabled = false;
+            saveLunarConfig();
+            stopLunar();
+            lunarRestoreNow();
+        }
         rebuildEffectiveSchedule();
         saveEffectState();
         queueCurrentLampStatePush();
@@ -763,6 +783,7 @@ void setupApiServer(WebServer& server) {
             auto ps = doc[p.id].to<JsonObject>();
             ps["name"] = p.name;
             ps["desc"] = p.desc;
+            if (p.disableLunar) ps["disable_lunar"] = true;
             auto manArr = ps["manual"].to<JsonArray>();
             for (int c = 0; c < K7_CHANNELS; c++) manArr.add(p.manual[c]);
 

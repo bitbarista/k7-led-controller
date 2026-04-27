@@ -6,7 +6,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-ESP32--S3-c51a4a)
-![Firmware](https://img.shields.io/badge/firmware-v2.6.13-0369a1)
+![Firmware](https://img.shields.io/badge/firmware-v2.6.14-0369a1)
 <a href="https://ko-fi.com/bitbarista" target="_blank"><img src="https://img.shields.io/badge/Ko--fi-Support%20the%20Project-FF5E5B?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
 
 </div>
@@ -20,7 +20,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 - Read the current schedule and mode directly from the lamp
 - Edit the 24-hour lighting schedule on an interactive drag-and-drop chart
 - Additive colour preview strip showing the blended light output for each hour
-- Built-in preset library for Fish Only, LPS Reef, SPS Reef, Mixed Reef, Soft Mixed Reef, Acclimation Mixed, LPS Low Energy, and Shallow SPS with dark overnight periods, practical coral photoperiods, and short dusk tails
+- Built-in preset library for Fish Only, LPS Reef, SPS Reef, Mixed Reef, Soft Mixed Reef, Acclimation Mixed, LPS Low Energy, Shallow SPS, and temporary Dino Suppression with dark overnight periods, practical coral photoperiods, and short dusk tails
 - Master brightness slider and per-channel intensity sliders (absolute output ceiling per channel)
 - Per-channel visibility toggles — hidden channels are zeroed when pushing to the device
 - Day-shift control to slide the entire schedule forward or back (e.g. peak at 18:00 instead of midday)
@@ -112,6 +112,7 @@ The controller uses a **static IP of 192.168.4.200** so the address never change
 - Smooth ramp, lunar cycle, feed mode, maintenance mode, and other schedule modifiers run entirely on the device — no browser needed once configured
 - Normal firmware updates and LittleFS web UI flashes no longer erase saved profiles and config; only a full erase/factory reset clears them
 - After updating firmware, reselect and push a built-in preset once if you want the controller to replace an older saved schedule with the latest preset definition
+- Dino Suppression is a temporary light-reduction preset for Ostreopsis/Prorocentrum pressure management; it disables Lunar/moonlight when pushed so nights remain fully dark
 - **Applying a change takes approximately 1 second to take effect on the lamp.** This is normal — each change requires a full TCP round-trip to the lamp (connect, send schedule + brightness, wait for acknowledgement, disconnect). Rapid successive changes are batched: only the latest value is sent. This is a constraint of the K7 lamp's TCP protocol, not a bug in the controller.
 
 ---

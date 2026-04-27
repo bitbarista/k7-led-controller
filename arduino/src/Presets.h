@@ -14,6 +14,7 @@ struct Preset {
     uint8_t         manual[K7_CHANNELS];
     const Keyframe* keyframes;
     uint8_t         numKeyframes;
+    bool            disableLunar;
 };
 
 // Build a 24-slot schedule by linearly interpolating between keyframes.
@@ -135,6 +136,15 @@ static const Keyframe KF_MINI_SHALLOWSPS[] = {
     {21, { 0,   8, 10, 0, 0, 0}},
     {22, { 0,   0,  0, 0, 0, 0}},
 };
+static const Keyframe KF_MINI_DINO[] = {
+    { 0, {0,  0,  0, 0, 0, 0}},
+    {10, {0,  0,  0, 0, 0, 0}},
+    {11, {1,  8,  8, 0, 0, 0}},
+    {12, {2, 16, 14, 0, 0, 0}},
+    {15, {2, 16, 14, 0, 0, 0}},
+    {16, {1,  8,  8, 0, 0, 0}},
+    {17, {0,  0,  0, 0, 0, 0}},
+};
 
 static const Preset MINI_PRESETS[] = {
     {"fo",    "Fish Only",           "White-dominant for natural daylight appearance and fish colour rendering. 10-hour photoperiod. Target ~100 µmol/m²/s at 300 mm.",
@@ -153,6 +163,8 @@ static const Preset MINI_PRESETS[] = {
      {8, 30, 32, 0, 0, 0}, KF_MINI_LOWENERGY, 12},
     {"shallowsps", "Shallow SPS", "Higher-output SPS profile for shallow tanks or elevated mounting, with strong midday intensity and a controlled evening falloff.",
      {78,100,100, 0, 0, 0}, KF_MINI_SHALLOWSPS, 13},
+    {"dino", "Dino Suppression", "Temporary low-output 6-hour schedule intended to reduce pressure from Ostreopsis/Prorocentrum dinoflagellates while you address nutrients, UV/export, and competition. Disables Lunar/moonlight on push for full darkness overnight; re-enable Lunar manually after treatment.",
+     {2, 16, 14, 0, 0, 0}, KF_MINI_DINO, 7, true},
 };
 
 // ── K7 Pro presets ────────────────────────────────────────────────────────────
@@ -271,6 +283,15 @@ static const Keyframe KF_PRO_SHALLOWSPS[] = {
     {21, { 0,   8, 10,  0,  0, 0}},
     {22, { 0,   0,  0,  0,  0, 0}},
 };
+static const Keyframe KF_PRO_DINO[] = {
+    { 0, {0,  0,  0, 0, 0, 0}},
+    {10, {0,  0,  0, 0, 0, 0}},
+    {11, {0,  8,  8, 1, 0, 0}},
+    {12, {1, 16, 14, 2, 0, 0}},
+    {15, {1, 16, 14, 2, 0, 0}},
+    {16, {0,  8,  8, 1, 0, 0}},
+    {17, {0,  0,  0, 0, 0, 0}},
+};
 
 static const Preset PRO_PRESETS[] = {
     {"fo",    "Fish Only",           "White-dominant for natural fish colour. Royal Blue for depth and sparkle. Bluer at dawn/dusk.",
@@ -289,10 +310,12 @@ static const Preset PRO_PRESETS[] = {
      {8, 30, 32, 12, 5, 0}, KF_PRO_LOWENERGY, 12},
     {"shallowsps", "Shallow SPS", "Higher-output SPS profile for shallow tanks or elevated mounting, with strong midday intensity and a controlled evening falloff.",
      {48,100,100, 52,14, 0}, KF_PRO_SHALLOWSPS, 13},
+    {"dino", "Dino Suppression", "Temporary low-output 6-hour schedule intended to reduce pressure from Ostreopsis/Prorocentrum dinoflagellates while you address nutrients, UV/export, and competition. Disables Lunar/moonlight on push for full darkness overnight; re-enable Lunar manually after treatment.",
+     {1, 16, 14, 2, 0, 0}, KF_PRO_DINO, 7, true},
 };
 
-static constexpr uint8_t NUM_MINI_PRESETS = 8;
-static constexpr uint8_t NUM_PRO_PRESETS  = 8;
+static constexpr uint8_t NUM_MINI_PRESETS = 9;
+static constexpr uint8_t NUM_PRO_PRESETS  = 9;
 
 // ── buildSchedule implementation ──────────────────────────────────────────────
 inline void buildSchedule(const Preset& p, uint8_t out[K7_SLOTS][8]) {
