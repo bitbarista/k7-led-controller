@@ -421,7 +421,7 @@
 
       <div class="usage-item">
         <div class="usage-title">Smooth Ramp</div>
-        <div class="usage-desc">By default the lamp jumps between brightness levels once per hour. Turn on <strong>Smooth Ramp</strong> and the controller adjusts brightness about every 10 seconds so transitions look like a natural sunrise and sunset.</div>
+        <div class="usage-desc">By default the lamp jumps between brightness levels once per hour. Turn on <strong>Smooth Ramp</strong> and the controller adjusts brightness about every 10 seconds so transitions look like a natural sunrise and sunset. Smooth Ramp sends only live luminance values when the calculated channel values change; it does not rewrite the lamp's stored 24-hour schedule every 10 seconds. The full schedule is kept on the ESP32 controller. The lamp firmware itself is closed, so use Smooth Ramp at your own discretion.</div>
       </div>
 
       <div class="usage-item">
