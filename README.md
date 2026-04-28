@@ -135,6 +135,8 @@ This project is provided "AS IS" without warranty of any kind. The author makes 
 
 K7 LED Controller changes live lighting output and stores controller-side schedules and settings for aquarium lamps. Incorrect settings, firmware bugs, hardware faults, WiFi issues, power loss, or unexpected lamp behaviour could affect aquarium lighting and livestock. Test changes carefully and keep your own backups.
 
+The Noo-Psyche lamp firmware is closed. Although this controller does not intentionally rewrite the lamp's stored schedule during Smooth Ramp, we cannot verify whether the lamp stores live luminance commands internally, how often it writes to its own non-volatile memory, or how it manages write wear.
+
 **Your use is at your sole risk.** The author shall not be liable for any damage, livestock loss, data loss, hardware failure, or other direct, indirect, incidental, punitive, or consequential damages arising from use of this project.
 
 ## Building from source
