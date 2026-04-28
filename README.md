@@ -129,6 +129,14 @@ The controller uses a **static IP of 192.168.4.200** so the address never change
 
 The lamp communicates over TCP on port 8266 using a simple binary framing protocol (`AA A5 [CMD] [data] BB`). The full implementation is in `arduino/src/K7Lamp.cpp`.
 
+## Disclaimer
+
+This project is provided "AS IS" without warranty of any kind. The author makes no representations about suitability, reliability, availability, or accuracy for any purpose.
+
+K7 LED Controller changes live lighting output and stores controller-side schedules and settings for aquarium lamps. Incorrect settings, firmware bugs, hardware faults, WiFi issues, power loss, or unexpected lamp behaviour could affect aquarium lighting and livestock. Test changes carefully and keep your own backups.
+
+**Your use is at your sole risk.** The author shall not be liable for any damage, livestock loss, data loss, hardware failure, or other direct, indirect, incidental, punitive, or consequential damages arising from use of this project.
+
 ## Building from source
 
 Requires [PlatformIO](https://platformio.org/).
