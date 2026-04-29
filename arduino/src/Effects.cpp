@@ -731,23 +731,31 @@ void startLampWorker() {
 }
 
 // ── Hourly schedule follower (ramp off) ──────────────────────────────────────
-// Sends the interpolated schedule value once per hour when ramp is not active,
-// but only if the value has changed since the last send.
+// Sends the schedule value when the wall-clock hour changes while ramp is not
+// active, but only if the value has changed since the last successful send.
 static void scheduleFollowerTask(void*) {
-    static const uint32_t FOLLOW_MS = 3600000;
+    static const uint32_t FOLLOW_CHECK_MS = 5000;
     uint8_t lastSent[K7_CHANNELS] = {};
     bool haveLast = false;
+    int lastHourKey = -1;
 
     for (;;) {
-        for (int i = 0; i < (int)(FOLLOW_MS / 500); i++)
-            vTaskDelay(pdMS_TO_TICKS(500));
-
         if (gRampActive || gFeedActive || gMaintenanceActive || !gLampAutoMode) {
             haveLast = false;
+            lastHourKey = -1;
+            vTaskDelay(pdMS_TO_TICKS(FOLLOW_CHECK_MS));
             continue;
         }
 
         time_t  now = time(nullptr);
+        struct tm t;
+        localtime_r(&now, &t);
+        int hourKey = ((t.tm_year * 366) + t.tm_yday) * 24 + t.tm_hour;
+        if (hourKey == lastHourKey) {
+            vTaskDelay(pdMS_TO_TICKS(FOLLOW_CHECK_MS));
+            continue;
+        }
+
         uint8_t ch[K7_CHANNELS];
         interpolateChannelsAt(now, ch);
         applySiestaDimming(ch);
@@ -764,8 +772,12 @@ static void scheduleFollowerTask(void*) {
             if (sendHandLuminance(source, ch)) {
                 memcpy(lastSent, ch, K7_CHANNELS);
                 haveLast = true;
+                lastHourKey = hourKey;
             }
+        } else {
+            lastHourKey = hourKey;
         }
+        vTaskDelay(pdMS_TO_TICKS(FOLLOW_CHECK_MS));
     }
 }
 
