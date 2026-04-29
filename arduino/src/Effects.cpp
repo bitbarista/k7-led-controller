@@ -1014,5 +1014,5 @@ static void scheduleModifierTask(void*) {
 void startEffectSchedulers() {
     xTaskCreatePinnedToCore(lunarSchedulerTask,    "lun_sched",  2048, nullptr, 1, nullptr, 0);
     xTaskCreatePinnedToCore(scheduleModifierTask,  "mod_sched",  3072, nullptr, 1, nullptr, 0);
-    xTaskCreatePinnedToCore(scheduleFollowerTask,  "sched_follow", 2048, nullptr, 1, nullptr, 0);
+    xTaskCreatePinnedToCore(scheduleFollowerTask,  "sched_follow", 4096, nullptr, 1, nullptr, 0);
 }
