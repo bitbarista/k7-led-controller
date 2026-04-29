@@ -29,6 +29,7 @@ extern std::atomic<bool> gFeedActive;
 extern std::atomic<bool> gMaintenanceActive;
 
 extern std::atomic<bool> gLunarStopped;
+extern bool              gRampConsentAccepted;
 
 extern int gFeedDuration;   // minutes, 1-60
 extern int gFeedIntensity;  // white channel %, 1-100

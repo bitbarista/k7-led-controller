@@ -1259,12 +1259,22 @@ function toggleFxSet(name) {
   document.getElementById(name+'Settings').classList.toggle('open');
 }
 
+function confirmSmoothRampConsent() {
+  return window.confirm(
+    'Smooth Ramp is optional and sends live luminance updates to the lamp about every 10 seconds, but only when calculated channel values change.\n\n' +
+    'It does not intentionally rewrite the lamp stored 24-hour schedule; the full schedule is kept on the ESP32 controller.\n\n' +
+    'However, the Noo-Psyche lamp firmware is closed, so we cannot verify whether the lamp stores live commands internally, how often it writes to non-volatile memory, or how it manages write wear.\n\n' +
+    'Use Smooth Ramp at your own discretion. Enable Smooth Ramp?'
+  );
+}
+
 async function toggleRamp() {
   const on = document.getElementById('rampBtn').classList.contains('on-ramp');
+  if (!on && !confirmSmoothRampConsent()) return;
   setRampBtn(!on);
   _suppressPoll('ramp');
   try {
-    await api('POST', on ? '/api/ramp/stop' : '/api/ramp/start');
+    await api('POST', on ? '/api/ramp/stop' : '/api/ramp/start', on ? undefined : { consent: true });
     document.getElementById('rampSub').textContent = !on ? 'Running…' : 'Inactive';
   } catch(e) { setRampBtn(on); _suppress.ramp = 0; setErr(e.message); }
 }

@@ -97,6 +97,7 @@ static bool saveConfigDoc(JsonVariantConst src) {
 
 static void buildStateDoc(JsonDocument& doc) {
     doc["ramp"]              = gRampActive.load();
+    doc["ramp_consent"]      = gRampConsentAccepted;
     doc["lunar"]             = gLunarActive.load() && !gLunarStopped.load();
     doc["master_brightness"] = gMasterBrightness;
     doc["schedule_shift_minutes"] = gScheduleShiftMinutes;
@@ -643,11 +644,13 @@ void setupApiServer(WebServer& server) {
                 gLampAutoMode = state["auto_mode"];
             if (state["active_preset"].is<const char*>())
                 strlcpy(gActivePreset, state["active_preset"], sizeof(gActivePreset));
+            if (state["ramp_consent"].is<bool>())
+                gRampConsentAccepted = state["ramp_consent"];
 
             rebuildEffectiveSchedule();
 
             if (state["ramp"].is<bool>()) {
-                if (state["ramp"].as<bool>()) startRamp();
+                if (state["ramp"].as<bool>() && gRampConsentAccepted) startRamp();
                 else stopRamp();
             }
             if (state["lunar"].is<bool>()) {
@@ -836,9 +839,18 @@ void setupApiServer(WebServer& server) {
         JsonDocument doc;
         doc["active"]    = gRampActive.load();
         doc["last_tick"] = (long long)gRampLastTick;
+        doc["consent"]   = gRampConsentAccepted;
         sendJson(server, doc);
     });
     server.on("/api/ramp/start", HTTP_POST, [&server]() {
+        JsonDocument doc;
+        if (server.arg("plain").length() && deserializeJson(doc, server.arg("plain")) != DeserializationError::Ok) {
+            sendError(server, "Bad JSON", 400); return;
+        }
+        if (!doc["consent"].is<bool>() || !doc["consent"].as<bool>()) {
+            sendError(server, "Smooth Ramp requires explicit consent", 400); return;
+        }
+        gRampConsentAccepted = true;
         startRamp();
         saveEffectState();
         sendOk(server);

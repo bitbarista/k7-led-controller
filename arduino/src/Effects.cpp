@@ -25,6 +25,7 @@ std::atomic<bool> gLunarActive{false};
 std::atomic<bool> gFeedActive{false};
 std::atomic<bool> gMaintenanceActive{false};
 std::atomic<bool> gLunarStopped{false};
+bool gRampConsentAccepted = false;
 
 int gFeedDuration  = 15;
 int gFeedIntensity = 80;
@@ -559,6 +560,7 @@ void saveEffectState() {
     if (!f) return;
     JsonDocument doc;
     doc["ramp"]          = gRampActive.load();
+    doc["ramp_consent"]  = gRampConsentAccepted;
     doc["lunar"]         = gLunarActive.load() && !gLunarStopped.load();
     doc["master_brightness"] = gMasterBrightness;
     doc["schedule_shift_minutes"] = gScheduleShiftMinutes;
@@ -615,8 +617,10 @@ void loadEffectState() {
         gMaintenanceDuration = max(1, min(180, doc["maintenance_duration"].as<int>()));
     if (doc["maintenance_intensity"].is<int>())
         gMaintenanceIntensity = max(1, min(100, doc["maintenance_intensity"].as<int>()));
+    if (doc["ramp_consent"].is<bool>())
+        gRampConsentAccepted = doc["ramp_consent"];
     rebuildEffectiveSchedule();
-    if (doc["ramp"].as<bool>())  startRamp();
+    if (gRampConsentAccepted && doc["ramp"].as<bool>())  startRamp();
     if (doc["lunar"].as<bool>()) { startLunar(); lunarApplyNow(); }
 }
 
