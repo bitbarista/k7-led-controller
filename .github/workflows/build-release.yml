@@ -186,9 +186,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
     - name: Checkout repository
@@ -320,5 +317,4 @@ jobs:
         path: website/
 
     - name: Deploy GitHub Pages
-      id: deployment
       uses: actions/deploy-pages@v4
