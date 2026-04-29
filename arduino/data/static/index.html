@@ -284,10 +284,10 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       <div class="consent-sub">Read the full notice before enabling this optional feature.</div>
     </div>
     <div class="consent-body" id="rampConsentBody" tabindex="0">
-      <p>Smooth Ramp sends live luminance updates to the lamp about every 10 seconds, but only when calculated channel values change.</p>
-      <p>It does not intentionally rewrite the lamp's stored 24-hour schedule every 10 seconds. The full schedule is kept on the ESP32 controller, and the lamp receives the current output level.</p>
-      <p>However, the Noo-Psyche lamp firmware is closed. We cannot verify whether the lamp stores live luminance commands internally, how often it writes to its own non-volatile memory, or how it manages write wear.</p>
-      <p>Use Smooth Ramp at your own discretion. If you are concerned about unknown internal lamp write behaviour, leave Smooth Ramp disabled.</p>
+      <p>Without Smooth Ramp, the controller sends one live luminance update per hour to keep the lamp in step with the schedule. Smooth Ramp increases this to about every 10 seconds, but only when calculated channel values change.</p>
+      <p>Neither mode intentionally rewrites the lamp's stored 24-hour schedule. The full schedule is kept on the ESP32 controller, and the lamp receives only the current output level.</p>
+      <p>However, the Noo-Psyche lamp firmware is closed. We cannot verify whether the lamp stores live luminance commands internally or how it manages write wear. Smooth Ramp sends commands significantly more frequently than the hourly default, which may increase any internal write activity.</p>
+      <p>Use Smooth Ramp at your own discretion.</p>
     </div>
     <label class="consent-check">
       <input type="checkbox" id="rampConsentCheck" disabled>
@@ -330,7 +330,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
         </div>
         <div class="fx-flyout" id="rampFlyout">
           <div class="fx-flyout-row">
-            <span style="font-size:0.8rem;color:var(--muted)">Updates each channel about every 10 seconds to follow the 24-hour schedule, smoothing abrupt brightness transitions. The last tick time is shown below the name above.</span>
+            <span style="font-size:0.8rem;color:var(--muted)">Without Smooth Ramp the schedule is followed with one update per hour. Enable Smooth Ramp to increase this to about every 10 seconds, smoothing brightness transitions. The last tick time is shown below the name above.</span>
           </div>
         </div>
       </div>

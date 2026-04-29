@@ -26,7 +26,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 - Day-shift control to slide the entire schedule forward or back (e.g. peak at 18:00 instead of midday)
 - Save and reload your own named profiles (stored on the controller, persists across sessions)
 - Manual mode with live preview
-- **Smooth Ramp** — sends interpolated brightness values about every 10 seconds so transitions are smooth rather than stepped
+- **Smooth Ramp** — without Smooth Ramp the controller sends one interpolated brightness update per hour to keep the lamp in step with the schedule; enable Smooth Ramp to increase this to about every 10 seconds for smooth sunrise and sunset transitions
 - **Feed mode** — timed white brightness boost for feeding; adjustable intensity (1–100 %) and duration (1–60 min); also triggered by a quick press of the BOOT button on the board
 - **Maintenance mode** — timed balanced inspection light for tank work, with adjustable profile intensity (1–100 %) and duration (1–180 min)
 - **Lunar** — varies the royal blue channel over the 29.5-day synodic cycle, with either a fixed nightly window or a moonrise/moonset-shifted window anchored to full-moon times, plus optional night clamping and schedule-aware cutoff
@@ -110,7 +110,7 @@ The controller uses a **static IP of 192.168.4.200** so the address never change
 
 - Profiles and settings are saved to flash and survive power cycles
 - Smooth ramp, lunar cycle, feed mode, maintenance mode, and other schedule modifiers run entirely on the device — no browser needed once configured
-- **Smooth Ramp safety note:** Smooth Ramp does not intentionally rewrite the lamp's stored 24-hour schedule every 10 seconds. It sends only live luminance values using the lamp's manual/hand luminance command, and only when the calculated channel values change. The full schedule is stored on the ESP32 controller; the lamp receives the current output level. However, the Noo-Psyche lamp firmware is closed, so we cannot verify whether the lamp stores those live commands internally, how often it writes to its own non-volatile memory, or how it manages write wear. Use Smooth Ramp at your own discretion.
+- **Live luminance commands and NVR:** The controller sends live luminance commands to the lamp in both modes — once per hour without Smooth Ramp, and about every 10 seconds with Smooth Ramp enabled. Neither mode intentionally rewrites the lamp's stored 24-hour schedule; the full schedule is kept on the ESP32 controller and the lamp receives only the current output level. However, the Noo-Psyche lamp firmware is closed, so we cannot verify whether the lamp stores those live commands internally or how it manages write wear. Smooth Ramp sends commands significantly more frequently than the hourly default, which may increase any internal write activity. Use Smooth Ramp at your own discretion.
 - Normal firmware updates and LittleFS web UI flashes no longer erase saved profiles and config; only a full erase/factory reset clears them
 - After updating firmware, reselect and push a built-in preset once if you want the controller to replace an older saved schedule with the latest preset definition
 - Dino Suppression is a temporary light-reduction preset for Ostreopsis/Prorocentrum pressure management; it disables Lunar/moonlight when pushed so nights remain fully dark
@@ -135,7 +135,7 @@ This project is provided "AS IS" without warranty of any kind. The author makes 
 
 K7 LED Controller changes live lighting output and stores controller-side schedules and settings for aquarium lamps. Incorrect settings, firmware bugs, hardware faults, WiFi issues, power loss, or unexpected lamp behaviour could affect aquarium lighting and livestock. Test changes carefully and keep your own backups.
 
-The Noo-Psyche lamp firmware is closed. Although this controller does not intentionally rewrite the lamp's stored schedule during Smooth Ramp, we cannot verify whether the lamp stores live luminance commands internally, how often it writes to its own non-volatile memory, or how it manages write wear.
+The Noo-Psyche lamp firmware is closed. The controller sends live luminance commands to the lamp in normal operation — once per hour without Smooth Ramp, and about every 10 seconds with Smooth Ramp enabled. Neither mode intentionally rewrites the lamp's stored schedule, but we cannot verify whether the lamp stores those live commands internally or how it manages write wear.
 
 **Your use is at your sole risk.** The author shall not be liable for any damage, livestock loss, data loss, hardware failure, or other direct, indirect, incidental, punitive, or consequential damages arising from use of this project.
 

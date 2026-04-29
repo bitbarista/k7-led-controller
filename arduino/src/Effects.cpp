@@ -730,6 +730,45 @@ void startLampWorker() {
     xTaskCreatePinnedToCore(lampWorkerTask, "lamp_w", 8192, nullptr, 4, nullptr, 0);
 }
 
+// ── Hourly schedule follower (ramp off) ──────────────────────────────────────
+// Sends the interpolated schedule value once per hour when ramp is not active,
+// but only if the value has changed since the last send.
+static void scheduleFollowerTask(void*) {
+    static const uint32_t FOLLOW_MS = 3600000;
+    uint8_t lastSent[K7_CHANNELS] = {};
+    bool haveLast = false;
+
+    for (;;) {
+        for (int i = 0; i < (int)(FOLLOW_MS / 500); i++)
+            vTaskDelay(pdMS_TO_TICKS(500));
+
+        if (gRampActive || gFeedActive || gMaintenanceActive || !gLampAutoMode) {
+            haveLast = false;
+            continue;
+        }
+
+        time_t  now = time(nullptr);
+        uint8_t ch[K7_CHANNELS];
+        interpolateChannelsAt(now, ch);
+        applySiestaDimming(ch);
+        applyMasterBrightness(ch);
+        bool lunarOn = (gLunarActive.load() || (gLunarConfig.enabled && !gLunarStopped.load()))
+                       && lunarWindowActiveNow()
+                       && lunarScheduleAllowsNow();
+        const char* source = "auto";
+        if (lunarOn) {
+            applyLunarOverlay(ch);
+            source = "lunar";
+        }
+        if (!haveLast || memcmp(lastSent, ch, K7_CHANNELS) != 0) {
+            if (sendHandLuminance(source, ch)) {
+                memcpy(lastSent, ch, K7_CHANNELS);
+                haveLast = true;
+            }
+        }
+    }
+}
+
 // ── Ramp ──────────────────────────────────────────────────────────────────────
 static void rampTask(void*) {
     static const uint32_t RAMP_UPDATE_MS = 10000;
@@ -961,6 +1000,7 @@ static void scheduleModifierTask(void*) {
 }
 
 void startEffectSchedulers() {
-    xTaskCreatePinnedToCore(lunarSchedulerTask, "lun_sched", 2048, nullptr, 1, nullptr, 0);
-    xTaskCreatePinnedToCore(scheduleModifierTask, "mod_sched", 3072, nullptr, 1, nullptr, 0);
+    xTaskCreatePinnedToCore(lunarSchedulerTask,    "lun_sched",  2048, nullptr, 1, nullptr, 0);
+    xTaskCreatePinnedToCore(scheduleModifierTask,  "mod_sched",  3072, nullptr, 1, nullptr, 0);
+    xTaskCreatePinnedToCore(scheduleFollowerTask,  "sched_follow", 2048, nullptr, 1, nullptr, 0);
 }
