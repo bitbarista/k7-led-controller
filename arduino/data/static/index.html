@@ -216,6 +216,21 @@ body {
 .btn-danger-custom:hover    { background:#dc2626; }
 button:disabled { opacity:0.45; cursor:not-allowed; }
 
+/* ── consent modal ── */
+.consent-backdrop { position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.72); display:flex; align-items:center; justify-content:center; padding:18px; }
+.consent-backdrop[hidden] { display:none; }
+.consent-modal { width:min(560px, 100%); max-height:min(660px, 92vh); background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:0 18px 48px rgba(0,0,0,0.42); display:flex; flex-direction:column; overflow:hidden; }
+.consent-head { padding:14px 16px 10px; border-bottom:1px solid var(--border); }
+.consent-title { font-size:1rem; font-weight:700; }
+.consent-sub { font-size:0.78rem; color:var(--muted); margin-top:3px; }
+.consent-body { max-height:280px; overflow-y:auto; padding:14px 16px; line-height:1.45; font-size:0.86rem; scrollbar-gutter:stable; }
+.consent-body p { margin:0 0 10px; }
+.consent-body p:last-child { margin-bottom:0; }
+.consent-check { display:flex; align-items:flex-start; gap:9px; padding:12px 16px; border-top:1px solid var(--border); font-size:0.82rem; line-height:1.35; }
+.consent-check input { margin-top:2px; accent-color:#3fb950; }
+.consent-actions { display:flex; justify-content:flex-end; gap:8px; padding:12px 16px 14px; border-top:1px solid var(--border); }
+.consent-hint { padding:0 16px 12px; color:var(--muted); font-size:0.76rem; }
+
 /* ── responsive ── */
 @media (max-width:1100px) {
   body { overflow:auto; height:auto; }
@@ -259,7 +274,31 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
   </select>
   <input type="text" id="hostInput" value="192.168.4.1" placeholder="IP address"
          title="Device IP address" onchange="onHostChange()">
-  <button class="btn-secondary-custom" onclick="readFromDevice()" id="readBtn">↻ Read</button>
+<button class="btn-secondary-custom" onclick="readFromDevice()" id="readBtn">↻ Read</button>
+</div>
+
+<div class="consent-backdrop" id="rampConsentModal" hidden>
+  <div class="consent-modal" role="dialog" aria-modal="true" aria-labelledby="rampConsentTitle">
+    <div class="consent-head">
+      <div class="consent-title" id="rampConsentTitle">Smooth Ramp consent</div>
+      <div class="consent-sub">Read the full notice before enabling this optional feature.</div>
+    </div>
+    <div class="consent-body" id="rampConsentBody" tabindex="0">
+      <p>Smooth Ramp sends live luminance updates to the lamp about every 10 seconds, but only when calculated channel values change.</p>
+      <p>It does not intentionally rewrite the lamp's stored 24-hour schedule every 10 seconds. The full schedule is kept on the ESP32 controller, and the lamp receives the current output level.</p>
+      <p>However, the Noo-Psyche lamp firmware is closed. We cannot verify whether the lamp stores live luminance commands internally, how often it writes to its own non-volatile memory, or how it manages write wear.</p>
+      <p>Use Smooth Ramp at your own discretion. If you are concerned about unknown internal lamp write behaviour, leave Smooth Ramp disabled.</p>
+    </div>
+    <label class="consent-check">
+      <input type="checkbox" id="rampConsentCheck" disabled>
+      <span>I have read the full Smooth Ramp notice and accept the uncertainty around the lamp's closed firmware.</span>
+    </label>
+    <div class="consent-hint" id="rampConsentHint">Scroll to the bottom of the notice to unlock acknowledgement.</div>
+    <div class="consent-actions">
+      <button class="btn-secondary-custom" id="rampConsentCancel" type="button">Cancel</button>
+      <button class="btn-primary-custom" id="rampConsentEnable" type="button" disabled>Enable Smooth Ramp</button>
+    </div>
+  </div>
 </div>
 
 <!-- ── Three-column grid ── -->
@@ -1415,17 +1454,48 @@ function formatControllerClock(epochSeconds) {
 }
 
 function confirmSmoothRampConsent() {
-  return window.confirm(
-    'Smooth Ramp is optional and sends live luminance updates to the lamp about every 10 seconds, but only when calculated channel values change.\n\n' +
-    'It does not intentionally rewrite the lamp stored 24-hour schedule; the full schedule is kept on the ESP32 controller.\n\n' +
-    'However, the Noo-Psyche lamp firmware is closed, so we cannot verify whether the lamp stores live commands internally, how often it writes to non-volatile memory, or how it manages write wear.\n\n' +
-    'Use Smooth Ramp at your own discretion. Enable Smooth Ramp?'
-  );
+  const modal = document.getElementById('rampConsentModal');
+  const body = document.getElementById('rampConsentBody');
+  const check = document.getElementById('rampConsentCheck');
+  const enable = document.getElementById('rampConsentEnable');
+  const cancel = document.getElementById('rampConsentCancel');
+  const hint = document.getElementById('rampConsentHint');
+  return new Promise(resolve => {
+    let readAll = false;
+    const cleanup = result => {
+      modal.hidden = true;
+      body.removeEventListener('scroll', update);
+      check.removeEventListener('change', update);
+      enable.removeEventListener('click', onEnable);
+      cancel.removeEventListener('click', onCancel);
+      resolve(result);
+    };
+    const update = () => {
+      readAll = body.scrollTop + body.clientHeight >= body.scrollHeight - 2;
+      check.disabled = !readAll;
+      if (!readAll) check.checked = false;
+      enable.disabled = !(readAll && check.checked);
+      hint.textContent = readAll ? 'Tick the acknowledgement to enable Smooth Ramp.' : 'Scroll to the bottom of the notice to unlock acknowledgement.';
+    };
+    const onEnable = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    check.checked = false;
+    check.disabled = true;
+    enable.disabled = true;
+    modal.hidden = false;
+    body.scrollTop = 0;
+    body.focus();
+    body.addEventListener('scroll', update);
+    check.addEventListener('change', update);
+    enable.addEventListener('click', onEnable);
+    cancel.addEventListener('click', onCancel);
+    requestAnimationFrame(update);
+  });
 }
 
 async function toggleRamp() {
   const active = document.getElementById('rampPill').classList.contains('active');
-  if (!active && !confirmSmoothRampConsent()) return;
+  if (!active && !(await confirmSmoothRampConsent())) return;
   setRampBtn(!active, null);
   try {
     await api('POST', active ? '/api/ramp/stop' : '/api/ramp/start', active ? undefined : { consent: true });
