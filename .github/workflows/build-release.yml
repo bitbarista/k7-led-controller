@@ -293,6 +293,9 @@ jobs:
         }
         EOF
 
+        sed -i -E "s#manifest=\"\./releases/latest/manifest-supermini\.json(\?v=[^\"]*)?\"#manifest=\"./releases/latest/manifest-supermini.json?v=v${VERSION}\"#" website/flash.html
+        sed -i -E "s#manifest=\"\./releases/latest/manifest-xiao\.json(\?v=[^\"]*)?\"#manifest=\"./releases/latest/manifest-xiao.json?v=v${VERSION}\"#" website/flash.html
+
     - name: Commit and push
       run: |
         git config user.name "github-actions[bot]"
