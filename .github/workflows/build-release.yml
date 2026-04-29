@@ -156,6 +156,8 @@ jobs:
           ]
         }
         EOF
+        cp manifest-supermini.json manifest-supermini-v${VERSION}.json
+        cp manifest-xiao.json manifest-xiao-v${VERSION}.json
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
@@ -176,6 +178,8 @@ jobs:
           k7controller-xiao-littlefs-v${{ steps.version.outputs.VERSION }}.bin
           manifest-supermini.json
           manifest-xiao.json
+          manifest-supermini-v${{ steps.version.outputs.VERSION }}.json
+          manifest-xiao-v${{ steps.version.outputs.VERSION }}.json
         retention-days: 90
 
   publish:
@@ -293,14 +297,17 @@ jobs:
         }
         EOF
 
-        sed -i -E "s#manifest=\"\./releases/latest/manifest-supermini\.json(\?v=[^\"]*)?\"#manifest=\"./releases/latest/manifest-supermini.json?v=v${VERSION}\"#" website/flash.html
-        sed -i -E "s#manifest=\"\./releases/latest/manifest-xiao\.json(\?v=[^\"]*)?\"#manifest=\"./releases/latest/manifest-xiao.json?v=v${VERSION}\"#" website/flash.html
+        cp website/releases/latest/manifest-supermini.json website/releases/latest/manifest-supermini-v${VERSION}.json
+        cp website/releases/latest/manifest-xiao.json website/releases/latest/manifest-xiao-v${VERSION}.json
+
+        sed -i -E "s#manifest=\"\./releases/latest/manifest-supermini[^\"\"]*\.json([^\"]*)?\"#manifest=\"./releases/latest/manifest-supermini-v${VERSION}.json\"#" website/flash.html
+        sed -i -E "s#manifest=\"\./releases/latest/manifest-xiao[^\"\"]*\.json([^\"]*)?\"#manifest=\"./releases/latest/manifest-xiao-v${VERSION}.json\"#" website/flash.html
 
     - name: Commit and push
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add website/releases/latest/
+        git add website/releases/latest/ website/flash.html
         git commit -m "Update flash binaries and manifests for v${{ steps.version.outputs.VERSION }}"
         git push origin master
 
