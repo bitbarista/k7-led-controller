@@ -118,6 +118,7 @@ body {
 .consent-body { max-height:38vh; overflow-y:auto; padding:13px 14px; line-height:1.45; font-size:0.86rem; scrollbar-gutter:stable; }
 .consent-body p { margin:0 0 10px; }
 .consent-body p:last-child { margin-bottom:0; }
+.consent-read { width:100%; margin-top:6px; padding:10px 12px; border-radius:8px; font-weight:700; }
 .consent-check { display:flex; align-items:flex-start; gap:9px; padding:12px 14px; border-top:1px solid var(--border); font-size:0.82rem; line-height:1.35; }
 .consent-check input { margin-top:2px; accent-color:#3fb950; }
 .consent-actions { display:flex; gap:8px; padding:12px 14px 14px; border-top:1px solid var(--border); }
@@ -292,6 +293,7 @@ button:disabled { opacity: 0.4; }
       <p>It does not intentionally rewrite the lamp's stored 24-hour schedule every 10 seconds. The full schedule is kept on the ESP32 controller, and the lamp receives the current output level.</p>
       <p>However, the Noo-Psyche lamp firmware is closed. We cannot verify whether the lamp stores live luminance commands internally, how often it writes to its own non-volatile memory, or how it manages write wear.</p>
       <p>Use Smooth Ramp at your own discretion. If you are concerned about unknown internal lamp write behaviour, leave Smooth Ramp disabled.</p>
+      <button class="btn-read consent-read" id="rampConsentRead" type="button">I have read to the bottom</button>
     </div>
     <label class="consent-check">
       <input type="checkbox" id="rampConsentCheck" disabled>
@@ -1305,24 +1307,25 @@ function confirmSmoothRampConsent() {
   const check = document.getElementById('rampConsentCheck');
   const enable = document.getElementById('rampConsentEnable');
   const cancel = document.getElementById('rampConsentCancel');
+  const read = document.getElementById('rampConsentRead');
   const hint = document.getElementById('rampConsentHint');
   return new Promise(resolve => {
     let readAll = false;
     const cleanup = result => {
       modal.hidden = true;
-      body.removeEventListener('scroll', update);
+      read.removeEventListener('click', onRead);
       check.removeEventListener('change', update);
       enable.removeEventListener('click', onEnable);
       cancel.removeEventListener('click', onCancel);
       resolve(result);
     };
     const update = () => {
-      readAll = body.scrollTop + body.clientHeight >= body.scrollHeight - 2;
       check.disabled = !readAll;
       if (!readAll) check.checked = false;
       enable.disabled = !(readAll && check.checked);
-      hint.textContent = readAll ? 'Tick the acknowledgement to enable Smooth Ramp.' : 'Scroll to the bottom of the notice to unlock acknowledgement.';
+      hint.textContent = readAll ? 'Tick the acknowledgement to enable Smooth Ramp.' : 'Scroll to the bottom of the notice and press the read button.';
     };
+    const onRead = () => { readAll = true; update(); check.focus(); };
     const onEnable = () => cleanup(true);
     const onCancel = () => cleanup(false);
     check.checked = false;
@@ -1331,7 +1334,7 @@ function confirmSmoothRampConsent() {
     modal.hidden = false;
     body.scrollTop = 0;
     body.focus();
-    body.addEventListener('scroll', update);
+    read.addEventListener('click', onRead);
     check.addEventListener('change', update);
     enable.addEventListener('click', onEnable);
     cancel.addEventListener('click', onCancel);
