@@ -421,7 +421,7 @@
 
       <div class="usage-item">
         <div class="usage-title">Smooth Ramp</div>
-        <div class="usage-desc">Without Smooth Ramp the controller sends one interpolated brightness update per hour, keeping the lamp in step with the schedule. Turn on <strong>Smooth Ramp</strong> and updates increase to about every 10 seconds, giving smooth sunrise and sunset transitions. Neither mode intentionally rewrites the lamp's stored 24-hour schedule; the full schedule is kept on the ESP32 controller and the lamp receives only the current output level. However, the Noo-Psyche lamp firmware is closed, so we cannot verify whether the lamp stores those live commands internally or how it manages write wear. Smooth Ramp sends commands significantly more frequently than the hourly default, which may increase any internal write activity. Use Smooth Ramp at your own discretion.</div>
+        <div class="usage-desc">Without Smooth Ramp the controller sends one interpolated brightness update per hour, keeping the lamp in step with the schedule. Turn on <strong>Smooth Ramp</strong> and updates increase to about every 2 minutes, only when calculated channel values change, giving smoother sunrise and sunset transitions. Neither mode intentionally rewrites the lamp's stored 24-hour schedule; the full schedule is kept on the ESP32 controller and the lamp receives only the current output level. However, the Noo-Psyche lamp firmware is closed, so we cannot verify whether the lamp stores those live commands internally or how it manages write wear. Smooth Ramp sends commands more frequently than the hourly default, which may increase any internal write activity. Use Smooth Ramp at your own discretion.</div>
       </div>
 
       <div class="usage-item">
@@ -503,7 +503,7 @@
       <h3>Disclaimer</h3>
       <p>This project is provided "AS IS" without warranty of any kind. The author makes no representations about suitability, reliability, availability, or accuracy for any purpose.</p>
       <p>K7 LED Controller changes live lighting output and stores controller-side schedules and settings for aquarium lamps. Incorrect settings, firmware bugs, hardware faults, WiFi issues, power loss, or unexpected lamp behaviour could affect aquarium lighting and livestock. Test changes carefully and keep your own backups.</p>
-      <p>The Noo-Psyche lamp firmware is closed. The controller sends live luminance commands to the lamp in normal operation — once per hour without Smooth Ramp, and about every 10 seconds with Smooth Ramp enabled. Neither mode intentionally rewrites the lamp's stored schedule, but we cannot verify whether the lamp stores those live commands internally or how it manages write wear.</p>
+      <p>The Noo-Psyche lamp firmware is closed. The controller sends live luminance commands to the lamp in normal operation — once per hour without Smooth Ramp, and about every 2 minutes with Smooth Ramp enabled, only when calculated channel values change. Neither mode intentionally rewrites the lamp's stored schedule, but we cannot verify whether the lamp stores those live commands internally or how it manages write wear.</p>
       <p><strong>Your use is at your sole risk.</strong> The author shall not be liable for any damage, livestock loss, data loss, hardware failure, or other direct, indirect, incidental, punitive, or consequential damages arising from use of this project.</p>
     </div>
 

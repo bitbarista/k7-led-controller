@@ -4,6 +4,7 @@
 #include "Presets.h"
 #include "Moon.h"
 #include "K7Lamp.h"
+#include "BuildInfo.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <WebServer.h>
@@ -446,7 +447,18 @@ void setupApiServer(WebServer& server) {
             "{\"k7mini\":{\"label\":\"K7 Mini\","
             "\"channels\":[\"white\",\"royal_blue\",\"blue\"]},"
             "\"k7pro\":{\"label\":\"K7 Pro\","
-            "\"channels\":[\"uv\",\"royal_blue\",\"blue\",\"white\",\"warm_white\",\"red\"]}}");
+            "\"channels\":[\"white\",\"royal_blue\",\"green\",\"uv\",\"cyan\",\"red\"]}}");
+    });
+
+    // ── /api/version ──────────────────────────────────────────────────────────
+    server.on("/api/version", HTTP_GET, [&server]() {
+        JsonDocument doc;
+        doc["firmware"] = K7_STRINGIFY(K7_FIRMWARE_VERSION);
+        doc["target"] = K7_STRINGIFY(K7_BUILD_TARGET);
+        doc["git"] = K7_STRINGIFY(K7_BUILD_GIT);
+        doc["build_date"] = __DATE__;
+        doc["build_time"] = __TIME__;
+        sendJson(server, doc);
     });
 
     // ── /api/config ───────────────────────────────────────────────────────────

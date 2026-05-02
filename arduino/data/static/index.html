@@ -62,6 +62,7 @@ body {
 .status-dot.busy  { background: #d29922; box-shadow: 0 0 6px #d29922; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 #statusMsg { font-size: 0.8rem; color: var(--muted); }
+.version-chip { display:none; align-items:center; min-height:22px; padding:2px 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface2); color:var(--muted); font-size:0.74rem; font-variant-numeric:tabular-nums; white-space:nowrap; }
 
 /* ── three-column grid ── */
 .grid-b {
@@ -262,6 +263,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
 <!-- ── Top bar ── -->
 <div class="topbar">
   <h1>🪸 K7 LED Controller</h1>
+  <span class="version-chip" id="versionChip" title="Firmware version"></span>
   <div class="status-dot busy" id="dot"></div>
   <span id="statusMsg">Connecting…</span>
   <div style="flex:1"></div>
@@ -284,9 +286,9 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       <div class="consent-sub">Read the full notice before enabling this optional feature.</div>
     </div>
     <div class="consent-body" id="rampConsentBody" tabindex="0">
-      <p>Without Smooth Ramp, the controller sends one live luminance update per hour to keep the lamp in step with the schedule. Smooth Ramp increases this to about every 10 seconds, but only when calculated channel values change.</p>
+      <p>Without Smooth Ramp, the controller sends one live luminance update per hour to keep the lamp in step with the schedule. Smooth Ramp increases this to about every 2 minutes, but only when calculated channel values change.</p>
       <p>Neither mode intentionally rewrites the lamp's stored 24-hour schedule. The full schedule is kept on the ESP32 controller, and the lamp receives only the current output level.</p>
-      <p>However, the Noo-Psyche lamp firmware is closed. We cannot verify whether the lamp stores live luminance commands internally or how it manages write wear. Smooth Ramp sends commands significantly more frequently than the hourly default, which may increase any internal write activity.</p>
+      <p>However, the Noo-Psyche lamp firmware is closed. We cannot verify whether the lamp stores live luminance commands internally or how it manages write wear. Smooth Ramp sends commands more frequently than the hourly default, which may increase any internal write activity.</p>
       <p>Use Smooth Ramp at your own discretion.</p>
     </div>
     <label class="consent-check">
@@ -330,7 +332,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
         </div>
         <div class="fx-flyout" id="rampFlyout">
           <div class="fx-flyout-row">
-            <span style="font-size:0.8rem;color:var(--muted)">Without Smooth Ramp the schedule is followed with one update per hour. Enable Smooth Ramp to increase this to about every 10 seconds, smoothing brightness transitions. The last tick time is shown below the name above.</span>
+            <span style="font-size:0.8rem;color:var(--muted)">Without Smooth Ramp the schedule is followed with one update per hour. Enable Smooth Ramp to increase this to about every 2 minutes when calculated channel values change, smoothing brightness transitions. The last tick time is shown below the name above.</span>
           </div>
         </div>
       </div>
@@ -632,22 +634,24 @@ const CH = {
   uv:         { label:'UV',         rgb:[138,43,226],  css:'#8b2be2' },
   royal_blue: { label:'Royal Blue', rgb:[65,105,225],  css:'#4169e1' },
   blue:       { label:'Blue',       rgb:[30,144,255],  css:'#1e90ff' },
+  green:      { label:'Green',      rgb:[40,220,40],    css:'#28dc28' },
   white:      { label:'White',      rgb:[210,210,210], css:'#d2d2d2' },
-  warm_white: { label:'Warm White', rgb:[255,200,80],  css:'#ffc850' },
+  cyan:       { label:'Cyan',       rgb:[120,220,255],  css:'#78dcff' },
   red:        { label:'Red',        rgb:[220,50,50],   css:'#dc3232' },
 };
 const LIGHT_RGB = {
   uv:         [180, 0,   255],
   royal_blue: [0,   30,  255],
   blue:       [0,   100, 255],
+  green:      [0,   255, 80 ],
   white:      [255, 255, 220],
-  warm_white: [255, 200, 100],
+  cyan:       [80,  220, 255],
   red:        [255, 0,   0  ],
 };
-const ALL_CH = ['uv','royal_blue','blue','white','warm_white','red'];
+const ALL_CH = ['white','royal_blue','green','uv','cyan','red'];
 const DEVICES = {
   k7mini: { label:'K7 Mini', channels:['white','royal_blue','blue'] },
-  k7pro:  { label:'K7 Pro',  channels:['uv','royal_blue','blue','white','warm_white','red'] },
+  k7pro:  { label:'K7 Pro',  channels:['white','royal_blue','green','uv','cyan','red'] },
 };
 
 // ── App state ─────────────────────────────────────────────────────────────────
@@ -683,6 +687,22 @@ function setStatus(state, msg) {
 function setBusy(msg='Working…') { setStatus('busy', msg); }
 function setOk(msg)  { setStatus('ok',    msg); }
 function setErr(msg) { setStatus('error', msg); }
+
+function applyVersionInfo(info) {
+  const chip = document.getElementById('versionChip');
+  if (!chip || !info) return;
+  const version = info.firmware || 'dev';
+  const target = info.target || '';
+  chip.textContent = target ? `v${version} · ${target}` : `v${version}`;
+  chip.title = `Firmware ${version}${target ? ` (${target})` : ''}${info.git && info.git !== 'unknown' ? ` · ${info.git}` : ''}`;
+  chip.style.display = 'inline-flex';
+}
+
+async function loadVersionInfo() {
+  try {
+    applyVersionInfo(await api('GET', '/api/version'));
+  } catch(_) {}
+}
 
 function renderWarnings(d) {
   warningsState = d;
@@ -1206,7 +1226,7 @@ function effectiveValueAtMins(mins, ci) {
   if (lunarWin && lunarFloor > 0 && _minsInWindow(mins, lunarWin.start, lunarWin.end)) {
     const ch = DEVICES[cfg.device].channels[ci];
     if (ch === 'royal_blue') v = Math.max(v, Math.round(lunarFloor));
-    else if (ch === 'blue' && cfg.device !== 'k7mini') v = Math.max(v, Math.round(lunarFloor * 0.7));
+    else if (ch === 'cyan') v = Math.max(v, Math.round(lunarFloor * 0.7));
   }
   return v;
 }
@@ -1227,7 +1247,7 @@ function chartEffectiveValueAtMins(mins, ci) {
   if (lunarWin && lunarFloor > 0 && _minsInWindow(mins, lunarWin.start, lunarWin.end)) {
     const ch = DEVICES[cfg.device].channels[ci];
     if (ch === 'royal_blue') v = Math.max(v, Math.round(lunarFloor));
-    else if (ch === 'blue' && cfg.device !== 'k7mini') v = Math.max(v, Math.round(lunarFloor * 0.7));
+    else if (ch === 'cyan') v = Math.max(v, Math.round(lunarFloor * 0.7));
   }
   return Math.min(100, Math.max(0, v));
 }
@@ -1263,7 +1283,7 @@ function updateChart() {
       let lunarContrib = 0;
       if (lunarWin && lunarFloor > 0) {
         if (ch === 'royal_blue') lunarContrib = lunarFloor;
-        else if (ch === 'blue' && cfg.device !== 'k7mini') lunarContrib = lunarFloor * 0.7;
+        else if (ch === 'cyan') lunarContrib = lunarFloor * 0.7;
       }
       const datasets = [{
         label: CH[ch].label, channelKey: ch,
@@ -1272,7 +1292,7 @@ function updateChart() {
         fill: true, tension: 0.35,
       }];
       const hasLunarCh = lunarWin && lunarFullMoon > 0 &&
-        (ch === 'royal_blue' || (ch === 'blue' && cfg.device !== 'k7mini'));
+        (ch === 'royal_blue' || ch === 'cyan');
       if (hasLunarCh) {
         const fmVal = ch === 'royal_blue' ? lunarFullMoon : Math.round(lunarFullMoon * 0.7);
         datasets.push({
@@ -2186,6 +2206,7 @@ async function init() {
   updateColorStrip();
   updateNowBars();
   applyModeUI();
+  loadVersionInfo();
   readFromDevice();
   api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 }).catch(()=>{});
   pollEffectStates();

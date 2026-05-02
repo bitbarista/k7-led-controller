@@ -42,7 +42,6 @@ AcclimationConfig gAcclimationConfig;
 SeasonalConfig gSeasonalConfig;
 static OutputStatus gOutputStatus;
 static portMUX_TYPE gOutputStatusMux = portMUX_INITIALIZER_UNLOCKED;
-
 // ── Task handles ──────────────────────────────────────────────────────────────
 static TaskHandle_t hRamp  = nullptr;
 static TaskHandle_t hFeed  = nullptr;
@@ -77,7 +76,7 @@ static void interpolateChannelsAt(time_t now, uint8_t out[K7_CHANNELS]) {
 
 static void buildMaintenanceChannels(uint8_t out[K7_CHANNELS]) {
     static const uint8_t MAINT_MINI[K7_CHANNELS] = {100, 40, 50,  0,  0, 0};
-    static const uint8_t MAINT_PRO [K7_CHANNELS] = { 15, 30, 40, 100, 55, 5};
+    static const uint8_t MAINT_PRO [K7_CHANNELS] = {100, 30, 55,  15, 40, 5};
     bool isPro = (strcmp(gDevice, "k7pro") == 0);
     const uint8_t* base = isPro ? MAINT_PRO : MAINT_MINI;
     int scale = max(1, min(100, gMaintenanceIntensity));
@@ -357,11 +356,11 @@ void applyLunarOverlay(uint8_t ch[K7_CHANNELS]) {
     float raw = gLunarConfig.maxIntensity * Moon::illumination();
     int   pct = (int)roundf(raw);
     if (pct <= 0) return;
-    // Royal blue channel 1 for both models; also blue ch2 for Pro
+    // Royal blue channel 1 for both models; also cyan ch4 for Pro
     ch[1] = max(ch[1], (uint8_t)min(pct, 100));
     if (strcmp(gDevice, "k7pro") == 0) {
         int b = (int)roundf(pct * 0.7f);
-        ch[2] = max(ch[2], (uint8_t)min(b, 100));
+        ch[4] = max(ch[4], (uint8_t)min(b, 100));
     }
 }
 
@@ -783,7 +782,7 @@ static void scheduleFollowerTask(void*) {
 
 // ── Ramp ──────────────────────────────────────────────────────────────────────
 static void rampTask(void*) {
-    static const uint32_t RAMP_UPDATE_MS = 10000;
+    static const uint32_t RAMP_UPDATE_MS = 120000;
     uint8_t lastSent[K7_CHANNELS] = {};
     bool haveLast = false;
 
@@ -901,9 +900,9 @@ void lunarRestoreNow() {
 
 // ── Feed mode ─────────────────────────────────────────────────────────────────
 // K7 mini: white=80, royal_blue=10, blue=10
-// K7 pro:  uv=5, royal_blue=10, blue=10, white=80, warm_white=40, red=0
+// K7 pro: white=80, royal_blue=10, green=40, uv=5, cyan=10, red=0
 static const uint8_t FEED_MINI[K7_CHANNELS] = {80, 10, 10,  0,  0, 0};
-static const uint8_t FEED_PRO [K7_CHANNELS] = { 5, 10, 10, 80, 40, 0};
+static const uint8_t FEED_PRO [K7_CHANNELS] = {80, 10, 40,  5, 10, 0};
 
 int feedSecondsRemaining() {
     if (!gFeedActive) return 0;

@@ -34,6 +34,12 @@ body {
   display: flex; align-items: center; gap: 10px;
 }
 .hdr-title { font-size: 1rem; font-weight: 600; flex: 1; }
+.version-chip {
+  display:none; align-items:center; min-height:20px; padding:2px 7px;
+  border:1px solid var(--border); border-radius:6px; background:var(--surface2);
+  color:var(--muted); font-size:0.7rem; font-variant-numeric:tabular-nums;
+  white-space:nowrap; flex-shrink:0;
+}
 .status-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .status-dot.ok    { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
 .status-dot.error { background: #f85149; box-shadow: 0 0 6px #f85149; }
@@ -276,6 +282,7 @@ button:disabled { opacity: 0.4; }
 <!-- Header -->
 <div class="hdr">
   <span class="hdr-title">🪸 K7 Controller</span>
+  <span class="version-chip" id="versionChip" title="Firmware version"></span>
   <div class="status-dot busy" id="dot"></div>
   <span class="status-txt" id="statusMsg">Connecting…</span>
   <a href="/?view=desktop" class="hdr-btn">Desktop ↗</a>
@@ -288,9 +295,9 @@ button:disabled { opacity: 0.4; }
       <div class="consent-sub">Read the full notice before enabling this optional feature.</div>
     </div>
     <div class="consent-body" id="rampConsentBody" tabindex="0">
-      <p>Without Smooth Ramp, the controller sends one live luminance update per hour to keep the lamp in step with the schedule. Smooth Ramp increases this to about every 10 seconds, but only when calculated channel values change.</p>
+      <p>Without Smooth Ramp, the controller sends one live luminance update per hour to keep the lamp in step with the schedule. Smooth Ramp increases this to about every 2 minutes, but only when calculated channel values change.</p>
       <p>Neither mode intentionally rewrites the lamp's stored 24-hour schedule. The full schedule is kept on the ESP32 controller, and the lamp receives only the current output level.</p>
-      <p>However, the Noo-Psyche lamp firmware is closed. We cannot verify whether the lamp stores live luminance commands internally or how it manages write wear. Smooth Ramp sends commands significantly more frequently than the hourly default, which may increase any internal write activity.</p>
+      <p>However, the Noo-Psyche lamp firmware is closed. We cannot verify whether the lamp stores live luminance commands internally or how it manages write wear. Smooth Ramp sends commands more frequently than the hourly default, which may increase any internal write activity.</p>
       <p>Use Smooth Ramp at your own discretion.</p>
     </div>
     <label class="consent-check">
@@ -592,13 +599,14 @@ const CH = {
   uv:         { label:'UV',         css:'#8b2be2' },
   royal_blue: { label:'Royal Blue', css:'#4169e1' },
   blue:       { label:'Blue',       css:'#1e90ff' },
+  green:      { label:'Green',      css:'#28dc28' },
   white:      { label:'White',      css:'#d2d2d2' },
-  warm_white: { label:'Warm White', css:'#ffc850' },
+  cyan:       { label:'Cyan',       css:'#78dcff' },
   red:        { label:'Red',        css:'#dc3232' },
 };
 const DEVICES = {
   k7mini: { channels:['white','royal_blue','blue'] },
-  k7pro:  { channels:['uv','royal_blue','blue','white','warm_white','red'] },
+  k7pro:  { channels:['white','royal_blue','green','uv','cyan','red'] },
 };
 
 // ── State ────────────────────────────────────────────────────────────────
@@ -753,6 +761,22 @@ function setBusy(m) { setStatus('busy', m||'Working…'); }
 function setOk(m)   { setStatus('ok',   m); }
 function setErr(m)  { setStatus('error', m); }
 
+function applyVersionInfo(info) {
+  const chip = document.getElementById('versionChip');
+  if (!chip || !info) return;
+  const version = info.firmware || 'dev';
+  const target = info.target || '';
+  chip.textContent = `v${version}`;
+  chip.title = `Firmware ${version}${target ? ` (${target})` : ''}${info.git && info.git !== 'unknown' ? ` · ${info.git}` : ''}`;
+  chip.style.display = 'inline-flex';
+}
+
+async function loadVersionInfo() {
+  try {
+    applyVersionInfo(await api('GET', '/api/version'));
+  } catch(_) {}
+}
+
 // ── API ──────────────────────────────────────────────────────────────────
 async function api(method, url, body) {
   const opts = { method, headers: {'Content-Type':'application/json'} };
@@ -869,7 +893,7 @@ function interpNow() {
     let v = Math.min(100, Math.round(acclimated * siestaFactorAt(minsNow) * masterBrightness / 100));
     if (inLunarWin) {
       if (ch === 'royal_blue') v = Math.max(v, Math.round(lunarFloor));
-      else if (ch === 'blue' && cfg.device !== 'k7mini') v = Math.max(v, Math.round(lunarFloor * 0.7));
+      else if (ch === 'cyan') v = Math.max(v, Math.round(lunarFloor * 0.7));
     }
     return v;
   });
@@ -1682,6 +1706,7 @@ function formatControllerClock(epochSeconds) {
 // ── Init ─────────────────────────────────────────────────────────────────
 (async function() {
   try { await api('POST', '/api/time', {timestamp: Date.now() - new Date().getTimezoneOffset()*60000}); } catch(_) {}
+  loadVersionInfo();
   await readFromDevice();
 })();
 </script>

@@ -60,6 +60,7 @@ jobs:
     - name: Build SuperMini firmware + filesystem
       run: |
         export PATH="$HOME/.platformio/packages/tool-mklittlefs:$PATH"
+        export PLATFORMIO_BUILD_FLAGS="-DK7_FIRMWARE_VERSION=${{ steps.version.outputs.VERSION }} -DK7_BUILD_GIT=${GITHUB_SHA::7}"
         cd arduino
         pio run -e supermini
         pio run -e supermini -t buildfs
@@ -67,6 +68,7 @@ jobs:
     - name: Build XIAO firmware + filesystem
       run: |
         export PATH="$HOME/.platformio/packages/tool-mklittlefs:$PATH"
+        export PLATFORMIO_BUILD_FLAGS="-DK7_FIRMWARE_VERSION=${{ steps.version.outputs.VERSION }} -DK7_BUILD_GIT=${GITHUB_SHA::7}"
         cd arduino
         pio run -e xiao
         pio run -e xiao -t buildfs
