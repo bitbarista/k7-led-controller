@@ -86,6 +86,27 @@ body {
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.07em;
   text-transform: uppercase; color: var(--muted);
 }
+.card-hd-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 10px 14px 6px;
+}
+.card-hd-row .card-hd { padding: 0; }
+.public-profile-link {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0;
+  padding: 4px 8px;
+  text-decoration: none;
+  text-transform: none;
+  white-space: nowrap;
+}
+.public-profile-link:active { background: var(--hover); color: var(--text); }
 
 /* ── Channel sliders ── */
 .ch-row {
@@ -569,7 +590,10 @@ button:disabled { opacity: 0.4; }
 
 <!-- Profiles & Presets -->
 <div class="card" style="margin-top:10px">
-  <div class="card-hd">Profiles &amp; Presets</div>
+  <div class="card-hd-row">
+    <div class="card-hd">Profiles &amp; Presets</div>
+    <a class="public-profile-link" href="https://bitbarista.github.io/k7-led-controller/community-presets.html" target="_blank" rel="noopener" title="Open the online public profile library and app QR codes">Profiles / QR ↗</a>
+  </div>
   <div class="profile-row">
     <select id="presetSel" class="profile-sel" onchange="onPresetChange()">
       <option value="">— Select preset or profile —</option>
@@ -579,6 +603,13 @@ button:disabled { opacity: 0.4; }
   <div class="profile-row" style="padding-top:0">
     <button class="profile-save" style="flex:1" onclick="exportBackup()" title="Download controller backup JSON">Export</button>
     <button class="profile-save" style="flex:1" onclick="chooseBackupImport()" title="Restore config, schedules, lunar settings, and profiles from a backup JSON file">Import</button>
+  </div>
+  <div class="profile-row" style="padding-top:0">
+    <button class="profile-save" style="flex:1" onclick="exportCommunityPreset()" title="Download just the current schedule and manual values for sharing">Export Preset</button>
+    <button class="profile-save" style="flex:1" onclick="choosePresetImport()" title="Load a shared preset JSON into the editor">Import Preset</button>
+  </div>
+  <div class="profile-row" style="padding-top:0">
+    <button class="profile-save" style="flex:1" onclick="submitCommunityPreset()" title="Open a GitHub issue draft for community preset review">Submit Preset</button>
   </div>
   <div class="profile-desc" id="presetDesc"></div>
 </div>
@@ -592,6 +623,7 @@ button:disabled { opacity: 0.4; }
 </div>
 
 <input type="file" id="backupImportInput" accept="application/json,.json" style="display:none" onchange="onBackupImport(event)">
+<input type="file" id="presetImportInput" accept="application/json,.json" style="display:none" onchange="onPresetImport(event)">
 
 <script>
 // ── Channel metadata ─────────────────────────────────────────────────────
@@ -1522,6 +1554,252 @@ async function saveProfile() {
     await loadPresetsProfiles();
     setOk('Saved');
   } catch(e) { setErr(e.message); }
+}
+
+function presetNameFromActive() {
+  if (activePresetKey.startsWith('preset:')) {
+    const p = presets[activePresetKey.slice(7)];
+    if (p?.name) return p.name;
+  }
+  if (activePresetKey.startsWith('profile:')) return activePresetKey.slice(8);
+  return '';
+}
+
+function sanitizePresetFilename(name) {
+  return (name || 'community-preset').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64) || 'community-preset';
+}
+
+function rowsEqual(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ar = a[i], br = b[i];
+    if (!Array.isArray(ar) || !Array.isArray(br) || ar.length < 8 || br.length < 8) return false;
+    for (let c = 0; c < 8; c++) {
+      if ((parseInt(ar[c]) || 0) !== (parseInt(br[c]) || 0)) return false;
+    }
+  }
+  return true;
+}
+
+function valuesEqual(a, b, count) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  for (let i = 0; i < count; i++) {
+    if ((parseInt(a[i]) || 0) !== (parseInt(b[i]) || 0)) return false;
+  }
+  return true;
+}
+
+function activeBuiltInPresetMismatch() {
+  if (!activePresetKey.startsWith('preset:')) return null;
+  const p = presets[activePresetKey.slice(7)];
+  if (!p) return null;
+  const chCount = DEVICES[cfg.device].channels.length;
+  if (rowsEqual(schedule, p.schedule) && valuesEqual(manual, p.manual, chCount)) return null;
+  return p;
+}
+
+function confirmCommunityPresetSource() {
+  const p = activeBuiltInPresetMismatch();
+  if (!p) return true;
+  if (!confirm(
+    `The selected preset is "${p.name}", but the current editor data does not match that built-in preset.\n\n` +
+    `This can happen after firmware updates or after editing a loaded preset.\n\n` +
+    `Press OK to reload "${p.name}" from the built-in preset library before continuing. Press Cancel to stop.`
+  )) return false;
+  schedule = p.schedule.map(row => [...row]);
+  manual = [...p.manual];
+  buildSliders();
+  buildNowBars();
+  if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
+  document.getElementById('presetDesc').textContent = p.desc || '';
+  setOk(`Preset reloaded: ${p.name}`);
+  return true;
+}
+
+function communityPresetPayload(name, useCase = '', notes = '') {
+  return {
+    kind: 'k7_community_preset',
+    schema: 1,
+    lamp: cfg.device,
+    name: name || presetNameFromActive() || 'Community preset',
+    use_case: useCase,
+    notes,
+    schedule: schedule.map(row => row.slice(0, 8).map(v => Math.max(0, Math.min(100, parseInt(v) || 0)))),
+    manual: manual.slice(0, DEVICES[cfg.device].channels.length).map(v => Math.max(0, Math.min(100, parseInt(v) || 0))),
+  };
+}
+
+function normalizeCommunityPreset(raw) {
+  const p = raw && typeof raw === 'object' ? raw : {};
+  if (p.kind !== 'k7_community_preset' || p.schema !== 1) throw new Error('Unsupported preset format');
+  const lamp = p.lamp || p.device;
+  if (!DEVICES[lamp]) throw new Error('Unknown preset lamp type');
+  if (!Array.isArray(p.schedule) || p.schedule.length !== 24) throw new Error('Preset schedule must contain 24 rows');
+  const normalized = {
+    lamp,
+    name: String(p.name || 'Imported preset').trim().slice(0, 64) || 'Imported preset',
+    notes: String(p.notes || '').slice(0, 500),
+    schedule: [],
+    manual: [],
+  };
+  for (let h = 0; h < 24; h++) {
+    const row = p.schedule[h];
+    if (!Array.isArray(row) || row.length < 8) throw new Error(`Preset schedule row ${h} is incomplete`);
+    const out = [];
+    for (let i = 0; i < 8; i++) out.push(Math.max(0, Math.min(100, parseInt(row[i]) || 0)));
+    out[0] = h; out[1] = 0;
+    normalized.schedule.push(out);
+  }
+  const chCount = DEVICES[lamp].channels.length;
+  if (!Array.isArray(p.manual) || p.manual.length < chCount) throw new Error('Preset manual values are incomplete');
+  normalized.manual = p.manual.slice(0, chCount).map(v => Math.max(0, Math.min(100, parseInt(v) || 0)));
+  while (normalized.manual.length < 6) normalized.manual.push(0);
+  return normalized;
+}
+
+function applyCommunityPreset(p) {
+  const label = p.lamp === 'k7pro' ? 'K7 Pro' : 'K7 Mini';
+  const current = cfg.device === 'k7pro' ? 'K7 Pro' : 'K7 Mini';
+  if (p.lamp !== cfg.device && !confirm(`This preset is for ${label}. Load it on ${current} anyway?`))
+    return false;
+  schedule = p.schedule.map(row => [...row]);
+  manual = [...p.manual];
+  activePresetKey = '';
+  buildSliders();
+  buildNowBars();
+  if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
+  document.getElementById('presetDesc').textContent = p.notes || 'Imported community preset';
+  return true;
+}
+
+async function saveImportedPresetAsProfile(p) {
+  const suggested = p.name || 'Imported preset';
+  const name = prompt('Optional: save as profile name (Cancel skips saving):', suggested);
+  if (!name?.trim()) return false;
+  await api('POST', '/api/profiles', {name: name.trim(), schedule, manual, device: cfg.device});
+  await loadPresetsProfiles();
+  const sel = document.getElementById('presetSel');
+  sel.value = 'profile:' + name.trim();
+  activePresetKey = sel.value;
+  document.getElementById('presetDesc').textContent = 'Saved profile';
+  return true;
+}
+
+function downloadJson(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+function optionalPrompt(message, defaultValue = '') {
+  const value = prompt(message, defaultValue);
+  return value === null ? null : value.trim();
+}
+
+function exportCommunityPreset() {
+  if (!confirmCommunityPresetSource()) return;
+  const suggested = presetNameFromActive() || 'Community preset';
+  const name = prompt('Preset name:', suggested);
+  if (!name?.trim()) return;
+  const useCase = optionalPrompt('Use case, e.g. LPS, SPS, mixed reef, acclimation:', '');
+  if (useCase === null) { setOk('Preset export cancelled'); return; }
+  const notes = optionalPrompt('Short notes for reviewers/users:', '');
+  if (notes === null) { setOk('Preset export cancelled'); return; }
+  const preset = communityPresetPayload(name.trim(), useCase, notes);
+  downloadJson(`${sanitizePresetFilename(preset.name)}.json`, preset);
+  setOk('Preset exported');
+}
+
+function choosePresetImport() {
+  const input = document.getElementById('presetImportInput');
+  input.value = '';
+  input.click();
+}
+
+async function onPresetImport(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  setBusy('Importing preset…');
+  try {
+    const preset = normalizeCommunityPreset(JSON.parse(await file.text()));
+    if (applyCommunityPreset(preset)) {
+      if (await saveImportedPresetAsProfile(preset))
+        setOk(`Preset imported and saved as profile — review, then Push`);
+      else
+        setOk(`Preset loaded: ${preset.name} — review, then Push`);
+    }
+  } catch(e) {
+    setErr(e.message);
+  }
+}
+
+function githubPresetIssueBody(preset) {
+  const lamp = preset.lamp === 'k7pro' ? 'K7 Pro' : 'K7 Mini';
+  return `### Community preset submission
+
+Name: ${preset.name}
+Lamp: ${lamp}
+Use case: ${preset.use_case || ''}
+Author/forum name:
+
+### Notes
+
+${preset.notes || ''}
+
+### Preset JSON
+
+\`\`\`json
+${JSON.stringify(preset, null, 2)}
+\`\`\`
+`;
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  return false;
+}
+
+async function submitCommunityPreset() {
+  if (!confirmCommunityPresetSource()) return;
+  const suggested = presetNameFromActive() || 'Community preset';
+  const name = prompt('Preset name for submission:', suggested);
+  if (!name?.trim()) return;
+  const useCase = optionalPrompt('Use case, e.g. LPS, SPS, mixed reef, acclimation:', '');
+  if (useCase === null) { setOk('Preset submission cancelled'); return; }
+  const notes = optionalPrompt('Short notes for reviewers/users:', '');
+  if (notes === null) { setOk('Preset submission cancelled'); return; }
+  const preset = communityPresetPayload(name.trim(), useCase, notes);
+  if (!confirm(`Open a GitHub submission draft for "${preset.name}"?`)) {
+    setOk('Preset submission cancelled');
+    return;
+  }
+  const body = githubPresetIssueBody(preset);
+  const title = `Community preset: ${preset.name}`;
+  const url = `https://github.com/bitbarista/k7-led-controller/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+  if (url.length < 7500) {
+    window.open(url, '_blank', 'noopener');
+    setOk('GitHub submission draft opened');
+    return;
+  }
+  try {
+    const copied = await copyText(body);
+    window.open('https://github.com/bitbarista/k7-led-controller/issues/new', '_blank', 'noopener');
+    setOk(copied ? 'Submission text copied — paste it into the GitHub issue' : 'GitHub issue opened — export the preset and paste it manually');
+  } catch(_) {
+    window.open('https://github.com/bitbarista/k7-led-controller/issues/new', '_blank', 'noopener');
+    setOk('GitHub issue opened — export the preset and paste it manually');
+  }
 }
 
 function chooseBackupImport() {

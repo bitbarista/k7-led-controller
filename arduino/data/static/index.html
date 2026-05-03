@@ -77,6 +77,10 @@ body {
 /* ── cards ── */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; color: var(--text); }
 .card-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.card-title-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.card-title-row .card-title { margin-bottom:0; }
+.public-profile-link { color:var(--muted); border:1px solid var(--border); border-radius:5px; padding:2px 6px; font-size:0.68rem; letter-spacing:0; text-transform:none; text-decoration:none; background:var(--surface2); white-space:nowrap; }
+.public-profile-link:hover { color:var(--text); background:var(--hover); }
 .warn-list { display:flex; flex-direction:column; gap:6px; }
 .warn-item { border:1px solid var(--border); border-radius:8px; padding:7px 9px; font-size:0.76rem; line-height:1.35; background:var(--surface2); }
 .warn-item[data-level="caution"] { border-color: rgba(248,81,73,0.4); }
@@ -207,6 +211,9 @@ body {
 /* ── presets ── */
 #presetSel { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:5px 8px; font-size:0.83rem; width:100%; cursor:pointer; font-family:inherit; }
 #presetDesc { font-size:0.75rem; color:var(--muted); }
+.preset-action-row { display:flex; gap:6px; margin-top:7px; align-items:center; }
+.preset-action-row .btn-secondary-custom { flex:1 1 0; min-width:0; padding:5px 8px; }
+.preset-action-row.compact .btn-secondary-custom { font-size:0.8rem; }
 
 /* ── buttons ── */
 .btn-primary-custom   { background:#238636; border:1px solid #2ea043; color:#fff; border-radius:6px; padding:6px 14px; font-size:0.88rem; cursor:pointer; transition:background 0.15s; font-family:inherit; }
@@ -597,16 +604,24 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
 
     <!-- Presets -->
     <div class="card">
-      <div class="card-title">Presets</div>
+      <div class="card-title-row">
+        <div class="card-title">Presets</div>
+        <a class="public-profile-link" href="https://bitbarista.github.io/k7-led-controller/community-presets.html" target="_blank" rel="noopener" title="Open the online public profile library and app QR codes">Profiles / QR ↗</a>
+      </div>
       <select id="presetSel" onchange="onPresetChange()" title="Load a preset or saved profile"></select>
       <div style="display:flex;gap:6px;margin-top:7px;align-items:center">
         <button class="btn-secondary-custom" onclick="saveProfile()" title="Save current schedule as a profile" style="padding:5px 10px">💾</button>
         <button class="btn-danger-custom" id="deleteProfileBtn" onclick="deleteProfile()" title="Delete selected profile" style="display:none;padding:5px 10px">🗑</button>
         <span id="presetDesc"></span>
       </div>
-      <div style="display:flex;gap:6px;margin-top:7px;align-items:center">
+      <div class="preset-action-row">
         <button class="btn-secondary-custom" onclick="exportBackup()" title="Download controller backup JSON" style="padding:5px 10px">Export Backup</button>
         <button class="btn-secondary-custom" onclick="chooseBackupImport()" title="Restore config, schedules, lunar settings, and profiles from a backup JSON file" style="padding:5px 10px">Import Backup</button>
+      </div>
+      <div class="preset-action-row compact">
+        <button class="btn-secondary-custom" onclick="exportCommunityPreset()" title="Export preset JSON: current schedule and manual values only">Export</button>
+        <button class="btn-secondary-custom" onclick="choosePresetImport()" title="Import preset JSON into the editor">Import</button>
+        <button class="btn-secondary-custom" onclick="submitCommunityPreset()" title="Submit preset for community review">Submit</button>
       </div>
     </div>
 
@@ -627,6 +642,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
 <div id="schedActions" style="display:none"></div>
 <div id="chToggles" style="display:none"></div>
 <input type="file" id="backupImportInput" accept="application/json,.json" style="display:none" onchange="onBackupImport(event)">
+<input type="file" id="presetImportInput" accept="application/json,.json" style="display:none" onchange="onPresetImport(event)">
 
 <script>
 // ── Channel metadata ─────────────────────────────────────────────────────────
@@ -2125,6 +2141,264 @@ async function deleteProfile() {
   } catch(e) { setErr(e.message); }
 }
 
+function presetNameFromActive() {
+  if (activePresetKey.startsWith('preset:')) {
+    const p = presets[activePresetKey.slice(7)];
+    if (p?.name) return p.name;
+  }
+  if (activePresetKey.startsWith('saved:')) return activePresetKey.slice(6);
+  return '';
+}
+
+function sanitizePresetFilename(name) {
+  return (name || 'community-preset').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64) || 'community-preset';
+}
+
+function rowsEqual(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ar = a[i], br = b[i];
+    if (!Array.isArray(ar) || !Array.isArray(br) || ar.length < 8 || br.length < 8) return false;
+    for (let c = 0; c < 8; c++) {
+      if ((parseInt(ar[c]) || 0) !== (parseInt(br[c]) || 0)) return false;
+    }
+  }
+  return true;
+}
+
+function valuesEqual(a, b, count) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  for (let i = 0; i < count; i++) {
+    if ((parseInt(a[i]) || 0) !== (parseInt(b[i]) || 0)) return false;
+  }
+  return true;
+}
+
+function activeBuiltInPresetMismatch() {
+  if (!activePresetKey.startsWith('preset:')) return null;
+  const p = presets[activePresetKey.slice(7)];
+  if (!p) return null;
+  const chCount = DEVICES[cfg.device].channels.length;
+  if (rowsEqual(scheduleBase, p.schedule) && valuesEqual(manual, p.manual, chCount)) return null;
+  return p;
+}
+
+function confirmCommunityPresetSource() {
+  const p = activeBuiltInPresetMismatch();
+  if (!p) return true;
+  if (!confirm(
+    `The selected preset is "${p.name}", but the current editor data does not match that built-in preset.\n\n` +
+    `This can happen after firmware updates or after editing a loaded preset.\n\n` +
+    `Press OK to reload "${p.name}" from the built-in preset library before continuing. Press Cancel to stop.`
+  )) return false;
+  scheduleBase = p.schedule.map(row => [...row]);
+  manual = [...p.manual];
+  resetMaster();
+  renderSliders();
+  updateChart();
+  updateColorStrip();
+  updateNowBars();
+  document.getElementById('presetDesc').textContent = p.desc || '';
+  setOk(`Preset reloaded: ${p.name}`);
+  return true;
+}
+
+function communityPresetPayload(name, useCase = '', notes = '') {
+  return {
+    kind: 'k7_community_preset',
+    schema: 1,
+    lamp: cfg.device,
+    name: name || presetNameFromActive() || 'Community preset',
+    use_case: useCase,
+    notes,
+    schedule: scheduleBase.map(row => row.slice(0, 8).map(v => Math.max(0, Math.min(100, parseInt(v) || 0)))),
+    manual: manual.slice(0, DEVICES[cfg.device].channels.length).map(v => Math.max(0, Math.min(100, parseInt(v) || 0))),
+  };
+}
+
+function normalizeCommunityPreset(raw) {
+  const p = raw && typeof raw === 'object' ? raw : {};
+  if (p.kind !== 'k7_community_preset' || p.schema !== 1) throw new Error('Unsupported preset format');
+  const lamp = p.lamp || p.device;
+  if (!DEVICES[lamp]) throw new Error('Unknown preset lamp type');
+  if (!Array.isArray(p.schedule) || p.schedule.length !== 24) throw new Error('Preset schedule must contain 24 rows');
+  const normalized = {
+    lamp,
+    name: String(p.name || 'Imported preset').trim().slice(0, 64) || 'Imported preset',
+    notes: String(p.notes || '').slice(0, 500),
+    schedule: [],
+    manual: [],
+  };
+  for (let h = 0; h < 24; h++) {
+    const row = p.schedule[h];
+    if (!Array.isArray(row) || row.length < 8) throw new Error(`Preset schedule row ${h} is incomplete`);
+    const out = [];
+    for (let i = 0; i < 8; i++) out.push(Math.max(0, Math.min(100, parseInt(row[i]) || 0)));
+    out[0] = h; out[1] = 0;
+    normalized.schedule.push(out);
+  }
+  const chCount = DEVICES[lamp].channels.length;
+  if (!Array.isArray(p.manual) || p.manual.length < chCount) throw new Error('Preset manual values are incomplete');
+  normalized.manual = p.manual.slice(0, chCount).map(v => Math.max(0, Math.min(100, parseInt(v) || 0)));
+  while (normalized.manual.length < ALL_CH.length) normalized.manual.push(0);
+  return normalized;
+}
+
+function applyCommunityPreset(p) {
+  if (p.lamp !== cfg.device && !confirm(`This preset is for ${DEVICES[p.lamp].label}. Load it on ${DEVICES[cfg.device].label} anyway?`))
+    return false;
+  scheduleBase = p.schedule.map(row => [...row]);
+  manual = [...p.manual];
+  resetMaster();
+  renderSliders();
+  updateChart();
+  updateColorStrip();
+  updateNowBars();
+  activePresetKey = '';
+  rebuildPresetDropdown();
+  document.getElementById('presetDesc').textContent = p.notes || 'Imported community preset';
+  return true;
+}
+
+async function saveImportedPresetAsProfile(p) {
+  const suggested = p.name || 'Imported preset';
+  const name = prompt('Optional: save as profile name (Cancel skips saving):', suggested);
+  if (!name?.trim()) return false;
+  const key = name.trim();
+  if (savedProfiles[key] && !confirm(`Profile "${key}" already exists. Overwrite?`)) return false;
+  await api('POST', '/api/profiles', {
+    name: key, device: cfg.device,
+    scheduleBase: scheduleBase.map(row => [...row]), manual: [...manual],
+    channelBrightness: {...channelBrightness}, masterBrightness, dayShift,
+  });
+  savedProfiles = await api('GET', '/api/profiles');
+  rebuildPresetDropdown();
+  const sel = document.getElementById('presetSel');
+  for (const opt of sel.options) {
+    if (opt.value === `saved:${key}`) { sel.value = opt.value; break; }
+  }
+  activePresetKey = `saved:${key}`;
+  document.getElementById('presetDesc').textContent = 'Saved profile';
+  document.getElementById('deleteProfileBtn').style.display = '';
+  return true;
+}
+
+function downloadJson(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+function optionalPrompt(message, defaultValue = '') {
+  const value = prompt(message, defaultValue);
+  return value === null ? null : value.trim();
+}
+
+function exportCommunityPreset() {
+  if (!confirmCommunityPresetSource()) return;
+  const suggested = presetNameFromActive() || 'Community preset';
+  const name = prompt('Preset name:', suggested);
+  if (!name?.trim()) return;
+  const useCase = optionalPrompt('Use case, e.g. LPS, SPS, mixed reef, acclimation:', '');
+  if (useCase === null) { setOk('Preset export cancelled'); return; }
+  const notes = optionalPrompt('Short notes for reviewers/users:', '');
+  if (notes === null) { setOk('Preset export cancelled'); return; }
+  const preset = communityPresetPayload(name.trim(), useCase, notes);
+  downloadJson(`${sanitizePresetFilename(preset.name)}.json`, preset);
+  setOk('Preset exported');
+}
+
+function choosePresetImport() {
+  const input = document.getElementById('presetImportInput');
+  input.value = '';
+  input.click();
+}
+
+async function onPresetImport(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  setBusy('Importing preset…');
+  try {
+    const preset = normalizeCommunityPreset(JSON.parse(await file.text()));
+    if (applyCommunityPreset(preset)) {
+      if (await saveImportedPresetAsProfile(preset))
+        setOk(`Preset imported and saved as profile — review, then Push`);
+      else
+        setOk(`Preset loaded: ${preset.name} — review, then Push`);
+    }
+  } catch(e) {
+    setErr(e.message);
+  }
+}
+
+function githubPresetIssueBody(preset) {
+  return `### Community preset submission
+
+Name: ${preset.name}
+Lamp: ${DEVICES[preset.lamp]?.label || preset.lamp}
+Use case: ${preset.use_case || ''}
+Author/forum name:
+
+### Notes
+
+${preset.notes || ''}
+
+### Preset JSON
+
+\`\`\`json
+${JSON.stringify(preset, null, 2)}
+\`\`\`
+`;
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  return false;
+}
+
+async function submitCommunityPreset() {
+  if (!confirmCommunityPresetSource()) return;
+  const suggested = presetNameFromActive() || 'Community preset';
+  const name = prompt('Preset name for submission:', suggested);
+  if (!name?.trim()) return;
+  const useCase = optionalPrompt('Use case, e.g. LPS, SPS, mixed reef, acclimation:', '');
+  if (useCase === null) { setOk('Preset submission cancelled'); return; }
+  const notes = optionalPrompt('Short notes for reviewers/users:', '');
+  if (notes === null) { setOk('Preset submission cancelled'); return; }
+  const preset = communityPresetPayload(name.trim(), useCase, notes);
+  if (!confirm(`Open a GitHub submission draft for "${preset.name}"?`)) {
+    setOk('Preset submission cancelled');
+    return;
+  }
+  const body = githubPresetIssueBody(preset);
+  const title = `Community preset: ${preset.name}`;
+  const url = `https://github.com/bitbarista/k7-led-controller/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+  if (url.length < 7500) {
+    window.open(url, '_blank', 'noopener');
+    setOk('GitHub submission draft opened');
+    return;
+  }
+  try {
+    const copied = await copyText(body);
+    window.open('https://github.com/bitbarista/k7-led-controller/issues/new', '_blank', 'noopener');
+    setOk(copied ? 'Submission text copied — paste it into the GitHub issue' : 'GitHub issue opened — export the preset and paste it manually');
+  } catch(_) {
+    window.open('https://github.com/bitbarista/k7-led-controller/issues/new', '_blank', 'noopener');
+    setOk('GitHub issue opened — export the preset and paste it manually');
+  }
+}
+
 function chooseBackupImport() {
   const input = document.getElementById('backupImportInput');
   input.value = '';
@@ -2206,9 +2480,9 @@ async function init() {
   updateColorStrip();
   updateNowBars();
   applyModeUI();
+  try { await api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 }); } catch(_) {}
   loadVersionInfo();
-  readFromDevice();
-  api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 }).catch(()=>{});
+  await readFromDevice();
   pollEffectStates();
   setInterval(pollEffectStates, 5000);
   loadLunarStatus();

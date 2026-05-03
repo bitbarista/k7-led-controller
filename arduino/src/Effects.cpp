@@ -49,6 +49,8 @@ static TaskHandle_t hMaintenance = nullptr;
 static TaskHandle_t hLunar = nullptr;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+static bool timeIsSane(time_t now);
+
 void interpolateChannels(const uint8_t sched[K7_SLOTS][8], int h, int m,
                          uint8_t out[K7_CHANNELS]) {
     const uint8_t* lo = sched[h % K7_SLOTS];
@@ -94,6 +96,10 @@ static void restoreScheduledOutputNow() {
         source = "manual";
     } else {
         time_t     now = time(nullptr);
+        if (!timeIsSane(now)) {
+            Serial.println("[sched] restore skipped: controller clock not set");
+            return;
+        }
         struct tm* t   = localtime(&now);
         interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, restored);
         applySiestaDimming(restored);
@@ -645,12 +651,17 @@ static void lampWorkerTask(void*) {
             // transient — the lamp reverts to its internal schedule tick and can
             // go dark.  Manual mode + handLuminance is immediate and stays put.
             time_t     now = time(nullptr);
-            struct tm* t   = localtime(&now);
             uint8_t    ch[K7_CHANNELS];
             if (gMaintenanceActive) {
                 buildMaintenanceChannels(ch);
                 applyMasterBrightness(ch);
             } else if (push.autoMode) {
+                if (!timeIsSane(now)) {
+                    Serial.println("[lamp] push skipped: controller clock not set");
+                    vTaskDelay(pdMS_TO_TICKS(400));
+                    continue;
+                }
+                struct tm* t = localtime(&now);
                 interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
                 applySiestaDimming(ch);
                 applyMasterBrightness(ch);
@@ -747,6 +758,12 @@ static void scheduleFollowerTask(void*) {
         }
 
         time_t  now = time(nullptr);
+        if (!timeIsSane(now)) {
+            haveLast = false;
+            lastHourKey = -1;
+            vTaskDelay(pdMS_TO_TICKS(FOLLOW_CHECK_MS));
+            continue;
+        }
         struct tm t;
         localtime_r(&now, &t);
         int hourKey = ((t.tm_year * 366) + t.tm_yday) * 24 + t.tm_hour;
@@ -789,6 +806,13 @@ static void rampTask(void*) {
     while (gRampActive) {
         if (!gFeedActive && !gMaintenanceActive) {
             gRampLastTick = time(nullptr);
+            if (!timeIsSane(gRampLastTick)) {
+                haveLast = false;
+                gRampLastTick = 0;
+                for (int i = 0; i < (int)(RAMP_UPDATE_MS / 500) && gRampActive; i++)
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                continue;
+            }
             uint8_t ch[K7_CHANNELS];
             interpolateChannelsAt(gRampLastTick, ch);
             applySiestaDimming(ch);
@@ -833,10 +857,15 @@ void stopRamp() {
 // ── Lunar ─────────────────────────────────────────────────────────────────────
 static void lunarTask(void*) {
     while (gLunarActive) {
+        time_t     now = time(nullptr);
+        if (!timeIsSane(now)) {
+            for (int i = 0; i < 120 && gLunarActive; i++)
+                vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
         int lunarPct = (int)roundf(gLunarConfig.maxIntensity * Moon::illumination());
         if (!gRampActive && !gFeedActive && !gMaintenanceActive && lunarPct > 0
             && lunarWindowActiveNow() && lunarScheduleAllowsNow()) {
-            time_t     now = time(nullptr);
             struct tm* t   = localtime(&now);
             uint8_t    ch[K7_CHANNELS];
             interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
@@ -845,7 +874,6 @@ static void lunarTask(void*) {
             applyLunarOverlay(ch);
             sendHandLuminance("lunar", ch);
         }
-        time_t     now = time(nullptr);
         struct tm* t   = localtime(&now);
         int sleepSecs  = max(1, 60 - t->tm_sec);
         for (int i = 0; i < sleepSecs * 2 && gLunarActive; i++)
@@ -873,6 +901,7 @@ void stopLunar() {
 }
 
 void lunarApplyNow() {
+    if (!timeIsSane(time(nullptr))) return;
     bool inWindow = lunarWindowActiveNow() && lunarScheduleAllowsNow();
     if (!gLunarActive && !(gLunarConfig.enabled && inWindow && !gLunarStopped)) return;
     if (!inWindow) return;
@@ -890,6 +919,10 @@ void lunarApplyNow() {
 
 void lunarRestoreNow() {
     time_t     now = time(nullptr);
+    if (!timeIsSane(now)) {
+        Serial.println("[sched] lunar restore skipped: controller clock not set");
+        return;
+    }
     struct tm* t   = localtime(&now);
     uint8_t    ch[K7_CHANNELS];
     interpolateChannels(gLastSchedule, t->tm_hour, t->tm_min, ch);
@@ -996,6 +1029,10 @@ static void scheduleModifierTask(void*) {
     uint32_t lastKey = 0;
     for (;;) {
         time_t now = time(nullptr);
+        if (!timeIsSane(now)) {
+            vTaskDelay(pdMS_TO_TICKS(900000));
+            continue;
+        }
         uint32_t key = dayKeyLocal(now);
         if (key != lastKey) {
             lastKey = key;
