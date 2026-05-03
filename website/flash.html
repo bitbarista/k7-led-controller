@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>K7 LED Controller - Flash Firmware</title>
     <meta name="description" content="Flash K7 LED Controller firmware directly from your browser. No software installation required!">
-    <script type="module" src="https://unpkg.com/esp-web-tools@9/dist/web/install-button.js?module"></script>
+    <script type="module" src="https://unpkg.com/esp-web-tools@9.4.3/dist/web/install-button.js?module"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .flash-button {
@@ -106,7 +106,7 @@
                         Compact and inexpensive with 4 MB flash. The most popular choice for a DIY build.
                     </p>
                 </div>
-                <esp-web-install-button id="superminiInstaller" manifest="./releases/latest/manifest-supermini-v2.6.20.json">
+                <esp-web-install-button id="superminiInstaller" manifest="./releases/latest/manifest-supermini.json">
                     <button slot="activate" class="flash-button text-white font-bold py-4 px-8 rounded-lg text-lg w-full">
                         📥 Install Firmware
                     </button>
@@ -128,7 +128,7 @@
                         8 MB flash and 8 MB PSRAM. Great if you want extra headroom for future features.
                     </p>
                 </div>
-                <esp-web-install-button id="xiaoInstaller" manifest="./releases/latest/manifest-xiao-v2.6.20.json">
+                <esp-web-install-button id="xiaoInstaller" manifest="./releases/latest/manifest-xiao.json">
                     <button slot="activate" class="flash-button text-white font-bold py-4 px-8 rounded-lg text-lg w-full">
                         📥 Install Firmware
                     </button>
@@ -252,15 +252,8 @@
 
     <script>
         function updateVersionInfo() {
-            const manifestUrl = document.getElementById('superminiInstaller')?.getAttribute('manifest') || '';
-            const match = manifestUrl.match(/manifest-supermini-v([0-9]+(?:\.[0-9]+){2})\.json/);
-            if (match) {
-                document.getElementById('version-info').textContent = `v${match[1]}`;
-                document.getElementById('release-date').textContent = 'Installer ready';
-            } else {
-                document.getElementById('version-info').textContent = 'Latest';
-                document.getElementById('release-date').textContent = 'Installer ready';
-            }
+            document.getElementById('version-info').textContent = 'Latest';
+            document.getElementById('release-date').textContent = 'Installer ready';
         }
         updateVersionInfo();
     </script>

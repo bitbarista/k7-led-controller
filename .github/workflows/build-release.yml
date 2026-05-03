@@ -249,10 +249,8 @@ jobs:
       run: |
         VERSION=${{ steps.version.outputs.VERSION }}
 
-        # Remove stale binaries
-        rm -f website/releases/latest/k7controller-*.bin
-
-        # Copy new binaries and manifests
+        # Copy new binaries and manifests. Keep older versioned binaries so
+        # cached manifests can still complete an install during CDN rollover.
         cp artifacts/k7controller-*.bin website/releases/latest/
 
         cat > website/releases/latest/manifest-supermini.json << EOF
@@ -300,14 +298,11 @@ jobs:
         cp website/releases/latest/manifest-supermini.json website/releases/latest/manifest-supermini-v${VERSION}.json
         cp website/releases/latest/manifest-xiao.json website/releases/latest/manifest-xiao-v${VERSION}.json
 
-        sed -i -E "s#manifest=\"\./releases/latest/manifest-supermini[^\"\"]*\.json([^\"]*)?\"#manifest=\"./releases/latest/manifest-supermini-v${VERSION}.json\"#" website/flash.html
-        sed -i -E "s#manifest=\"\./releases/latest/manifest-xiao[^\"\"]*\.json([^\"]*)?\"#manifest=\"./releases/latest/manifest-xiao-v${VERSION}.json\"#" website/flash.html
-
     - name: Commit and push
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add website/releases/latest/ website/flash.html
+        git add website/releases/latest/
         git commit -m "Update flash binaries and manifests for v${{ steps.version.outputs.VERSION }}"
         git push origin master
 
