@@ -79,8 +79,8 @@ body {
 .card-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
 .card-title-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
 .card-title-row .card-title { margin-bottom:0; }
-.public-profile-link { color:var(--muted); border:1px solid var(--border); border-radius:5px; padding:2px 6px; font-size:0.68rem; letter-spacing:0; text-transform:none; text-decoration:none; background:var(--surface2); white-space:nowrap; }
-.public-profile-link:hover { color:var(--text); background:var(--hover); }
+.public-profile-link { color:#dbeafe; border:1px solid rgba(56,189,248,0.65); border-radius:6px; padding:4px 8px; font-size:0.74rem; font-weight:700; letter-spacing:0; text-transform:none; text-decoration:none; background:rgba(3,105,161,0.34); box-shadow:0 0 0 1px rgba(14,165,233,0.12) inset; white-space:nowrap; }
+.public-profile-link:hover { color:#ffffff; border-color:#7dd3fc; background:rgba(3,105,161,0.55); }
 .warn-list { display:flex; flex-direction:column; gap:6px; }
 .warn-item { border:1px solid var(--border); border-radius:8px; padding:7px 9px; font-size:0.76rem; line-height:1.35; background:var(--surface2); }
 .warn-item[data-level="caution"] { border-color: rgba(248,81,73,0.4); }
@@ -606,7 +606,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
     <div class="card">
       <div class="card-title-row">
         <div class="card-title">Presets</div>
-        <a class="public-profile-link" href="https://bitbarista.github.io/k7-led-controller/community-presets.html" target="_blank" rel="noopener" title="Open the online public profile library and app QR codes">Profiles / QR ↗</a>
+        <a class="public-profile-link" href="https://bitbarista.github.io/k7-led-controller/community-presets.html" target="_blank" rel="noopener" title="Open the online public profile library and app QR codes">Public Profiles / QR ↗</a>
       </div>
       <select id="presetSel" onchange="onPresetChange()" title="Load a preset or saved profile"></select>
       <div style="display:flex;gap:6px;margin-top:7px;align-items:center">
