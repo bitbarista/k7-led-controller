@@ -253,21 +253,19 @@
     <script>
         async function updateVersionInfo() {
             try {
-                const r = await fetch('https://api.github.com/repos/bitbarista/k7-led-controller/releases/latest');
-                const rel = await r.json();
-                if (rel.tag_name) {
-                    document.getElementById('version-info').textContent = rel.tag_name;
+                const manifestUrl = document.getElementById('superminiInstaller')?.getAttribute('manifest');
+                if (!manifestUrl) throw new Error('Missing installer manifest');
+                const r = await fetch(manifestUrl, {cache: 'no-store'});
+                if (!r.ok) throw new Error(r.statusText);
+                const manifest = await r.json();
+                if (manifest.version) {
+                    document.getElementById('version-info').textContent = `v${manifest.version}`;
                     document.getElementById('release-date').textContent =
-                        'Released ' + new Date(rel.published_at).toLocaleDateString();
-                    const cacheKey = encodeURIComponent(rel.tag_name);
-                    document.getElementById('superminiInstaller')
-                        ?.setAttribute('manifest', `./releases/latest/manifest-supermini-${cacheKey}.json`);
-                    document.getElementById('xiaoInstaller')
-                        ?.setAttribute('manifest', `./releases/latest/manifest-xiao-${cacheKey}.json`);
+                        'Installer manifest loaded';
                 }
             } catch {
                 document.getElementById('version-info').textContent = '—';
-                document.getElementById('release-date').textContent = 'Could not fetch release info';
+                document.getElementById('release-date').textContent = 'Could not load installer manifest';
             }
         }
         updateVersionInfo();
