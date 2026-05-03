@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
   pages: write
   id-token: write
 
@@ -310,13 +311,30 @@ jobs:
         git commit -m "Update flash binaries and manifests for v${{ steps.version.outputs.VERSION }}"
         git push origin master
 
-    - name: Setup Pages
-      uses: actions/configure-pages@v5
+    - name: Deploy updated website from master
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh workflow run deploy-pages.yml --ref master
+        sleep 5
 
-    - name: Upload website
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: website/
+        RUN_ID=""
+        for i in {1..20}; do
+          RUN_ID=$(gh run list \
+            --workflow "Deploy GitHub Pages" \
+            --branch master \
+            --event workflow_dispatch \
+            --json databaseId,status,createdAt \
+            --jq 'map(select(.status != "completed")) | .[0].databaseId // empty')
+          if [[ -n "$RUN_ID" ]]; then
+            break
+          fi
+          sleep 3
+        done
 
-    - name: Deploy GitHub Pages
-      uses: actions/deploy-pages@v4
+        if [[ -z "$RUN_ID" ]]; then
+          echo "Could not find dispatched Pages deployment run"
+          exit 1
+        fi
+
+        gh run watch "$RUN_ID" --exit-status
