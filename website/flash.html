@@ -106,7 +106,7 @@
                         Compact and inexpensive with 4 MB flash. The most popular choice for a DIY build.
                     </p>
                 </div>
-                <esp-web-install-button id="superminiInstaller" manifest="./releases/latest/manifest-supermini.json">
+                <esp-web-install-button id="superminiInstaller" manifest="https://bitbarista.github.io/k7-led-controller/releases/latest/manifest-supermini.json?v=v2.6.20">
                     <button slot="activate" class="flash-button text-white font-bold py-4 px-8 rounded-lg text-lg w-full">
                         📥 Install Firmware
                     </button>
@@ -128,7 +128,7 @@
                         8 MB flash and 8 MB PSRAM. Great if you want extra headroom for future features.
                     </p>
                 </div>
-                <esp-web-install-button id="xiaoInstaller" manifest="./releases/latest/manifest-xiao.json">
+                <esp-web-install-button id="xiaoInstaller" manifest="https://bitbarista.github.io/k7-led-controller/releases/latest/manifest-xiao.json?v=v2.6.20">
                     <button slot="activate" class="flash-button text-white font-bold py-4 px-8 rounded-lg text-lg w-full">
                         📥 Install Firmware
                     </button>
@@ -252,7 +252,9 @@
 
     <script>
         function updateVersionInfo() {
-            document.getElementById('version-info').textContent = 'Latest';
+            const manifestUrl = document.getElementById('superminiInstaller')?.getAttribute('manifest') || '';
+            const version = new URL(manifestUrl, window.location.href).searchParams.get('v');
+            document.getElementById('version-info').textContent = version || 'Latest';
             document.getElementById('release-date').textContent = 'Installer ready';
         }
         updateVersionInfo();

@@ -298,11 +298,14 @@ jobs:
         cp website/releases/latest/manifest-supermini.json website/releases/latest/manifest-supermini-v${VERSION}.json
         cp website/releases/latest/manifest-xiao.json website/releases/latest/manifest-xiao-v${VERSION}.json
 
+        sed -i -E "s#manifest=\"[^\"]*manifest-supermini\\.json([^\"]*)?\"#manifest=\"https://bitbarista.github.io/k7-led-controller/releases/latest/manifest-supermini.json?v=v${VERSION}\"#" website/flash.html
+        sed -i -E "s#manifest=\"[^\"]*manifest-xiao\\.json([^\"]*)?\"#manifest=\"https://bitbarista.github.io/k7-led-controller/releases/latest/manifest-xiao.json?v=v${VERSION}\"#" website/flash.html
+
     - name: Commit and push
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add website/releases/latest/
+        git add website/releases/latest/ website/flash.html
         git commit -m "Update flash binaries and manifests for v${{ steps.version.outputs.VERSION }}"
         git push origin master
 
