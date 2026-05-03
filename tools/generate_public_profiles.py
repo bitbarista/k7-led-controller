@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PRESETS_H = ROOT / "arduino" / "src" / "Presets.h"
+REVIEWED_DIR = ROOT / "community-presets" / "reviewed"
 INDEX_PATHS = [
     ROOT / "community-presets" / "index.json",
     ROOT / "website" / "community-presets" / "index.json",
@@ -106,6 +107,64 @@ def profile_entry(lamp, preset, keyframes):
     }
 
 
+def clamp_percent(value):
+    return max(0, min(100, int(value)))
+
+
+def reviewed_profile_entry(path):
+    preset = json.loads(path.read_text(encoding="utf-8"))
+    if preset.get("kind") != "k7_community_preset":
+        raise SystemExit(f"{path}: invalid kind")
+    if preset.get("schema") != 1:
+        raise SystemExit(f"{path}: invalid schema")
+    if preset.get("lamp") not in ("k7mini", "k7pro"):
+        raise SystemExit(f"{path}: invalid lamp")
+
+    active_channels = 3 if preset["lamp"] == "k7mini" else 6
+    manual = preset.get("manual")
+    if not isinstance(manual, list) or len(manual) < active_channels:
+        raise SystemExit(f"{path}: manual values are incomplete")
+    preset["manual"] = [clamp_percent(v) for v in manual[:active_channels]]
+    while len(preset["manual"]) < 6:
+        preset["manual"].append(0)
+
+    schedule = preset.get("schedule")
+    if not isinstance(schedule, list) or len(schedule) != 24:
+        raise SystemExit(f"{path}: schedule must contain 24 rows")
+    normalized_schedule = []
+    for hour, row in enumerate(schedule):
+        if not isinstance(row, list) or len(row) < 8:
+            raise SystemExit(f"{path}: schedule row {hour} is incomplete")
+        out = [hour, clamp_percent(row[1])]
+        out.extend(clamp_percent(v) for v in row[2:8])
+        normalized_schedule.append(out)
+    preset["schedule"] = normalized_schedule
+
+    name = str(preset.get("name") or path.stem).strip()
+    notes = str(preset.get("notes") or "").strip()
+    use_case = str(preset.get("use_case") or "community").strip()
+    if not name:
+        raise SystemExit(f"{path}: preset name is required")
+
+    preset["name"] = name
+    preset["notes"] = notes
+    preset["use_case"] = use_case
+    return {
+        "name": name,
+        "lamp": preset["lamp"],
+        "use_case": use_case,
+        "notes": notes,
+        "source": "community",
+        "preset": preset,
+    }
+
+
+def load_reviewed_profiles():
+    if not REVIEWED_DIR.exists():
+        return []
+    return [reviewed_profile_entry(path) for path in sorted(REVIEWED_DIR.glob("*.json"))]
+
+
 def build_index():
     source = PRESETS_H.read_text(encoding="utf-8")
     keyframes = parse_keyframes(source)
@@ -113,6 +172,7 @@ def build_index():
     for lamp, array_name in (("k7mini", "MINI_PRESETS"), ("k7pro", "PRO_PRESETS")):
         for preset in parse_presets(source, array_name):
             presets.append(profile_entry(lamp, preset, keyframes))
+    presets.extend(load_reviewed_profiles())
     return {
         "kind": "k7_community_preset_index",
         "schema": 1,
