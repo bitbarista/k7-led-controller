@@ -223,6 +223,7 @@ body {
 .btn-danger-custom    { background:#b91c1c; border:1px solid #f85149; color:#fff; border-radius:6px; padding:6px 14px; font-size:0.88rem; cursor:pointer; transition:background 0.15s; font-family:inherit; }
 .btn-danger-custom:hover    { background:#dc2626; }
 button:disabled { opacity:0.45; cursor:not-allowed; }
+.cap-hidden { display:none !important; }
 
 /* ── consent modal ── */
 .consent-backdrop { position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.72); display:flex; align-items:center; justify-content:center; padding:18px; }
@@ -328,7 +329,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
         </label>
         <span class="mode-label active" id="lblAuto">Schedule</span>
       </div>
-      <div class="mode-extra fx-row-wrap" data-fx="ramp" id="rampPill">
+      <div class="mode-extra fx-row-wrap" data-fx="ramp" id="rampPill" data-cap="smooth_ramp">
         <div class="fx-row">
           <div class="fx-info">
             <div class="fx-name">≈ Smooth Ramp</div>
@@ -392,7 +393,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
     </div>
 
     <!-- Checks -->
-    <div class="card" style="margin-top:10px">
+    <div class="card" style="margin-top:10px" data-cap="logs">
       <div class="card-title">Checks</div>
       <div class="warn-list" id="warningsList"></div>
     </div>
@@ -416,7 +417,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       <div class="card-title">Effects</div>
 
       <!-- Feed mode -->
-      <div class="fx-row-wrap" data-fx="feed" id="feedPill">
+      <div class="fx-row-wrap" data-fx="feed" id="feedPill" data-cap="feed_mode">
         <div class="fx-row">
           <div class="fx-info">
             <div class="fx-name">🍽 Feed mode</div>
@@ -440,7 +441,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       </div>
 
       <!-- Maintenance mode -->
-      <div class="fx-row-wrap" data-fx="maintenance" id="maintenancePill">
+      <div class="fx-row-wrap" data-fx="maintenance" id="maintenancePill" data-cap="maintenance_mode">
         <div class="fx-row">
           <div class="fx-info">
             <div class="fx-name">🛠 Maintenance</div>
@@ -465,7 +466,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       </div>
 
       <!-- Siesta -->
-      <div class="fx-row-wrap" data-fx="siesta" id="siestaPill">
+      <div class="fx-row-wrap" data-fx="siesta" id="siestaPill" data-cap="smooth_ramp">
         <div class="fx-row">
           <div class="fx-info">
             <div class="fx-name">🌤 Siesta</div>
@@ -499,7 +500,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       </div>
 
       <!-- Acclimation -->
-      <div class="fx-row-wrap" data-fx="acclimation" id="acclimationPill">
+      <div class="fx-row-wrap" data-fx="acclimation" id="acclimationPill" data-cap="acclimation">
         <div class="fx-row">
           <div class="fx-info">
             <div class="fx-name">🪸 Acclimation</div>
@@ -529,7 +530,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       </div>
 
       <!-- Seasonal Shift -->
-      <div class="fx-row-wrap" data-fx="seasonal" id="seasonalPill">
+      <div class="fx-row-wrap" data-fx="seasonal" id="seasonalPill" data-cap="seasonal_daylength">
         <div class="fx-row">
           <div class="fx-info">
             <div class="fx-name">🌤 Seasonal Shift</div>
@@ -554,7 +555,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       </div>
 
       <!-- Lunar Cycle -->
-      <div class="fx-row-wrap" data-fx="lunar" id="lunarPill">
+      <div class="fx-row-wrap" data-fx="lunar" id="lunarPill" data-cap="tracked_lunar">
         <div class="fx-row">
           <div class="fx-info">
             <div class="fx-name">🌕 Lunar</div>
@@ -694,6 +695,73 @@ let presets       = {};
 let savedProfiles = {};
 let activePresetKey = '';
 const hiddenChannels = new Set();
+let platformInfo = { platform:'esp32', transport:'controller', capabilities:{} };
+
+const DEFAULT_CAPABILITIES = {
+  read_lamp: true,
+  push_schedule: true,
+  manual_preview: true,
+  profiles: true,
+  community_presets: true,
+  backup_restore: true,
+  fixed_lunar: true,
+  siesta_baked_schedule: false,
+  smooth_ramp: true,
+  tracked_lunar: true,
+  acclimation: true,
+  seasonal_daylength: true,
+  feed_mode: true,
+  maintenance_mode: true,
+  setup_portal: true,
+  logs: true,
+  persistent_controller_clock: true,
+};
+
+const DEFAULT_STATUS = {
+  ramp: {active:false, last_tick:0, consent:false},
+  feed: {active:false, remaining:0, duration:15, intensity:80},
+  maintenance: {active:false, remaining:0, duration:30, intensity:70},
+  siesta: {enabled:false, active:false, start:'13:00', duration:90, duration_mins:90, intensity:25},
+  acclimation: {enabled:false, current_percent:100, days_remaining:0, start_percent:70, duration_days:21},
+  seasonal: {enabled:false, current_shift_minutes:0, max_shift_minutes:60},
+  lunar: {enabled:false, active:false, phase:0, illumination:0, phase_name:'', start:'18:30', end:'06:30', clamp_start:'18:00', clamp_end:'08:00', max_intensity:15, day_threshold:2, track_moonrise:false},
+  master: {value:100},
+  warnings: {items:[]},
+};
+
+function cap(name) {
+  return platformInfo.capabilities?.[name] !== false;
+}
+
+function cloneDefaultStatus(name) {
+  return JSON.parse(JSON.stringify(DEFAULT_STATUS[name]));
+}
+
+async function capGet(capability, url, fallbackName) {
+  if (!cap(capability)) return cloneDefaultStatus(fallbackName);
+  try { return await api('GET', url); } catch(_) { return cloneDefaultStatus(fallbackName); }
+}
+
+async function loadCapabilities() {
+  try {
+    const info = await api('GET', '/api/capabilities');
+    platformInfo = {
+      platform: info.platform || 'esp32',
+      transport: info.transport || 'controller',
+      capabilities: {...DEFAULT_CAPABILITIES, ...(info.capabilities || {})},
+    };
+  } catch(_) {
+    platformInfo = {platform:'esp32', transport:'controller', capabilities:{...DEFAULT_CAPABILITIES}};
+  }
+  applyCapabilityUI();
+}
+
+function applyCapabilityUI() {
+  document.querySelectorAll('[data-cap]').forEach(el => {
+    const names = (el.dataset.cap || '').split(/\s+/).filter(Boolean);
+    el.classList.toggle('cap-hidden', names.some(name => !cap(name)));
+  });
+}
 
 // ── Status ────────────────────────────────────────────────────────────────────
 function setStatus(state, msg) {
@@ -787,15 +855,15 @@ async function readFromDevice() {
   try {
     const [s, rampStatus, masterData, feedStatus, maintenanceStatus, siestaStatus, acclimationStatus, seasonalStatus, warnings, outputStatus] = await Promise.all([
       api('GET', '/api/state'),
-      api('GET', '/api/ramp/status'),
-      api('GET', '/api/master'),
-      api('GET', '/api/feed/status'),
-      api('GET', '/api/maintenance/status'),
-      api('GET', '/api/siesta/status'),
-      api('GET', '/api/acclimation/status'),
-      api('GET', '/api/seasonal/status'),
-      api('GET', '/api/warnings/status'),
-      api('GET', '/api/output/status').catch(() => null),
+      capGet('smooth_ramp', '/api/ramp/status', 'ramp'),
+      api('GET', '/api/master').catch(() => cloneDefaultStatus('master')),
+      capGet('feed_mode', '/api/feed/status', 'feed'),
+      capGet('maintenance_mode', '/api/maintenance/status', 'maintenance'),
+      capGet('smooth_ramp', '/api/siesta/status', 'siesta'),
+      capGet('acclimation', '/api/acclimation/status', 'acclimation'),
+      capGet('seasonal_daylength', '/api/seasonal/status', 'seasonal'),
+      capGet('logs', '/api/warnings/status', 'warnings'),
+      cap('logs') ? api('GET', '/api/output/status').catch(() => null) : Promise.resolve(null),
     ]);
     mode            = s.mode;
     activePresetKey = s.active_preset || '';
@@ -1147,6 +1215,11 @@ function _wrapMins(mins) {
   mins %= 1440;
   if (mins < 0) mins += 1440;
   return mins;
+}
+
+function parseHHMM(value) {
+  const [h, m] = String(value || '00:00').split(':').map(Number);
+  return ((Number.isFinite(h) ? h : 0) * 60) + (Number.isFinite(m) ? m : 0);
 }
 
 function signedShiftHours() {
@@ -1949,16 +2022,16 @@ function _setIfUnfocused(id, setter) {
 async function pollEffectStates() {
   try {
     const [ramp, feed, maintenance, siesta, acclimation, seasonal, lunar, master, warnings, outputStatus] = await Promise.all([
-      api('GET', '/api/ramp/status'),
-      api('GET', '/api/feed/status'),
-      api('GET', '/api/maintenance/status'),
-      api('GET', '/api/siesta/status'),
-      api('GET', '/api/acclimation/status'),
-      api('GET', '/api/seasonal/status'),
-      api('GET', '/api/lunar/status'),
-      api('GET', '/api/master'),
-      api('GET', '/api/warnings/status'),
-      api('GET', '/api/output/status').catch(() => null),
+      capGet('smooth_ramp', '/api/ramp/status', 'ramp'),
+      capGet('feed_mode', '/api/feed/status', 'feed'),
+      capGet('maintenance_mode', '/api/maintenance/status', 'maintenance'),
+      capGet('smooth_ramp', '/api/siesta/status', 'siesta'),
+      capGet('acclimation', '/api/acclimation/status', 'acclimation'),
+      capGet('seasonal_daylength', '/api/seasonal/status', 'seasonal'),
+      capGet('tracked_lunar', '/api/lunar/status', 'lunar'),
+      api('GET', '/api/master').catch(() => cloneDefaultStatus('master')),
+      capGet('logs', '/api/warnings/status', 'warnings'),
+      cap('logs') ? api('GET', '/api/output/status').catch(() => null) : Promise.resolve(null),
     ]);
     outputStatusState = outputStatus;
     const masterSlider = document.getElementById('masterSlider');
@@ -2463,6 +2536,7 @@ async function init() {
   chartMode = localStorage.getItem('k7-chartMode') === 'effective' ? 'effective' : 'base';
   initChart();
   setChartMode(chartMode);
+  await loadCapabilities();
   try {
     const c = await api('GET','/api/config');
     cfg = c;
@@ -2480,13 +2554,17 @@ async function init() {
   updateColorStrip();
   updateNowBars();
   applyModeUI();
-  try { await api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 }); } catch(_) {}
+  if (cap('persistent_controller_clock')) {
+    try { await api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 }); } catch(_) {}
+  }
   loadVersionInfo();
   await readFromDevice();
   pollEffectStates();
   setInterval(pollEffectStates, 5000);
-  loadLunarStatus();
-  setInterval(loadLunarStatus, 60000);
+  if (cap('tracked_lunar')) {
+    loadLunarStatus();
+    setInterval(loadLunarStatus, 60000);
+  }
   setInterval(() => { if (chart) chart.render(); }, 1000);
   setInterval(() => {
     updateColorStrip();

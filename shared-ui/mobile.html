@@ -298,6 +298,7 @@ body {
 .btn-read { background: var(--surface2); border-color: var(--border); color: var(--text); }
 .btn-read:active { background: var(--hover); }
 button:disabled { opacity: 0.4; }
+.cap-hidden { display:none !important; }
 </style>
 </head>
 <body>
@@ -346,7 +347,7 @@ button:disabled { opacity: 0.4; }
   <span class="mode-lbl on" id="lblAuto">Schedule</span>
 </div>
 
-<div class="mode-ramp">
+<div class="mode-ramp" data-cap="smooth_ramp">
   <div class="fx-card">
     <div class="fx-main">
       <div class="fx-info">
@@ -394,7 +395,7 @@ button:disabled { opacity: 0.4; }
   </div>
 </div>
 
-<div class="card" style="margin-top:10px">
+<div class="card" style="margin-top:10px" data-cap="logs">
   <div class="card-hd">Checks</div>
   <div class="warn-list" id="warningsList"></div>
 </div>
@@ -404,7 +405,7 @@ button:disabled { opacity: 0.4; }
   <div class="card-hd" style="padding-bottom:4px">Effects</div>
 
   <!-- Feed mode -->
-  <div class="fx-card">
+  <div class="fx-card" data-cap="feed_mode">
     <div class="fx-main">
       <div class="fx-info">
         <div class="fx-name">🍽 Feed mode</div>
@@ -428,7 +429,7 @@ button:disabled { opacity: 0.4; }
   </div>
 
   <!-- Maintenance mode -->
-  <div class="fx-card">
+  <div class="fx-card" data-cap="maintenance_mode">
     <div class="fx-main">
       <div class="fx-info">
         <div class="fx-name">🛠 Maintenance</div>
@@ -453,7 +454,7 @@ button:disabled { opacity: 0.4; }
   </div>
 
   <!-- Siesta -->
-  <div class="fx-card">
+  <div class="fx-card" data-cap="smooth_ramp">
     <div class="fx-main">
       <div class="fx-info">
         <div class="fx-name">🌤 Siesta</div>
@@ -487,7 +488,7 @@ button:disabled { opacity: 0.4; }
   </div>
 
   <!-- Acclimation -->
-  <div class="fx-card">
+  <div class="fx-card" data-cap="acclimation">
     <div class="fx-main">
       <div class="fx-info">
         <div class="fx-name">🪸 Acclimation</div>
@@ -517,7 +518,7 @@ button:disabled { opacity: 0.4; }
   </div>
 
   <!-- Seasonal -->
-  <div class="fx-card">
+  <div class="fx-card" data-cap="seasonal_daylength">
     <div class="fx-main">
       <div class="fx-info">
         <div class="fx-name">🌤 Seasonal Shift</div>
@@ -542,7 +543,7 @@ button:disabled { opacity: 0.4; }
   </div>
 
   <!-- Lunar -->
-  <div class="fx-card">
+  <div class="fx-card" data-cap="tracked_lunar">
     <div class="fx-main">
       <div class="fx-info">
         <div class="fx-name">🌕 Lunar</div>
@@ -661,6 +662,73 @@ let rampActiveState = false;
 let warningsState = null;
 let scheduleShiftMinutes = 0;
 let outputStatusState = null;
+let platformInfo = { platform:'esp32', transport:'controller', capabilities:{} };
+
+const DEFAULT_CAPABILITIES = {
+  read_lamp: true,
+  push_schedule: true,
+  manual_preview: true,
+  profiles: true,
+  community_presets: true,
+  backup_restore: true,
+  fixed_lunar: true,
+  siesta_baked_schedule: false,
+  smooth_ramp: true,
+  tracked_lunar: true,
+  acclimation: true,
+  seasonal_daylength: true,
+  feed_mode: true,
+  maintenance_mode: true,
+  setup_portal: true,
+  logs: true,
+  persistent_controller_clock: true,
+};
+
+const DEFAULT_STATUS = {
+  ramp: {active:false, last_tick:0, consent:false},
+  feed: {active:false, remaining:0, duration:15, intensity:80},
+  maintenance: {active:false, remaining:0, duration:30, intensity:70},
+  siesta: {enabled:false, active:false, start:'13:00', duration:90, duration_mins:90, intensity:25},
+  acclimation: {enabled:false, current_percent:100, days_remaining:0, start_percent:70, duration_days:21},
+  seasonal: {enabled:false, current_shift_minutes:0, max_shift_minutes:60},
+  lunar: {enabled:false, active:false, phase:0, illumination:0, phase_name:'', start:'18:30', end:'06:30', clamp_start:'18:00', clamp_end:'08:00', max_intensity:15, day_threshold:2, track_moonrise:false},
+  master: {value:100},
+  warnings: {items:[]},
+};
+
+function cap(name) {
+  return platformInfo.capabilities?.[name] !== false;
+}
+
+function cloneDefaultStatus(name) {
+  return JSON.parse(JSON.stringify(DEFAULT_STATUS[name]));
+}
+
+async function capGet(capability, url, fallbackName) {
+  if (!cap(capability)) return cloneDefaultStatus(fallbackName);
+  try { return await api('GET', url); } catch(_) { return cloneDefaultStatus(fallbackName); }
+}
+
+async function loadCapabilities() {
+  try {
+    const info = await api('GET', '/api/capabilities');
+    platformInfo = {
+      platform: info.platform || 'esp32',
+      transport: info.transport || 'controller',
+      capabilities: {...DEFAULT_CAPABILITIES, ...(info.capabilities || {})},
+    };
+  } catch(_) {
+    platformInfo = {platform:'esp32', transport:'controller', capabilities:{...DEFAULT_CAPABILITIES}};
+  }
+  applyCapabilityUI();
+}
+
+function applyCapabilityUI() {
+  document.querySelectorAll('[data-cap]').forEach(el => {
+    const names = (el.dataset.cap || '').split(/\s+/).filter(Boolean);
+    el.classList.toggle('cap-hidden', names.some(name => !cap(name)));
+  });
+}
 
 function chs() { return DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels; }
 function lunarWindow(d) {
@@ -1029,15 +1097,15 @@ async function readFromDevice() {
     const [cfgData, s, rampSt, feedSt, maintenanceSt, siestaSt, acclimationSt, seasonalSt, lunarSt, warnings, outputStatus] = await Promise.all([
       api('GET', '/api/config'),
       api('GET', '/api/state'),
-      api('GET', '/api/ramp/status'),
-      api('GET', '/api/feed/status'),
-      api('GET', '/api/maintenance/status'),
-      api('GET', '/api/siesta/status'),
-      api('GET', '/api/acclimation/status'),
-      api('GET', '/api/seasonal/status'),
-      api('GET', '/api/lunar/status'),
-      api('GET', '/api/warnings/status'),
-      api('GET', '/api/output/status').catch(() => null),
+      capGet('smooth_ramp', '/api/ramp/status', 'ramp'),
+      capGet('feed_mode', '/api/feed/status', 'feed'),
+      capGet('maintenance_mode', '/api/maintenance/status', 'maintenance'),
+      capGet('smooth_ramp', '/api/siesta/status', 'siesta'),
+      capGet('acclimation', '/api/acclimation/status', 'acclimation'),
+      capGet('seasonal_daylength', '/api/seasonal/status', 'seasonal'),
+      capGet('tracked_lunar', '/api/lunar/status', 'lunar'),
+      capGet('logs', '/api/warnings/status', 'warnings'),
+      cap('logs') ? api('GET', '/api/output/status').catch(() => null) : Promise.resolve(null),
     ]);
 
     cfg             = cfgData;
@@ -1871,17 +1939,17 @@ function _setIfUnfocused(id, setter) {
 async function pollEffectStates() {
   try {
     const [ramp, feed, maintenance, siesta, acclimation, seasonal, lunar, master, stateData, warnings, outputStatus] = await Promise.all([
-      api('GET', '/api/ramp/status'),
-      api('GET', '/api/feed/status'),
-      api('GET', '/api/maintenance/status'),
-      api('GET', '/api/siesta/status'),
-      api('GET', '/api/acclimation/status'),
-      api('GET', '/api/seasonal/status'),
-      api('GET', '/api/lunar/status'),
-      api('GET', '/api/master'),
+      capGet('smooth_ramp', '/api/ramp/status', 'ramp'),
+      capGet('feed_mode', '/api/feed/status', 'feed'),
+      capGet('maintenance_mode', '/api/maintenance/status', 'maintenance'),
+      capGet('smooth_ramp', '/api/siesta/status', 'siesta'),
+      capGet('acclimation', '/api/acclimation/status', 'acclimation'),
+      capGet('seasonal_daylength', '/api/seasonal/status', 'seasonal'),
+      capGet('tracked_lunar', '/api/lunar/status', 'lunar'),
+      api('GET', '/api/master').catch(() => cloneDefaultStatus('master')),
       api('GET', '/api/state'),
-      api('GET', '/api/warnings/status'),
-      api('GET', '/api/output/status').catch(() => null),
+      capGet('logs', '/api/warnings/status', 'warnings'),
+      cap('logs') ? api('GET', '/api/output/status').catch(() => null) : Promise.resolve(null),
     ]);
     outputStatusState = outputStatus;
     const masterSlider = document.getElementById('masterSlider');
@@ -1985,7 +2053,10 @@ function formatControllerClock(epochSeconds) {
 
 // ── Init ─────────────────────────────────────────────────────────────────
 (async function() {
-  try { await api('POST', '/api/time', {timestamp: Date.now() - new Date().getTimezoneOffset()*60000}); } catch(_) {}
+  await loadCapabilities();
+  if (cap('persistent_controller_clock')) {
+    try { await api('POST', '/api/time', {timestamp: Date.now() - new Date().getTimezoneOffset()*60000}); } catch(_) {}
+  }
   loadVersionInfo();
   await readFromDevice();
 })();

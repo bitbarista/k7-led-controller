@@ -91,8 +91,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/capabilities", s.handleCapabilities)
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/devices", s.handleDevices)
+	mux.HandleFunc("/api/master", s.handleMaster)
 	mux.HandleFunc("/api/lamp/read", s.handleLampRead)
 	mux.HandleFunc("/api/state", s.handleState)
+	mux.HandleFunc("/api/presets", s.handlePresets)
 	mux.HandleFunc("/api/profiles", s.handleProfiles)
 	mux.HandleFunc("/api/profiles/", s.handleProfileByName)
 	mux.HandleFunc("/api/backup", s.handleBackup)
@@ -224,6 +226,38 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleMaster(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		s.mu.RLock()
+		value := s.state.MasterBrightness
+		s.mu.RUnlock()
+		if value <= 0 {
+			value = 100
+		}
+		writeJSON(w, http.StatusOK, map[string]int{"value": value})
+	case http.MethodPost:
+		var in struct {
+			Value int `json:"value"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			writeError(w, http.StatusBadRequest, "Bad JSON")
+			return
+		}
+		value := clamp(in.Value, 0, 200)
+		s.mu.Lock()
+		s.state.MasterBrightness = value
+		s.mu.Unlock()
+		if err := s.saveStore(); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]int{"value": value})
+	default:
+		methodNotAllowed(w)
+	}
+}
+
 func (s *Server) handleLampRead(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -250,6 +284,14 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	state := s.state
 	s.mu.RUnlock()
 	writeJSON(w, http.StatusOK, state)
+}
+
+func (s *Server) handlePresets(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{})
 }
 
 func (s *Server) handleProfiles(w http.ResponseWriter, r *http.Request) {
