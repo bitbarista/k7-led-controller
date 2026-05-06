@@ -24,6 +24,15 @@ cd pc-bridge
 go build ./cmd/k7-bridge
 ```
 
+To build distributable Linux and Windows archives from the repository root:
+
+```bash
+python3 tools/build_pc_bridge.py
+```
+
+The archives are written under `dist/pc-bridge/`. Each package contains the
+bridge binary, a short README, and a small launcher script.
+
 The first intended release targets are Linux and Windows. Android will reuse the
 shared web UI later with a native mobile TCP bridge. macOS can be cross-built
 later, but is not an initial test target.

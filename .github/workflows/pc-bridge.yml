@@ -1,0 +1,79 @@
+name: PC Bridge
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'pc-bridge/**'
+      - 'shared-ui/**'
+      - 'arduino/src/Presets.h'
+      - 'tools/build_pc_bridge.py'
+      - 'tools/generate_pc_bridge_presets.py'
+      - 'tools/sync_shared_ui.py'
+      - '.github/workflows/pc-bridge.yml'
+  pull_request:
+    paths:
+      - 'pc-bridge/**'
+      - 'shared-ui/**'
+      - 'arduino/src/Presets.h'
+      - 'tools/build_pc_bridge.py'
+      - 'tools/generate_pc_bridge_presets.py'
+      - 'tools/sync_shared_ui.py'
+      - '.github/workflows/pc-bridge.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Archive version label'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: pc-bridge/go.mod
+        cache-dependency-path: pc-bridge/go.mod
+
+    - name: Check generated PC bridge inputs
+      run: |
+        python3 tools/generate_pc_bridge_presets.py --check
+        python3 tools/sync_shared_ui.py --check
+
+    - name: Resolve version
+      id: version
+      shell: bash
+      run: |
+        if [[ -n "${{ github.event.inputs.version }}" ]]; then
+          VERSION="${{ github.event.inputs.version }}"
+        elif [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION="${GITHUB_REF#refs/tags/v}"
+        else
+          VERSION="dev-${GITHUB_SHA::7}"
+        fi
+        echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "Building PC bridge version: $VERSION"
+
+    - name: Build PC bridge archives
+      run: python3 tools/build_pc_bridge.py --version "${{ steps.version.outputs.VERSION }}"
+
+    - name: Upload PC bridge archives
+      uses: actions/upload-artifact@v4
+      with:
+        name: k7-pc-bridge-${{ steps.version.outputs.VERSION }}
+        path: dist/pc-bridge/*
+        retention-days: 90
