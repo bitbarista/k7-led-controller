@@ -15,7 +15,7 @@ import (
 	"github.com/bitbarista/k7-led-controller/pc-bridge/internal/k7tcp"
 )
 
-//go:embed static/*.html
+//go:embed static/*.html static/vendor/* diagnostic/*.html
 var staticFiles embed.FS
 
 type Config struct {
@@ -83,6 +83,10 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleRoot)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(mustSub(staticFiles, "static")))))
+	mux.Handle("/diagnostic/", http.StripPrefix("/diagnostic/", http.FileServer(http.FS(mustSub(staticFiles, "diagnostic")))))
+	mux.HandleFunc("/diagnostic", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/diagnostic/test.html", http.StatusFound)
+	})
 	mux.HandleFunc("/api/version", s.handleVersion)
 	mux.HandleFunc("/api/capabilities", s.handleCapabilities)
 	mux.HandleFunc("/api/config", s.handleConfig)
@@ -108,7 +112,16 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	http.Redirect(w, r, "/static/test.html", http.StatusFound)
+	view := r.URL.Query().Get("view")
+	ua := r.Header.Get("User-Agent")
+	mobile := view == "mobile" || (view != "desktop" && (strings.Contains(ua, "Mobile") ||
+		strings.Contains(ua, "Android") || strings.Contains(ua, "iPhone") ||
+		strings.Contains(ua, "iPad")))
+	if mobile {
+		http.Redirect(w, r, "/static/mobile.html", http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/static/", http.StatusFound)
 }
 
 func mustSub(fsys fs.FS, dir string) fs.FS {

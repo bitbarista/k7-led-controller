@@ -41,10 +41,16 @@ The bridge listens on:
 http://127.0.0.1:8787
 ```
 
-Open the diagnostic page at:
+Open the shared UI at:
 
 ```text
 http://127.0.0.1:8787/
+```
+
+Open the bridge diagnostic page at:
+
+```text
+http://127.0.0.1:8787/diagnostic/
 ```
 
 Useful early endpoints:
