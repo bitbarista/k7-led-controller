@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>K7 PC Bridge Test</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #101418;
+      color: #edf2f7;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+    section {
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 16px;
+      background: #151b22;
+    }
+    h1, h2 {
+      margin: 0 0 12px;
+      letter-spacing: 0;
+    }
+    h1 {
+      font-size: 1.6rem;
+    }
+    h2 {
+      font-size: 1.05rem;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.9rem;
+      color: #cbd5e1;
+    }
+    input, select, button, textarea {
+      font: inherit;
+    }
+    input, select, textarea {
+      box-sizing: border-box;
+      width: 100%;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: #0f1720;
+      color: #f8fafc;
+    }
+    textarea {
+      min-height: 220px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 0.82rem;
+    }
+    button {
+      border: 1px solid #64748b;
+      border-radius: 6px;
+      padding: 8px 12px;
+      background: #233044;
+      color: #f8fafc;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #2d3d55;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .channel {
+      display: grid;
+      grid-template-columns: 110px 1fr 46px;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 0;
+    }
+    .channel input[type="range"] {
+      padding: 0;
+    }
+    .status {
+      min-height: 24px;
+      color: #93c5fd;
+    }
+    .danger {
+      border-color: #ef4444;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>K7 PC Bridge Test</h1>
+    <div class="status" id="status">Ready</div>
+  </header>
+
+  <section>
+    <h2>Connection</h2>
+    <div class="grid">
+      <label>Host
+        <input id="host" value="192.168.4.1">
+      </label>
+      <label>Port
+        <input id="port" type="number" min="1" max="65535" value="8266">
+      </label>
+      <label>Device
+        <select id="device">
+          <option value="k7mini">K7 Mini</option>
+          <option value="k7pro">K7 Pro</option>
+        </select>
+      </label>
+    </div>
+    <div class="buttons" style="margin-top:12px">
+      <button id="saveConfig">Save Config</button>
+      <button id="readLamp">Read Lamp</button>
+      <button id="loadSchedule">Use Read Schedule</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Manual Output</h2>
+    <div id="channels"></div>
+    <div class="buttons">
+      <button id="preview">Preview</button>
+      <button id="hand">Send Manual</button>
+      <button id="zero">Zero Channels</button>
+    </div>
+  </section>
+
+  <section class="danger">
+    <h2>Schedule Push</h2>
+    <div class="buttons">
+      <button id="makeSafeSchedule">Make Low Test Schedule</button>
+      <button id="pushSchedule">Push Schedule</button>
+    </div>
+    <textarea id="schedule" spellcheck="false"></textarea>
+  </section>
+
+  <section>
+    <h2>Output</h2>
+    <textarea id="output" spellcheck="false"></textarea>
+  </section>
+</main>
+
+<script>
+const channelNames = ["white", "royal_blue", "blue", "green/uv", "cyan", "red"];
+const statusEl = document.getElementById("status");
+const outputEl = document.getElementById("output");
+const scheduleEl = document.getElementById("schedule");
+const channelWrap = document.getElementById("channels");
+
+function setStatus(text) {
+  statusEl.textContent = text;
+}
+
+function writeOutput(value) {
+  outputEl.value = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
+function channels() {
+  return Array.from(document.querySelectorAll("[data-channel]")).map(input => Number(input.value) || 0);
+}
+
+function setChannels(values) {
+  document.querySelectorAll("[data-channel]").forEach((input, idx) => {
+    input.value = values[idx] ?? 0;
+    document.getElementById(`chv${idx}`).textContent = input.value;
+  });
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: {"Content-Type": "application/json", ...(options.headers || {})}
+  });
+  const text = await res.text();
+  let body = text;
+  try { body = text ? JSON.parse(text) : null; } catch (_) {}
+  if (!res.ok) throw new Error(typeof body === "object" ? (body.error || JSON.stringify(body)) : body);
+  return body;
+}
+
+function makeLowSchedule() {
+  return Array.from({length: 24}, (_, hour) => {
+    const on = hour >= 10 && hour <= 16;
+    return [hour, 0, on ? 1 : 0, on ? 1 : 0, on ? 1 : 0, 0, 0, 0];
+  });
+}
+
+function currentSchedule() {
+  return JSON.parse(scheduleEl.value);
+}
+
+channelNames.forEach((name, idx) => {
+  const row = document.createElement("div");
+  row.className = "channel";
+  row.innerHTML = `
+    <label for="ch${idx}">${name}</label>
+    <input id="ch${idx}" data-channel="${idx}" type="range" min="0" max="100" value="0">
+    <output id="chv${idx}" for="ch${idx}">0</output>
+  `;
+  channelWrap.appendChild(row);
+  row.querySelector("input").addEventListener("input", event => {
+    document.getElementById(`chv${idx}`).textContent = event.target.value;
+  });
+});
+
+document.getElementById("saveConfig").addEventListener("click", async () => {
+  try {
+    setStatus("Saving config...");
+    const cfg = await api("/api/config", {
+      method: "POST",
+      body: JSON.stringify({
+        host: document.getElementById("host").value,
+        port: Number(document.getElementById("port").value),
+        device: document.getElementById("device").value
+      })
+    });
+    writeOutput(cfg);
+    setStatus("Config saved");
+  } catch (err) {
+    setStatus(err.message);
+  }
+});
+
+document.getElementById("readLamp").addEventListener("click", async () => {
+  try {
+    setStatus("Reading lamp...");
+    const state = await api("/api/lamp/read");
+    writeOutput(state);
+    setChannels(state.manual || []);
+    scheduleEl.value = JSON.stringify(state.schedule, null, 2);
+    setStatus("Lamp read complete");
+  } catch (err) {
+    setStatus(err.message);
+  }
+});
+
+document.getElementById("loadSchedule").addEventListener("click", () => {
+  try {
+    const out = JSON.parse(outputEl.value);
+    if (!Array.isArray(out.schedule)) throw new Error("Output does not contain a schedule");
+    scheduleEl.value = JSON.stringify(out.schedule, null, 2);
+    setStatus("Loaded schedule from output");
+  } catch (err) {
+    setStatus(err.message);
+  }
+});
+
+document.getElementById("preview").addEventListener("click", async () => {
+  try {
+    setStatus("Sending preview...");
+    writeOutput(await api("/api/preview", {method: "POST", body: JSON.stringify({channels: channels()})}));
+    setStatus("Preview sent");
+  } catch (err) {
+    setStatus(err.message);
+  }
+});
+
+document.getElementById("hand").addEventListener("click", async () => {
+  try {
+    setStatus("Sending manual output...");
+    writeOutput(await api("/api/hand", {method: "POST", body: JSON.stringify({channels: channels()})}));
+    setStatus("Manual output sent");
+  } catch (err) {
+    setStatus(err.message);
+  }
+});
+
+document.getElementById("zero").addEventListener("click", () => {
+  setChannels([0, 0, 0, 0, 0, 0]);
+  setStatus("Channels set to zero");
+});
+
+document.getElementById("makeSafeSchedule").addEventListener("click", () => {
+  scheduleEl.value = JSON.stringify(makeLowSchedule(), null, 2);
+  setStatus("Low test schedule ready");
+});
+
+document.getElementById("pushSchedule").addEventListener("click", async () => {
+  try {
+    const ok = confirm("Push the schedule shown here to the lamp's internal scheduler?");
+    if (!ok) return;
+    setStatus("Pushing schedule...");
+    writeOutput(await api("/api/push", {
+      method: "POST",
+      body: JSON.stringify({
+        manual: channels(),
+        schedule: currentSchedule(),
+        mode: "auto"
+      })
+    }));
+    setStatus("Schedule pushed");
+  } catch (err) {
+    setStatus(err.message);
+  }
+});
+
+api("/api/config")
+  .then(cfg => {
+    document.getElementById("host").value = cfg.host || "192.168.4.1";
+    document.getElementById("port").value = cfg.port || 8266;
+    document.getElementById("device").value = cfg.device || "k7mini";
+    scheduleEl.value = JSON.stringify(makeLowSchedule(), null, 2);
+  })
+  .catch(err => setStatus(err.message));
+</script>
+</body>
+</html>

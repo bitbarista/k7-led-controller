@@ -1,8 +1,10 @@
 package bridge
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"strings"
@@ -11,6 +13,9 @@ import (
 
 	"github.com/bitbarista/k7-led-controller/pc-bridge/internal/k7tcp"
 )
+
+//go:embed static/*.html
+var staticFiles embed.FS
 
 type Config struct {
 	Host   string `json:"host"`
@@ -50,6 +55,7 @@ func (s *Server) Config() Config {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleRoot)
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(mustSub(staticFiles, "static")))))
 	mux.HandleFunc("/api/version", s.handleVersion)
 	mux.HandleFunc("/api/capabilities", s.handleCapabilities)
 	mux.HandleFunc("/api/config", s.handleConfig)
@@ -72,7 +78,15 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	writeText(w, http.StatusOK, "K7 PC bridge is running.\n")
+	http.Redirect(w, r, "/static/test.html", http.StatusFound)
+}
+
+func mustSub(fsys fs.FS, dir string) fs.FS {
+	sub, err := fs.Sub(fsys, dir)
+	if err != nil {
+		panic(err)
+	}
+	return sub
 }
 
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {

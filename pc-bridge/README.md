@@ -41,6 +41,12 @@ The bridge listens on:
 http://127.0.0.1:8787
 ```
 
+Open the diagnostic page at:
+
+```text
+http://127.0.0.1:8787/
+```
+
 Useful early endpoints:
 
 - `GET /api/capabilities`
