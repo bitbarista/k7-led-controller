@@ -694,6 +694,7 @@ let previewTimer = null;
 let presets       = {};
 let savedProfiles = {};
 let activePresetKey = '';
+let lastLampReadAt = '';
 const hiddenChannels = new Set();
 let platformInfo = { platform:'esp32', transport:'controller', capabilities:{} };
 
@@ -733,6 +734,10 @@ function cap(name) {
   return platformInfo.capabilities?.[name] !== false;
 }
 
+function isPCBridge() {
+  return platformInfo.platform === 'pc_bridge';
+}
+
 function cloneDefaultStatus(name) {
   return JSON.parse(JSON.stringify(DEFAULT_STATUS[name]));
 }
@@ -763,6 +768,13 @@ function applyCapabilityUI() {
   });
 }
 
+async function readControllerState() {
+  if (isPCBridge()) {
+    await api('GET', '/api/lamp/read');
+  }
+  return api('GET', '/api/state');
+}
+
 // ── Status ────────────────────────────────────────────────────────────────────
 function setStatus(state, msg) {
   document.getElementById('dot').className = `status-dot ${state}`;
@@ -775,6 +787,12 @@ function setErr(msg) { setStatus('error', msg); }
 function applyVersionInfo(info) {
   const chip = document.getElementById('versionChip');
   if (!chip || !info) return;
+  if (isPCBridge()) {
+    chip.textContent = 'PC Bridge · Direct Lamp';
+    chip.title = 'PC Bridge direct lamp control';
+    chip.style.display = 'inline-flex';
+    return;
+  }
   const version = info.firmware || 'dev';
   const target = info.target || '';
   chip.textContent = target ? `v${version} · ${target}` : `v${version}`;
@@ -854,7 +872,7 @@ async function readFromDevice() {
   document.getElementById('readBtn').disabled = true;
   try {
     const [s, rampStatus, masterData, feedStatus, maintenanceStatus, siestaStatus, acclimationStatus, seasonalStatus, warnings, outputStatus] = await Promise.all([
-      api('GET', '/api/state'),
+      readControllerState(),
       capGet('smooth_ramp', '/api/ramp/status', 'ramp'),
       api('GET', '/api/master').catch(() => cloneDefaultStatus('master')),
       capGet('feed_mode', '/api/feed/status', 'feed'),
@@ -867,6 +885,7 @@ async function readFromDevice() {
     ]);
     mode            = s.mode;
     activePresetKey = s.active_preset || '';
+    lastLampReadAt = s.last_read_at || lastLampReadAt;
     outputStatusState = outputStatus;
     if (rampStatus.active && mode === 'manual') mode = 'auto';
     setRampBtn(rampStatus.active, rampStatus.last_tick);
@@ -932,6 +951,10 @@ function buildPushBase() {
 }
 
 async function pushSchedule() {
+  if (isPCBridge() && !lastLampReadAt) {
+    setErr('Read from lamp first');
+    return;
+  }
   setBusy('Pushing…');
   document.getElementById('pushBtn').disabled = true;
   try {
@@ -943,7 +966,7 @@ async function pushSchedule() {
       active_preset: activePresetKey,
       schedule_shift_minutes: signedShiftMinutes(),
     });
-    if (activePresetDisablesLunar()) {
+    if (activePresetDisablesLunar() && cap('tracked_lunar')) {
       await loadLunarStatus();
       setOk('Pushed successfully · Lunar disabled');
     } else {
@@ -964,6 +987,10 @@ function activePresetDisablesLunar() {
 
 // ── Manual: save ──────────────────────────────────────────────────────────────
 async function saveManual() {
+  if (isPCBridge() && !lastLampReadAt) {
+    setErr('Read from lamp first');
+    return;
+  }
   setBusy('Saving…');
   try {
     await api('POST','/api/push', {
@@ -1525,6 +1552,7 @@ function onMasterChange() {
 }
 
 async function _autoPushMaster() {
+  if (isPCBridge() && !lastLampReadAt) return;
   try {
     const pushBase = buildPushBase();
     await api('POST','/api/master', {value: masterBrightness});

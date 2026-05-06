@@ -33,6 +33,16 @@ python3 tools/build_pc_bridge.py
 The archives are written under `dist/pc-bridge/`. Each package contains the
 bridge binary, a short README, and a small launcher script.
 
+Private test builds can also be made from GitHub Actions without creating a
+public GitHub Release:
+
+1. Open **Actions** in the repository.
+2. Run the **PC Bridge** workflow.
+3. Download the `k7-pc-bridge-...` artifact from the workflow run.
+
+These workflow artifacts are for people with repository access. They do not
+publish a release, update the website, or create a version tag.
+
 The first intended release targets are Linux and Windows. Android will reuse the
 shared web UI later with a native mobile TCP bridge. macOS can be cross-built
 later, but is not an initial test target.
@@ -62,6 +72,11 @@ Open the bridge diagnostic page at:
 ```text
 http://127.0.0.1:8787/diagnostic/
 ```
+
+The UI shows `PC Bridge · Direct Lamp` in the top bar when it is running through
+the local bridge. On the PC bridge, the Read button performs a live lamp read
+before loading the editor state. Push/Apply is blocked until a live read has
+succeeded, reducing the chance of accidentally pushing stale local data.
 
 Useful early endpoints:
 
