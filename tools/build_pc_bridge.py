@@ -60,7 +60,7 @@ def launcher_text(target: str) -> tuple[str, str]:
             "@echo off\r\n"
             "setlocal\r\n"
             "cd /d %~dp0\r\n"
-            "echo K7 PC Bridge will open at http://127.0.0.1:8787/\r\n"
+            "echo K7 PC Bridge will start at http://127.0.0.1:8787/\r\n"
             "echo Connect this PC to the lamp WiFi before using Read or Push.\r\n"
             "k7-bridge.exe\r\n",
         )
@@ -69,7 +69,7 @@ def launcher_text(target: str) -> tuple[str, str]:
         "#!/usr/bin/env sh\n"
         "set -eu\n"
         "cd \"$(dirname \"$0\")\"\n"
-        "echo \"K7 PC Bridge will open at http://127.0.0.1:8787/\"\n"
+        "echo \"K7 PC Bridge will start at http://127.0.0.1:8787/\"\n"
         "echo \"Connect this PC to the lamp WiFi before using Read or Push.\"\n"
         "exec ./k7-bridge\n",
     )
@@ -91,6 +91,10 @@ Or run the binary directly:
 
 Then open:
   http://127.0.0.1:8787/
+
+The bridge opens the local UI in your default browser automatically. If that
+does not work, open the URL above manually. For debugging, run the binary with
+--no-open.
 
 Before using Read, Preview, or Push, connect this computer to the lamp's WiFi.
 The bridge stores local profiles and settings in k7-pc-bridge.json beside the

@@ -61,6 +61,9 @@ The bridge listens on:
 http://127.0.0.1:8787
 ```
 
+By default the bridge opens this URL in your default browser automatically. Use
+`--no-open` if you want to keep it from launching a browser while debugging.
+
 Open the shared UI at:
 
 ```text
