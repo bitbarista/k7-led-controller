@@ -15,7 +15,7 @@ import (
 	"github.com/bitbarista/k7-led-controller/pc-bridge/internal/k7tcp"
 )
 
-//go:embed static/*.html static/vendor/* diagnostic/*.html
+//go:embed static/*.html static/vendor/* diagnostic/*.html presets.json
 var staticFiles embed.FS
 
 type Config struct {
@@ -291,7 +291,27 @@ func (s *Server) handlePresets(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{})
+	presets, err := staticFiles.ReadFile("presets.json")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Load presets failed: %v", err))
+		return
+	}
+	var catalog map[string]json.RawMessage
+	if err := json.Unmarshal(presets, &catalog); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Parse presets failed: %v", err))
+		return
+	}
+	s.mu.RLock()
+	device := s.config.Device
+	s.mu.RUnlock()
+	if device == "" {
+		device = "k7mini"
+	}
+	payload, ok := catalog[device]
+	if !ok {
+		payload = catalog["k7mini"]
+	}
+	writeRawJSON(w, http.StatusOK, payload)
 }
 
 func (s *Server) handleProfiles(w http.ResponseWriter, r *http.Request) {
@@ -748,6 +768,12 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func writeRawJSON(w http.ResponseWriter, status int, value []byte) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write(value)
 }
 
 func writeText(w http.ResponseWriter, status int, value string) {

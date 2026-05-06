@@ -7,7 +7,8 @@ Current scope:
 
 - Serve a local HTTP API on the PC.
 - Talk to the lamp over raw TCP at `192.168.4.1:8266`.
-- Prove direct read, preview/manual output, and native schedule push.
+- Serve the shared controller UI with PC-only capability hiding.
+- Read, preview/manual output, save profiles/backups, and push native schedules.
 
 The PC bridge is an addition to the ESP32 controller, not a replacement. The
 ESP32 remains the advanced always-on controller for Smooth Ramp, lunar tracking,
@@ -58,6 +59,7 @@ Useful early endpoints:
 - `GET /api/capabilities`
 - `GET /api/config`
 - `POST /api/config`
+- `GET /api/presets`
 - `GET /api/lamp/read`
 - `GET /api/state`
 - `GET /api/profiles`
@@ -74,6 +76,15 @@ connection settings, last known local state, and saved profiles. `GET
 /api/state` returns this local state without contacting the lamp; use `GET
 /api/lamp/read` when you want a live TCP read from the lamp.
 
+Built-in presets are generated from `arduino/src/Presets.h`:
+
+```bash
+python3 ../tools/generate_pc_bridge_presets.py
+```
+
+Use `--check` in CI or before commits to confirm the embedded PC bridge preset
+copy is still in sync with the firmware definitions.
+
 Example transport checks:
 
 ```bash
@@ -85,5 +96,6 @@ curl -sS \
   http://127.0.0.1:8787/api/preview
 ```
 
-The existing Web UI has not been moved onto this bridge yet. This first slice is
-for validating the direct TCP transport.
+The shared Web UI is embedded in the bridge. Runtime capability flags hide the
+ESP32-only controls on the PC bridge while keeping the same HTML source for the
+ESP32 and PC variants.
