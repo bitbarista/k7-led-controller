@@ -568,6 +568,9 @@ func (s *Server) saveStateFromLamp(lamp k7tcp.LampState, read bool, pushed bool)
 	}
 	s.mu.Lock()
 	state.ActivePreset = s.state.ActivePreset
+	if !pushed {
+		state.LastPushedAt = s.state.LastPushedAt
+	}
 	s.state = state
 	s.mu.Unlock()
 	return s.saveStore()
