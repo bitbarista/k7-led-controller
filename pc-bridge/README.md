@@ -53,9 +53,20 @@ Useful early endpoints:
 - `GET /api/config`
 - `POST /api/config`
 - `GET /api/lamp/read`
+- `GET /api/state`
+- `GET /api/profiles`
+- `POST /api/profiles`
+- `DELETE /api/profiles/<name>`
+- `GET /api/backup`
+- `POST /api/backup`
 - `POST /api/preview`
 - `POST /api/hand`
 - `POST /api/push`
+
+The bridge store path defaults to `k7-pc-bridge.json`. It contains the lamp
+connection settings, last known local state, and saved profiles. `GET
+/api/state` returns this local state without contacting the lamp; use `GET
+/api/lamp/read` when you want a live TCP read from the lamp.
 
 Example transport checks:
 

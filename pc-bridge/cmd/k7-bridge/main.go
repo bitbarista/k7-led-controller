@@ -11,7 +11,7 @@ import (
 
 func main() {
 	listen := flag.String("listen", "127.0.0.1:8787", "HTTP listen address")
-	configPath := flag.String("config", "k7-pc-bridge.json", "bridge config path")
+	configPath := flag.String("config", "k7-pc-bridge.json", "bridge store path")
 	timeout := flag.Duration("timeout", 500*time.Millisecond, "lamp TCP command timeout")
 	flag.Parse()
 

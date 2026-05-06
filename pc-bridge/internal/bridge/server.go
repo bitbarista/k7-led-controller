@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -23,9 +24,33 @@ type Config struct {
 	Device string `json:"device"`
 }
 
+type State struct {
+	Name                 string            `json:"name"`
+	Mode                 string            `json:"mode"`
+	Manual               []int             `json:"manual"`
+	Schedule             [][]int           `json:"schedule"`
+	ActivePreset         string            `json:"active_preset"`
+	ScheduleShiftMinutes int               `json:"schedule_shift_minutes"`
+	MasterBrightness     int               `json:"master_brightness"`
+	LastReadAt           string            `json:"last_read_at,omitempty"`
+	LastPushedAt         string            `json:"last_pushed_at,omitempty"`
+	Extras               map[string]string `json:"extras,omitempty"`
+}
+
+type storeFile struct {
+	Kind       string                     `json:"kind"`
+	Schema     int                        `json:"schema"`
+	Config     Config                     `json:"config"`
+	State      State                      `json:"state"`
+	Profiles   map[string]json.RawMessage `json:"profiles"`
+	ExportedAt string                     `json:"exported_at,omitempty"`
+}
+
 type Server struct {
 	mu         sync.RWMutex
 	config     Config
+	state      State
+	profiles   map[string]json.RawMessage
 	configPath string
 	timeout    time.Duration
 }
@@ -37,10 +62,12 @@ func NewServer(configPath string, timeout time.Duration) (*Server, error) {
 			Port:   k7tcp.DefaultPort,
 			Device: "k7mini",
 		},
+		state:      defaultState(),
+		profiles:   map[string]json.RawMessage{},
 		configPath: configPath,
 		timeout:    timeout,
 	}
-	if err := s.loadConfig(); err != nil {
+	if err := s.loadStore(); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -62,6 +89,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/devices", s.handleDevices)
 	mux.HandleFunc("/api/lamp/read", s.handleLampRead)
 	mux.HandleFunc("/api/state", s.handleState)
+	mux.HandleFunc("/api/profiles", s.handleProfiles)
+	mux.HandleFunc("/api/profiles/", s.handleProfileByName)
+	mux.HandleFunc("/api/backup", s.handleBackup)
 	mux.HandleFunc("/api/preview", s.handlePreview)
 	mux.HandleFunc("/api/hand", s.handleHand)
 	mux.HandleFunc("/api/push", s.handlePush)
@@ -154,7 +184,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		cfg := s.config
 		s.mu.Unlock()
 
-		if err := s.saveConfig(); err != nil {
+		if err := s.saveStore(); err != nil {
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save config failed: %v", err))
 			return
 		}
@@ -191,6 +221,10 @@ func (s *Server) handleLampRead(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	if err := s.saveStateFromLamp(state, true, false); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
+		return
+	}
 	writeJSON(w, http.StatusOK, state)
 }
 
@@ -199,21 +233,106 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	state, err := s.client().ReadAll()
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+	s.mu.RLock()
+	state := s.state
+	s.mu.RUnlock()
+	writeJSON(w, http.StatusOK, state)
+}
+
+func (s *Server) handleProfiles(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		s.mu.RLock()
+		profiles := cloneProfiles(s.profiles)
+		s.mu.RUnlock()
+		writeJSON(w, http.StatusOK, profiles)
+	case http.MethodPost:
+		var raw json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			writeError(w, http.StatusBadRequest, "Bad JSON")
+			return
+		}
+		var probe struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(raw, &probe); err != nil {
+			writeError(w, http.StatusBadRequest, "Bad JSON")
+			return
+		}
+		name := strings.TrimSpace(probe.Name)
+		if name == "" {
+			writeError(w, http.StatusBadRequest, "Name required")
+			return
+		}
+		s.mu.Lock()
+		s.profiles[name] = raw
+		s.mu.Unlock()
+		if err := s.saveStore(); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save profiles failed: %v", err))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	default:
+		methodNotAllowed(w)
+	}
+}
+
+func (s *Server) handleProfileByName(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		methodNotAllowed(w)
 		return
 	}
-	mode := "manual"
-	if state.AutoMode {
-		mode = "auto"
+	name, err := url.PathUnescape(strings.TrimPrefix(r.URL.Path, "/api/profiles/"))
+	if err != nil || strings.TrimSpace(name) == "" {
+		writeError(w, http.StatusBadRequest, "Profile name required")
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"name":     state.Name,
-		"mode":     mode,
-		"manual":   state.Manual,
-		"schedule": state.Schedule,
-	})
+	s.mu.Lock()
+	delete(s.profiles, name)
+	s.mu.Unlock()
+	if err := s.saveStore(); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save profiles failed: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		backup := s.snapshotStore()
+		backup.Kind = "k7_pc_bridge_backup"
+		backup.ExportedAt = time.Now().Format(time.RFC3339)
+		w.Header().Set("Content-Disposition", `attachment; filename="k7-pc-bridge-backup.json"`)
+		writeJSON(w, http.StatusOK, backup)
+	case http.MethodPost:
+		var backup storeFile
+		if err := json.NewDecoder(r.Body).Decode(&backup); err != nil {
+			writeError(w, http.StatusBadRequest, "Bad JSON")
+			return
+		}
+		if backup.Kind != "k7_pc_bridge_backup" || backup.Schema != 1 {
+			writeError(w, http.StatusBadRequest, "Unsupported backup format")
+			return
+		}
+		if backup.Profiles == nil {
+			backup.Profiles = map[string]json.RawMessage{}
+		}
+		normalizeConfig(&backup.Config)
+		normalizeState(&backup.State)
+		s.mu.Lock()
+		s.config = backup.Config
+		s.state = backup.State
+		s.profiles = cloneProfiles(backup.Profiles)
+		s.mu.Unlock()
+		if err := s.saveStore(); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save backup failed: %v", err))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	default:
+		methodNotAllowed(w)
+	}
 }
 
 func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
@@ -245,6 +364,10 @@ func (s *Server) handleHand(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.client().HandLuminance(ch); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if err := s.saveManualState(ch); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -283,10 +406,14 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	if err := s.savePushedState(manual, schedule, autoMode); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-func (s *Server) loadConfig() error {
+func (s *Server) loadStore() error {
 	data, err := os.ReadFile(s.configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -294,29 +421,103 @@ func (s *Server) loadConfig() error {
 		}
 		return err
 	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	if _, ok := raw["config"]; ok {
+		var store storeFile
+		if err := json.Unmarshal(data, &store); err != nil {
+			return err
+		}
+		normalizeConfig(&store.Config)
+		normalizeState(&store.State)
+		s.config = store.Config
+		s.state = store.State
+		if store.Profiles != nil {
+			s.profiles = cloneProfiles(store.Profiles)
+		}
+		return nil
+	}
+
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return err
 	}
-	if strings.TrimSpace(cfg.Host) != "" {
-		s.config.Host = strings.TrimSpace(cfg.Host)
-	}
-	if cfg.Port > 0 && cfg.Port <= 65535 {
-		s.config.Port = cfg.Port
-	}
-	if cfg.Device == "k7mini" || cfg.Device == "k7pro" {
-		s.config.Device = cfg.Device
-	}
+	normalizeConfig(&cfg)
+	s.config = cfg
 	return nil
 }
 
-func (s *Server) saveConfig() error {
-	cfg := s.Config()
-	data, err := json.MarshalIndent(cfg, "", "  ")
+func (s *Server) saveStore() error {
+	store := s.snapshotStore()
+	data, err := json.MarshalIndent(store, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(s.configPath, append(data, '\n'), 0644)
+}
+
+func (s *Server) snapshotStore() storeFile {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return storeFile{
+		Kind:     "k7_pc_bridge_store",
+		Schema:   1,
+		Config:   s.config,
+		State:    s.state,
+		Profiles: cloneProfiles(s.profiles),
+	}
+}
+
+func (s *Server) saveStateFromLamp(lamp k7tcp.LampState, read bool, pushed bool) error {
+	mode := "manual"
+	if lamp.AutoMode {
+		mode = "auto"
+	}
+	state := State{
+		Name:                 lamp.Name,
+		Mode:                 mode,
+		Manual:               intsFromManual(lamp.Manual),
+		Schedule:             intsFromSchedule(lamp.Schedule),
+		ScheduleShiftMinutes: 0,
+		MasterBrightness:     100,
+	}
+	now := time.Now().Format(time.RFC3339)
+	if read {
+		state.LastReadAt = now
+	}
+	if pushed {
+		state.LastPushedAt = now
+	}
+	s.mu.Lock()
+	state.ActivePreset = s.state.ActivePreset
+	s.state = state
+	s.mu.Unlock()
+	return s.saveStore()
+}
+
+func (s *Server) saveManualState(ch [k7tcp.Channels]uint8) error {
+	s.mu.Lock()
+	s.state.Mode = "manual"
+	s.state.Manual = intsFromChannels(ch)
+	s.mu.Unlock()
+	return s.saveStore()
+}
+
+func (s *Server) savePushedState(manual [k7tcp.Channels]uint8, schedule [k7tcp.Slots][8]uint8, autoMode bool) error {
+	mode := "manual"
+	if autoMode {
+		mode = "auto"
+	}
+	s.mu.Lock()
+	s.state.Mode = mode
+	s.state.Manual = intsFromChannels(manual)
+	s.state.Schedule = intsFromUintSchedule(schedule)
+	s.state.LastPushedAt = time.Now().Format(time.RFC3339)
+	s.mu.Unlock()
+	return s.saveStore()
 }
 
 func decodeChannels(r *http.Request) ([k7tcp.Channels]uint8, error) {
@@ -363,6 +564,129 @@ func normalizeSchedule(values [][]int) ([k7tcp.Slots][8]uint8, error) {
 		}
 	}
 	return out, nil
+}
+
+func defaultState() State {
+	return State{
+		Name:                 "",
+		Mode:                 "auto",
+		Manual:               make([]int, k7tcp.Channels),
+		Schedule:             defaultSchedule(),
+		ScheduleShiftMinutes: 0,
+		MasterBrightness:     100,
+	}
+}
+
+func defaultSchedule() [][]int {
+	out := make([][]int, k7tcp.Slots)
+	for h := 0; h < k7tcp.Slots; h++ {
+		out[h] = []int{h, 0, 0, 0, 0, 0, 0, 0}
+	}
+	return out
+}
+
+func normalizeConfig(cfg *Config) {
+	if strings.TrimSpace(cfg.Host) == "" {
+		cfg.Host = k7tcp.DefaultHost
+	}
+	if cfg.Port <= 0 || cfg.Port > 65535 {
+		cfg.Port = k7tcp.DefaultPort
+	}
+	if cfg.Device != "k7mini" && cfg.Device != "k7pro" {
+		cfg.Device = "k7mini"
+	}
+}
+
+func normalizeState(state *State) {
+	if state.Mode != "manual" {
+		state.Mode = "auto"
+	}
+	if len(state.Manual) == 0 {
+		state.Manual = make([]int, k7tcp.Channels)
+	}
+	for len(state.Manual) < k7tcp.Channels {
+		state.Manual = append(state.Manual, 0)
+	}
+	if len(state.Manual) > k7tcp.Channels {
+		state.Manual = state.Manual[:k7tcp.Channels]
+	}
+	for i := range state.Manual {
+		state.Manual[i] = clamp(state.Manual[i], 0, 100)
+	}
+	if len(state.Schedule) != k7tcp.Slots {
+		state.Schedule = defaultSchedule()
+	}
+	for h := 0; h < k7tcp.Slots; h++ {
+		if len(state.Schedule[h]) < 8 {
+			state.Schedule[h] = []int{h, 0, 0, 0, 0, 0, 0, 0}
+		}
+		state.Schedule[h] = state.Schedule[h][:8]
+		state.Schedule[h][0] = clamp(state.Schedule[h][0], 0, 23)
+		state.Schedule[h][1] = clamp(state.Schedule[h][1], 0, 59)
+		for i := 2; i < 8; i++ {
+			state.Schedule[h][i] = clamp(state.Schedule[h][i], 0, 100)
+		}
+	}
+	state.ScheduleShiftMinutes = 0
+	if state.MasterBrightness <= 0 {
+		state.MasterBrightness = 100
+	}
+}
+
+func clamp(v int, min int, max int) int {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
+}
+
+func cloneProfiles(in map[string]json.RawMessage) map[string]json.RawMessage {
+	out := make(map[string]json.RawMessage, len(in))
+	for k, v := range in {
+		out[k] = append(json.RawMessage(nil), v...)
+	}
+	return out
+}
+
+func intsFromManual(in [k7tcp.Channels]int) []int {
+	out := make([]int, k7tcp.Channels)
+	for i := range out {
+		out[i] = in[i]
+	}
+	return out
+}
+
+func intsFromChannels(in [k7tcp.Channels]uint8) []int {
+	out := make([]int, k7tcp.Channels)
+	for i := range out {
+		out[i] = int(in[i])
+	}
+	return out
+}
+
+func intsFromSchedule(in [k7tcp.Slots][8]int) [][]int {
+	out := make([][]int, k7tcp.Slots)
+	for h := range out {
+		out[h] = make([]int, 8)
+		for i := range out[h] {
+			out[h][i] = in[h][i]
+		}
+	}
+	return out
+}
+
+func intsFromUintSchedule(in [k7tcp.Slots][8]uint8) [][]int {
+	out := make([][]int, k7tcp.Slots)
+	for h := range out {
+		out[h] = make([]int, 8)
+		for i := range out[h] {
+			out[h][i] = int(in[h][i])
+		}
+	}
+	return out
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

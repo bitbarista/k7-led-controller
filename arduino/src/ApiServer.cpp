@@ -450,6 +450,32 @@ void setupApiServer(WebServer& server) {
             "\"channels\":[\"white\",\"royal_blue\",\"green\",\"uv\",\"cyan\",\"red\"]}}");
     });
 
+    // ── /api/capabilities ────────────────────────────────────────────────────
+    server.on("/api/capabilities", HTTP_GET, [&server]() {
+        JsonDocument doc;
+        doc["platform"] = "esp32";
+        doc["transport"] = "controller";
+        auto caps = doc["capabilities"].to<JsonObject>();
+        caps["read_lamp"] = true;
+        caps["push_schedule"] = true;
+        caps["manual_preview"] = true;
+        caps["profiles"] = true;
+        caps["community_presets"] = true;
+        caps["backup_restore"] = true;
+        caps["fixed_lunar"] = true;
+        caps["siesta_baked_schedule"] = false;
+        caps["smooth_ramp"] = true;
+        caps["tracked_lunar"] = true;
+        caps["acclimation"] = true;
+        caps["seasonal_daylength"] = true;
+        caps["feed_mode"] = true;
+        caps["maintenance_mode"] = true;
+        caps["setup_portal"] = true;
+        caps["logs"] = true;
+        caps["persistent_controller_clock"] = true;
+        sendJson(server, doc);
+    });
+
     // ── /api/version ──────────────────────────────────────────────────────────
     server.on("/api/version", HTTP_GET, [&server]() {
         JsonDocument doc;
