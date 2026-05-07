@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/bitbarista/k7-led-controller/pc-bridge/internal/k7tcp"
@@ -40,5 +41,42 @@ func TestApplyMasterToLampStateClampsAbove100(t *testing.T) {
 	}
 	if got, want := scaledSchedule[9], ([8]uint8{9, 0, 100, 100, 2, 0, 0, 0}); got != want {
 		t.Fatalf("schedule row = %v, want %v", got, want)
+	}
+}
+
+func TestReadLampStateKeepsDefaultScheduleModeWhenLampReportsManual(t *testing.T) {
+	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var lamp k7tcp.LampState
+	lamp.AutoMode = false
+
+	if err := s.saveStateFromLamp(lamp, true, false); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := s.state.Mode, "auto"; got != want {
+		t.Fatalf("mode = %q, want %q", got, want)
+	}
+}
+
+func TestReadLampStatePreservesDeliberateManualMode(t *testing.T) {
+	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.state.Mode = "manual"
+
+	var lamp k7tcp.LampState
+	lamp.AutoMode = false
+
+	if err := s.saveStateFromLamp(lamp, true, false); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, want := s.state.Mode, "manual"; got != want {
+		t.Fatalf("mode = %q, want %q", got, want)
 	}
 }

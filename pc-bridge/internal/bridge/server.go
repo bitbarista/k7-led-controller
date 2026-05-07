@@ -552,13 +552,9 @@ func (s *Server) snapshotStore() storeFile {
 }
 
 func (s *Server) saveStateFromLamp(lamp k7tcp.LampState, read bool, pushed bool) error {
-	mode := "manual"
-	if lamp.AutoMode {
-		mode = "auto"
-	}
 	state := State{
 		Name:                 lamp.Name,
-		Mode:                 mode,
+		Mode:                 "auto",
 		Manual:               intsFromManual(lamp.Manual),
 		Schedule:             intsFromSchedule(lamp.Schedule),
 		ScheduleShiftMinutes: 0,
@@ -572,6 +568,9 @@ func (s *Server) saveStateFromLamp(lamp k7tcp.LampState, read bool, pushed bool)
 		state.LastPushedAt = now
 	}
 	s.mu.Lock()
+	if s.state.Mode == "manual" {
+		state.Mode = "manual"
+	}
 	state.ActivePreset = s.state.ActivePreset
 	if !pushed {
 		state.LastPushedAt = s.state.LastPushedAt
