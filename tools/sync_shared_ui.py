@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "shared-ui"
 DESTINATIONS = {
+    "android": ROOT / "android" / "app" / "src" / "main" / "assets" / "static",
     "esp32": ROOT / "arduino" / "data" / "static",
     "pc-bridge": ROOT / "pc-bridge" / "internal" / "bridge" / "static",
 }

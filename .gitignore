@@ -2,6 +2,11 @@ venv/
 __pycache__/
 *.pyc
 dist/
+.android-sdk/
+.android-tools/
+.gradle/
+android/**/build/
+local.properties
 *.yaml
 *.yml
 !.github/**/*.yml
