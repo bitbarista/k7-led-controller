@@ -854,6 +854,10 @@ function setSiestaAvailability(enabled) {
   });
 }
 
+function siestaAvailable(rampActive = rampActiveState) {
+  return !!rampActive || cap('siesta_baked_schedule');
+}
+
 function updateLunarHint(d) {
   const hint = document.getElementById('lmHint');
   if (!hint) return;
@@ -1170,10 +1174,10 @@ async function readFromDevice() {
     if (maintenanceSt.active) startMaintenanceCountdown(maintenanceSt.remaining, maintenanceSt.intensity ?? 70);
     else updateMaintenanceSub(0, maintenanceSt.intensity ?? 70);
 
-    // Siesta
-    siestaState = siestaSt;
-    setSiestaAvailability(rampSt.active);
-    setSiestaBtn(rampSt.active && !!(siestaSt.enabled || siestaSt.active));
+	// Siesta
+	siestaState = siestaSt;
+	setSiestaAvailability(siestaAvailable(rampSt.active));
+	setSiestaBtn(siestaAvailable(rampSt.active) && !!(siestaSt.enabled || siestaSt.active));
     document.getElementById('siEnabled').checked = !!siestaSt.enabled;
     document.getElementById('siStart').value = siestaSt.start || '13:00';
     document.getElementById('siDuration').value = siestaSt.duration ?? siestaSt.duration_mins ?? 90;
@@ -1300,9 +1304,9 @@ function setRampBtn(on) {
   const b = document.getElementById('rampBtn');
   b.textContent = on ? 'ON' : 'OFF';
   b.className = 'fx-tog' + (on ? ' on-ramp' : '');
-  setSiestaAvailability(on);
+  setSiestaAvailability(siestaAvailable(on));
   if (siestaState) {
-    setSiestaBtn(on && !!(siestaState.enabled || siestaState.active));
+    setSiestaBtn(siestaAvailable(on) && !!(siestaState.enabled || siestaState.active));
     updateSiestaHint(siestaState);
   }
 }
@@ -1547,7 +1551,7 @@ async function onSiestaChange() {
   });
   const siesta = await api('GET', '/api/siesta/status');
   siestaState = siesta;
-  setSiestaAvailability(rampActiveState || cap('siesta_baked_schedule'));
+  setSiestaAvailability(siestaAvailable());
   setSiestaBtn((rampActiveState || cap('siesta_baked_schedule')) && !!(siesta.enabled || siesta.active));
   const win = siestaWindow(siesta);
   const base = siestaBaseWindow(siesta);
@@ -2020,8 +2024,8 @@ async function pollEffectStates() {
         : 'Inactive';
     }
     if (_pollOk('siesta')) {
-      setSiestaAvailability(ramp.active);
-      setSiestaBtn(ramp.active && !!(siesta.enabled || siesta.active));
+      setSiestaAvailability(siestaAvailable(ramp.active));
+      setSiestaBtn(siestaAvailable(ramp.active) && !!(siesta.enabled || siesta.active));
       _setIfUnfocused('siEnabled', el => { el.checked = !!siesta.enabled; });
       _setIfUnfocused('siStart', el => { el.value = siesta.start || '13:00'; });
       _setIfUnfocused('siDuration', el => { el.value = siesta.duration ?? siesta.duration_mins ?? 90; });
