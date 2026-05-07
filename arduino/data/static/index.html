@@ -1178,6 +1178,14 @@ function setChartMode(mode) {
   updateColorStrip();
 }
 
+function showEffectiveChartForPCBridgeEffects() {
+  const siestaOn = siestaState && (siestaState.enabled || siestaState.active);
+  const lunarOn = lunarState && (lunarState.enabled || lunarState.active);
+  if (isPCBridge() && chartMode !== 'effective' && (siestaOn || lunarOn)) {
+    setChartMode('effective');
+  }
+}
+
 function initChart() {
   const dragDataConfig = {
     round: 0, showTooltip: true, dragX: false,
@@ -1809,6 +1817,7 @@ function setSiestaBtn(active) {
 
 function applySiestaUI(d) {
   siestaState = d;
+  showEffectiveChartForPCBridgeEffects();
   const available = siestaAvailable();
   setSiestaAvailability(available);
   setSiestaBtn(available && !!(d.enabled || d.active));
@@ -1989,6 +1998,7 @@ function setLunarBtn(active) {
 
 function applyLunarUI(d) {
   lunarState = d;
+  showEffectiveChartForPCBridgeEffects();
   setLunarBtn(!!(d.enabled || d.active));
   document.getElementById('lmEnabled').checked = !!d.enabled;
   document.getElementById('lmTrackMoonrise').checked = !!d.track_moonrise;
