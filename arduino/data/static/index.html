@@ -466,7 +466,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       </div>
 
       <!-- Siesta -->
-      <div class="fx-row-wrap" data-fx="siesta" id="siestaPill" data-cap="smooth_ramp">
+      <div class="fx-row-wrap" data-fx="siesta" id="siestaPill" data-cap="smooth_ramp|siesta_baked_schedule">
         <div class="fx-row">
           <div class="fx-info">
             <div class="fx-name">🌤 Siesta</div>
@@ -555,7 +555,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       </div>
 
       <!-- Lunar Cycle -->
-      <div class="fx-row-wrap" data-fx="lunar" id="lunarPill" data-cap="tracked_lunar">
+      <div class="fx-row-wrap" data-fx="lunar" id="lunarPill" data-cap="tracked_lunar|fixed_lunar">
         <div class="fx-row">
           <div class="fx-info">
             <div class="fx-name">🌕 Lunar</div>
@@ -731,6 +731,7 @@ const DEFAULT_STATUS = {
 };
 
 function cap(name) {
+  if (name.includes('|')) return name.split('|').some(part => cap(part.trim()));
   return platformInfo.capabilities?.[name] !== false;
 }
 
@@ -877,7 +878,7 @@ async function readFromDevice() {
       api('GET', '/api/master').catch(() => cloneDefaultStatus('master')),
       capGet('feed_mode', '/api/feed/status', 'feed'),
       capGet('maintenance_mode', '/api/maintenance/status', 'maintenance'),
-      capGet('smooth_ramp', '/api/siesta/status', 'siesta'),
+      capGet('smooth_ramp|siesta_baked_schedule', '/api/siesta/status', 'siesta'),
       capGet('acclimation', '/api/acclimation/status', 'acclimation'),
       capGet('seasonal_daylength', '/api/seasonal/status', 'seasonal'),
       capGet('logs', '/api/warnings/status', 'warnings'),
@@ -1772,7 +1773,7 @@ function onMaintenanceIntensityChange() { /* applied on next start */ }
 function updateSiestaHint(d) {
   const hint = document.getElementById('siHint');
   if (!hint) return;
-  if (!rampActiveState) {
+  if (!rampActiveState && !cap('siesta_baked_schedule')) {
     hint.textContent = 'Requires Smooth Ramp. The lamp native schedule is too coarse for midday dimming on its own.';
     return;
   }
@@ -1804,8 +1805,9 @@ function setSiestaBtn(active) {
 
 function applySiestaUI(d) {
   siestaState = d;
-  setSiestaAvailability(rampActiveState);
-  setSiestaBtn(rampActiveState && !!(d.enabled || d.active));
+  const available = rampActiveState || cap('siesta_baked_schedule');
+  setSiestaAvailability(available);
+  setSiestaBtn(available && !!(d.enabled || d.active));
   document.getElementById('siEnabled').checked = !!d.enabled;
   document.getElementById('siStart').value = d.start || '13:00';
   _setIfUnfocused('siDuration', el => { el.value = d.duration ?? d.duration_mins ?? 90; });
@@ -1831,7 +1833,7 @@ async function loadSiestaStatus() {
 }
 
 async function toggleSiesta() {
-  if (!rampActiveState) return;
+  if (!rampActiveState && !cap('siesta_baked_schedule')) return;
   const enabled = !!document.getElementById('siEnabled').checked;
   document.getElementById('siEnabled').checked = !enabled;
   try {
@@ -1843,7 +1845,7 @@ async function toggleSiesta() {
 }
 
 async function onSiestaChange() {
-  if (!rampActiveState) return;
+  if (!rampActiveState && !cap('siesta_baked_schedule')) return;
   const si = {
     enabled: document.getElementById('siEnabled').checked,
     start: document.getElementById('siStart').value,
@@ -1960,7 +1962,9 @@ function lunarWindow(d) {
 function updateLunarWindowHint(d) {
   const hint = document.getElementById('lmWindowHint');
   if (!hint) return;
-  if (d?.track_moonrise) {
+  if (!cap('tracked_lunar')) {
+    hint.textContent = `Fixed nightly moonlight. This is baked into the lamp schedule when you Push; it does not track moonrise or moon phase after the PC closes.`;
+  } else if (d?.track_moonrise) {
     const shift = d.shift_minutes || 0;
     const sign = shift >= 0 ? '+' : '';
     const win = lunarWindow(d);
@@ -1984,6 +1988,7 @@ function applyLunarUI(d) {
   setLunarBtn(!!(d.enabled || d.active));
   document.getElementById('lmEnabled').checked = !!d.enabled;
   document.getElementById('lmTrackMoonrise').checked = !!d.track_moonrise;
+  document.getElementById('lmTrackMoonrise').disabled = !cap('tracked_lunar');
   document.getElementById('lmStart').value     = d.start || '18:30';
   document.getElementById('lmEnd').value       = d.end   || '06:30';
   document.getElementById('lmClampStart').value = d.clamp_start || '18:00';
@@ -2053,10 +2058,10 @@ async function pollEffectStates() {
       capGet('smooth_ramp', '/api/ramp/status', 'ramp'),
       capGet('feed_mode', '/api/feed/status', 'feed'),
       capGet('maintenance_mode', '/api/maintenance/status', 'maintenance'),
-      capGet('smooth_ramp', '/api/siesta/status', 'siesta'),
+      capGet('smooth_ramp|siesta_baked_schedule', '/api/siesta/status', 'siesta'),
       capGet('acclimation', '/api/acclimation/status', 'acclimation'),
       capGet('seasonal_daylength', '/api/seasonal/status', 'seasonal'),
-      capGet('tracked_lunar', '/api/lunar/status', 'lunar'),
+      capGet('tracked_lunar|fixed_lunar', '/api/lunar/status', 'lunar'),
       api('GET', '/api/master').catch(() => cloneDefaultStatus('master')),
       capGet('logs', '/api/warnings/status', 'warnings'),
       cap('logs') ? api('GET', '/api/output/status').catch(() => null) : Promise.resolve(null),
@@ -2087,7 +2092,7 @@ async function pollEffectStates() {
     }
     siestaState = siesta;
     setSiestaAvailability(ramp.active);
-    setSiestaBtn(ramp.active && !!(siesta.enabled || siesta.active));
+    setSiestaBtn((ramp.active || cap('siesta_baked_schedule')) && !!(siesta.enabled || siesta.active));
     _setIfUnfocused('siEnabled',   el => { el.checked = !!siesta.enabled; });
     _setIfUnfocused('siStart',     el => { el.value = siesta.start || '13:00'; });
     _setIfUnfocused('siDuration',  el => { el.value = siesta.duration ?? siesta.duration_mins ?? 90; });
@@ -2589,7 +2594,7 @@ async function init() {
   await readFromDevice();
   pollEffectStates();
   setInterval(pollEffectStates, 5000);
-  if (cap('tracked_lunar')) {
+  if (cap('tracked_lunar|fixed_lunar')) {
     loadLunarStatus();
     setInterval(loadLunarStatus, 60000);
   }

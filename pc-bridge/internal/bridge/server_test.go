@@ -44,6 +44,34 @@ func TestApplyMasterToLampStateClampsAbove100(t *testing.T) {
 	}
 }
 
+func TestBakePCBridgeEffectsAppliesSiestaAndFixedLunar(t *testing.T) {
+	var schedule [k7tcp.Slots][8]uint8
+	for h := 0; h < k7tcp.Slots; h++ {
+		schedule[h] = [8]uint8{uint8(h), 0, 40, 40, 40, 0, 0, 0}
+	}
+	schedule[0] = [8]uint8{0, 0, 0, 0, 0, 0, 0, 0}
+	schedule[13] = [8]uint8{13, 0, 80, 60, 40, 0, 0, 0}
+
+	out := bakePCBridgeEffects(
+		schedule,
+		SiestaConfig{Enabled: true, Start: "13:00", Duration: 60, Intensity: 25},
+		LunarConfig{Enabled: true, Start: "18:00", End: "06:00", MaxIntensity: 15, DayThreshold: 2},
+	)
+
+	if got, want := out[13], ([8]uint8{13, 0, 60, 45, 30, 0, 0, 0}); got != want {
+		t.Fatalf("siesta row = %v, want %v", got, want)
+	}
+	if got, want := out[0][3], uint8(15); got != want {
+		t.Fatalf("lunar royal blue = %d, want %d", got, want)
+	}
+	if got, want := out[0][6], uint8(11); got != want {
+		t.Fatalf("lunar cyan = %d, want %d", got, want)
+	}
+	if got, want := out[12][3], uint8(40); got != want {
+		t.Fatalf("daylight royal blue = %d, want %d", got, want)
+	}
+}
+
 func TestReadLampStateKeepsDefaultScheduleModeWhenLampReportsManual(t *testing.T) {
 	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100)
 	if err != nil {

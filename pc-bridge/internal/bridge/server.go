@@ -32,9 +32,35 @@ type State struct {
 	ActivePreset         string            `json:"active_preset"`
 	ScheduleShiftMinutes int               `json:"schedule_shift_minutes"`
 	MasterBrightness     int               `json:"master_brightness"`
+	Siesta               SiestaConfig      `json:"siesta"`
+	Lunar                LunarConfig       `json:"lunar"`
 	LastReadAt           string            `json:"last_read_at,omitempty"`
 	LastPushedAt         string            `json:"last_pushed_at,omitempty"`
 	Extras               map[string]string `json:"extras,omitempty"`
+}
+
+type SiestaConfig struct {
+	Enabled      bool   `json:"enabled"`
+	Active       bool   `json:"active"`
+	Start        string `json:"start"`
+	Duration     int    `json:"duration"`
+	DurationMins int    `json:"duration_mins"`
+	Intensity    int    `json:"intensity"`
+}
+
+type LunarConfig struct {
+	Enabled       bool   `json:"enabled"`
+	Active        bool   `json:"active"`
+	Phase         int    `json:"phase"`
+	Illumination  int    `json:"illumination"`
+	PhaseName     string `json:"phase_name"`
+	Start         string `json:"start"`
+	End           string `json:"end"`
+	ClampStart    string `json:"clamp_start"`
+	ClampEnd      string `json:"clamp_end"`
+	MaxIntensity  int    `json:"max_intensity"`
+	DayThreshold  int    `json:"day_threshold"`
+	TrackMoonrise bool   `json:"track_moonrise"`
 }
 
 type storeFile struct {
@@ -101,6 +127,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/preview", s.handlePreview)
 	mux.HandleFunc("/api/hand", s.handleHand)
 	mux.HandleFunc("/api/push", s.handlePush)
+	mux.HandleFunc("/api/siesta/status", s.handleSiestaStatus)
+	mux.HandleFunc("/api/siesta/schedule", s.handleSiestaSchedule)
+	mux.HandleFunc("/api/lunar/status", s.handleLunarStatus)
+	mux.HandleFunc("/api/lunar/schedule", s.handleLunarSchedule)
+	mux.HandleFunc("/api/lunar/start", s.handleLunarStart)
+	mux.HandleFunc("/api/lunar/stop", s.handleLunarStop)
 	return withCORS(mux)
 }
 
@@ -479,7 +511,10 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.RLock()
 	master := s.state.MasterBrightness
+	siesta := s.state.Siesta
+	lunar := s.state.Lunar
 	s.mu.RUnlock()
+	schedule = bakePCBridgeEffects(schedule, siesta, lunar)
 	manualForLamp, scheduleForLamp := applyMasterToLampState(manual, schedule, master)
 
 	if err := s.client().PushSchedule(manualForLamp, scheduleForLamp, autoMode); err != nil {
@@ -487,6 +522,96 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.savePushedState(manualForLamp, scheduleForLamp, autoMode); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) handleSiestaStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	s.mu.RLock()
+	cfg := normalizeSiesta(s.state.Siesta)
+	s.mu.RUnlock()
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (s *Server) handleSiestaSchedule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var cfg SiestaConfig
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "Bad JSON")
+		return
+	}
+	cfg = normalizeSiesta(cfg)
+	s.mu.Lock()
+	s.state.Siesta = cfg
+	s.mu.Unlock()
+	if err := s.saveStore(); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (s *Server) handleLunarStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	s.mu.RLock()
+	cfg := normalizeLunar(s.state.Lunar)
+	s.mu.RUnlock()
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (s *Server) handleLunarSchedule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var cfg LunarConfig
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "Bad JSON")
+		return
+	}
+	cfg = normalizeLunar(cfg)
+	s.mu.Lock()
+	s.state.Lunar = cfg
+	s.mu.Unlock()
+	if err := s.saveStore(); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (s *Server) handleLunarStart(w http.ResponseWriter, r *http.Request) {
+	s.setLunarEnabled(w, r, true)
+}
+
+func (s *Server) handleLunarStop(w http.ResponseWriter, r *http.Request) {
+	s.setLunarEnabled(w, r, false)
+}
+
+func (s *Server) setLunarEnabled(w http.ResponseWriter, r *http.Request, enabled bool) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	s.mu.Lock()
+	cfg := normalizeLunar(s.state.Lunar)
+	cfg.Enabled = enabled
+	cfg.Active = enabled
+	s.state.Lunar = cfg
+	s.mu.Unlock()
+	if err := s.saveStore(); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
 		return
 	}
@@ -572,6 +697,8 @@ func (s *Server) saveStateFromLamp(lamp k7tcp.LampState, read bool, pushed bool)
 		state.Mode = "manual"
 	}
 	state.ActivePreset = s.state.ActivePreset
+	state.Siesta = s.state.Siesta
+	state.Lunar = s.state.Lunar
 	if !pushed {
 		state.LastPushedAt = s.state.LastPushedAt
 	}
@@ -670,6 +797,53 @@ func applyMasterToLampState(manual [k7tcp.Channels]uint8, schedule [k7tcp.Slots]
 	return scaledManual, scaledSchedule
 }
 
+func bakePCBridgeEffects(schedule [k7tcp.Slots][8]uint8, siesta SiestaConfig, lunar LunarConfig) [k7tcp.Slots][8]uint8 {
+	out := schedule
+	siesta = normalizeSiesta(siesta)
+	lunar = normalizeLunar(lunar)
+	if siesta.Enabled {
+		start := parseHHMM(siesta.Start, 13*60)
+		end := start + siesta.Duration
+		factor := 100 - siesta.Intensity
+		for h := 0; h < k7tcp.Slots; h++ {
+			mins := int(out[h][0])*60 + int(out[h][1])
+			if mins >= start && mins < end {
+				for c := 2; c < 8; c++ {
+					out[h][c] = scalePercent(out[h][c], factor)
+				}
+			}
+		}
+	}
+	if lunar.Enabled && lunar.MaxIntensity > 0 {
+		start := parseHHMM(lunar.Start, 18*60+30)
+		end := parseHHMM(lunar.End, 6*60+30)
+		for h := 0; h < k7tcp.Slots; h++ {
+			mins := int(out[h][0])*60 + int(out[h][1])
+			if !minsInWindow(mins, start, end) || scheduleDaylightLevel(out[h]) > lunar.DayThreshold {
+				continue
+			}
+			if out[h][3] < uint8(lunar.MaxIntensity) {
+				out[h][3] = uint8(lunar.MaxIntensity)
+			}
+			cyan := uint8((lunar.MaxIntensity*7 + 5) / 10)
+			if out[h][6] < cyan {
+				out[h][6] = cyan
+			}
+		}
+	}
+	return out
+}
+
+func scheduleDaylightLevel(row [8]uint8) int {
+	maxValue := 0
+	for c := 2; c < 8; c++ {
+		if int(row[c]) > maxValue {
+			maxValue = int(row[c])
+		}
+	}
+	return maxValue
+}
+
 func scalePercent(value uint8, master int) uint8 {
 	scaled := int(value)*master + 50
 	scaled /= 100
@@ -690,6 +864,8 @@ func defaultState() State {
 		Schedule:             defaultSchedule(),
 		ScheduleShiftMinutes: 0,
 		MasterBrightness:     100,
+		Siesta:               defaultSiesta(),
+		Lunar:                defaultLunar(),
 	}
 }
 
@@ -747,6 +923,89 @@ func normalizeState(state *State) {
 	if state.MasterBrightness <= 0 {
 		state.MasterBrightness = 100
 	}
+	state.Siesta = normalizeSiesta(state.Siesta)
+	state.Lunar = normalizeLunar(state.Lunar)
+}
+
+func defaultSiesta() SiestaConfig {
+	return SiestaConfig{Start: "13:00", Duration: 90, DurationMins: 90, Intensity: 25}
+}
+
+func normalizeSiesta(cfg SiestaConfig) SiestaConfig {
+	if cfg.Start == "" {
+		cfg.Start = "13:00"
+	}
+	if cfg.Duration <= 0 {
+		cfg.Duration = cfg.DurationMins
+	}
+	if cfg.Duration <= 0 {
+		cfg.Duration = 90
+	}
+	cfg.Duration = clamp(cfg.Duration, 15, 480)
+	cfg.DurationMins = cfg.Duration
+	cfg.Intensity = clamp(cfg.Intensity, 1, 90)
+	cfg.Active = cfg.Enabled
+	return cfg
+}
+
+func defaultLunar() LunarConfig {
+	return LunarConfig{
+		Start:        "18:30",
+		End:          "06:30",
+		ClampStart:   "18:00",
+		ClampEnd:     "08:00",
+		MaxIntensity: 15,
+		DayThreshold: 2,
+		PhaseName:    "Fixed",
+		Illumination: 100,
+	}
+}
+
+func normalizeLunar(cfg LunarConfig) LunarConfig {
+	if cfg.Start == "" {
+		cfg.Start = "18:30"
+	}
+	if cfg.End == "" {
+		cfg.End = "06:30"
+	}
+	if cfg.ClampStart == "" {
+		cfg.ClampStart = "18:00"
+	}
+	if cfg.ClampEnd == "" {
+		cfg.ClampEnd = "08:00"
+	}
+	if cfg.MaxIntensity <= 0 {
+		cfg.MaxIntensity = 15
+	}
+	cfg.MaxIntensity = clamp(cfg.MaxIntensity, 0, 100)
+	cfg.DayThreshold = clamp(cfg.DayThreshold, 0, 100)
+	cfg.TrackMoonrise = false
+	cfg.Active = cfg.Enabled
+	cfg.Phase = 4
+	cfg.Illumination = 100
+	cfg.PhaseName = "Fixed"
+	return cfg
+}
+
+func parseHHMM(value string, fallback int) int {
+	var hour, minute int
+	if _, err := fmt.Sscanf(value, "%d:%d", &hour, &minute); err != nil {
+		return fallback
+	}
+	if hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+		return fallback
+	}
+	return hour*60 + minute
+}
+
+func minsInWindow(mins int, start int, end int) bool {
+	if start == end {
+		return true
+	}
+	if start < end {
+		return mins >= start && mins < end
+	}
+	return mins >= start || mins < end
 }
 
 func clamp(v int, min int, max int) int {
