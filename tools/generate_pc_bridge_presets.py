@@ -116,7 +116,7 @@ def main() -> int:
     args = parser.parse_args()
 
     presets = generate(args.source)
-    text = json.dumps(presets, indent=2, sort_keys=True) + "\n"
+    text = json.dumps(presets, indent=2) + "\n"
 
     if args.check:
         try:
