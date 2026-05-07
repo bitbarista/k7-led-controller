@@ -968,7 +968,7 @@ async function pushSchedule() {
       active_preset: activePresetKey,
       schedule_shift_minutes: signedShiftMinutes(),
     });
-    if (activePresetDisablesLunar() && cap('tracked_lunar')) {
+    if (activePresetDisablesLunar() && cap('tracked_lunar|fixed_lunar')) {
       await loadLunarStatus();
       setOk('Pushed successfully · Lunar disabled');
     } else {

@@ -1272,7 +1272,7 @@ async function pushSchedule() {
       active_preset: activePresetKey,
       schedule_shift_minutes: scheduleShiftMinutes,
     });
-    if (activePresetDisablesLunar() && cap('tracked_lunar')) {
+    if (activePresetDisablesLunar() && cap('tracked_lunar|fixed_lunar')) {
       const lunar = await api('GET', '/api/lunar/status');
       lunarState = lunar;
       setLunarBtn(!!(lunar.enabled || lunar.active));

@@ -72,6 +72,27 @@ func TestBakePCBridgeEffectsAppliesSiestaAndFixedLunar(t *testing.T) {
 	}
 }
 
+func TestSavePushedDinoPresetDisablesLunar(t *testing.T) {
+	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.state.Lunar = LunarConfig{Enabled: true, Active: true, MaxIntensity: 15}
+
+	var manual [k7tcp.Channels]uint8
+	var schedule [k7tcp.Slots][8]uint8
+	if err := s.savePushedState(manual, schedule, true, "preset:dino", true); err != nil {
+		t.Fatal(err)
+	}
+
+	if s.state.Lunar.Enabled || s.state.Lunar.Active {
+		t.Fatalf("lunar = %+v, want disabled", s.state.Lunar)
+	}
+	if got, want := s.state.ActivePreset, "preset:dino"; got != want {
+		t.Fatalf("active preset = %q, want %q", got, want)
+	}
+}
+
 func TestReadLampStateKeepsDefaultScheduleModeWhenLampReportsManual(t *testing.T) {
 	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100)
 	if err != nil {

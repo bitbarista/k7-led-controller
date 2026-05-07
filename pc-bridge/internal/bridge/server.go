@@ -487,9 +487,10 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var in struct {
-		Manual   []int   `json:"manual"`
-		Schedule [][]int `json:"schedule"`
-		Mode     string  `json:"mode"`
+		Manual       []int   `json:"manual"`
+		Schedule     [][]int `json:"schedule"`
+		Mode         string  `json:"mode"`
+		ActivePreset string  `json:"active_preset"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "Bad JSON")
@@ -514,6 +515,10 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 	siesta := s.state.Siesta
 	lunar := s.state.Lunar
 	s.mu.RUnlock()
+	if presetDisablesLunar(in.ActivePreset) {
+		lunar.Enabled = false
+		lunar.Active = false
+	}
 	schedule = bakePCBridgeEffects(schedule, siesta, lunar)
 	manualForLamp, scheduleForLamp := applyMasterToLampState(manual, schedule, master)
 
@@ -521,7 +526,7 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if err := s.savePushedState(manualForLamp, scheduleForLamp, autoMode); err != nil {
+	if err := s.savePushedState(manualForLamp, scheduleForLamp, autoMode, in.ActivePreset, presetDisablesLunar(in.ActivePreset)); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
 		return
 	}
@@ -715,7 +720,7 @@ func (s *Server) saveManualState(ch [k7tcp.Channels]uint8) error {
 	return s.saveStore()
 }
 
-func (s *Server) savePushedState(manual [k7tcp.Channels]uint8, schedule [k7tcp.Slots][8]uint8, autoMode bool) error {
+func (s *Server) savePushedState(manual [k7tcp.Channels]uint8, schedule [k7tcp.Slots][8]uint8, autoMode bool, activePreset string, disableLunar bool) error {
 	mode := "manual"
 	if autoMode {
 		mode = "auto"
@@ -724,6 +729,13 @@ func (s *Server) savePushedState(manual [k7tcp.Channels]uint8, schedule [k7tcp.S
 	s.state.Mode = mode
 	s.state.Manual = intsFromChannels(manual)
 	s.state.Schedule = intsFromUintSchedule(schedule)
+	s.state.ActivePreset = strings.TrimSpace(activePreset)
+	if disableLunar {
+		lunar := normalizeLunar(s.state.Lunar)
+		lunar.Enabled = false
+		lunar.Active = false
+		s.state.Lunar = lunar
+	}
 	s.state.LastPushedAt = time.Now().Format(time.RFC3339)
 	s.mu.Unlock()
 	return s.saveStore()
@@ -832,6 +844,10 @@ func bakePCBridgeEffects(schedule [k7tcp.Slots][8]uint8, siesta SiestaConfig, lu
 		}
 	}
 	return out
+}
+
+func presetDisablesLunar(activePreset string) bool {
+	return strings.EqualFold(strings.TrimSpace(activePreset), "preset:dino")
 }
 
 func scheduleDaylightLevel(row [8]uint8) int {
