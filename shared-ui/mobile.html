@@ -987,15 +987,13 @@ async function _autoPushMaster() {
     const man = Array(6).fill(0);
     chs().forEach((_,i) => { man[i] = manual[i]||0; });
     // Send unscaled schedule; server applies MB when pushing to lamp
-    await Promise.all([
-      api('POST', '/api/master', {value: masterBrightness}),
-      api('POST', '/api/push', {
-        manual: man,
-        schedule: schedule.map(r => [...r]),
-        mode,
-        schedule_shift_minutes: scheduleShiftMinutes,
-      }),
-    ]);
+    await api('POST', '/api/master', {value: masterBrightness});
+    await api('POST', '/api/push', {
+      manual: man,
+      schedule: schedule.map(r => [...r]),
+      mode,
+      schedule_shift_minutes: scheduleShiftMinutes,
+    });
   } catch(_) {}
 }
 

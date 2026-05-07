@@ -477,11 +477,16 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request) {
 
 	autoMode := in.Mode != "manual"
 
-	if err := s.client().PushSchedule(manual, schedule, autoMode); err != nil {
+	s.mu.RLock()
+	master := s.state.MasterBrightness
+	s.mu.RUnlock()
+	manualForLamp, scheduleForLamp := applyMasterToLampState(manual, schedule, master)
+
+	if err := s.client().PushSchedule(manualForLamp, scheduleForLamp, autoMode); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if err := s.savePushedState(manual, schedule, autoMode); err != nil {
+	if err := s.savePushedState(manualForLamp, scheduleForLamp, autoMode); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
 		return
 	}
@@ -642,6 +647,40 @@ func normalizeSchedule(values [][]int) ([k7tcp.Slots][8]uint8, error) {
 		}
 	}
 	return out, nil
+}
+
+func applyMasterToLampState(manual [k7tcp.Channels]uint8, schedule [k7tcp.Slots][8]uint8, master int) ([k7tcp.Channels]uint8, [k7tcp.Slots][8]uint8) {
+	if master <= 0 {
+		master = 0
+	}
+	if master == 100 {
+		return manual, schedule
+	}
+	var scaledManual [k7tcp.Channels]uint8
+	var scaledSchedule [k7tcp.Slots][8]uint8
+	for i := 0; i < k7tcp.Channels; i++ {
+		scaledManual[i] = scalePercent(manual[i], master)
+	}
+	for h := 0; h < k7tcp.Slots; h++ {
+		scaledSchedule[h][0] = schedule[h][0]
+		scaledSchedule[h][1] = schedule[h][1]
+		for c := 2; c < 8; c++ {
+			scaledSchedule[h][c] = scalePercent(schedule[h][c], master)
+		}
+	}
+	return scaledManual, scaledSchedule
+}
+
+func scalePercent(value uint8, master int) uint8 {
+	scaled := int(value)*master + 50
+	scaled /= 100
+	if scaled < 0 {
+		return 0
+	}
+	if scaled > 100 {
+		return 100
+	}
+	return uint8(scaled)
 }
 
 func defaultState() State {
