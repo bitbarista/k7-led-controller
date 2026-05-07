@@ -706,6 +706,10 @@ function isPCBridge() {
   return platformInfo.platform === 'pc_bridge';
 }
 
+function isDirectLamp() {
+  return platformInfo.transport === 'direct_lamp';
+}
+
 function cloneDefaultStatus(name) {
   return JSON.parse(JSON.stringify(DEFAULT_STATUS[name]));
 }
@@ -955,7 +959,7 @@ function previewManual() {
   prevTimer = setTimeout(async () => {
     const out = Array(6).fill(0);
     chs().forEach((_,i) => { out[i] = manual[i]||0; });
-    try { await api('POST', '/api/preview', {channels: out}); } catch(_) {}
+    try { await api('POST', isDirectLamp() ? '/api/hand' : '/api/preview', {channels: out}); } catch(_) {}
   }, 120);
 }
 

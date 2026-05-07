@@ -1,5 +1,11 @@
 package com.bitbarista.k7controller;
 
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.util.Log;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -10,7 +16,10 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
+import javax.net.SocketFactory;
+
 final class K7TcpClient {
+    private static final String TAG = "K7TcpClient";
     static final int CHANNELS = 6;
     static final int SLOTS = 24;
     static final String DEFAULT_HOST = "192.168.4.1";
@@ -24,11 +33,13 @@ final class K7TcpClient {
     private static final byte[] CMD_ALL_SET = {0x10, 0x07};
     private static final byte[] CMD_ALL_READ = {0x10, 0x08};
 
+    private final Context context;
     private final String host;
     private final int port;
     private final int timeoutMs;
 
-    K7TcpClient(String host, int port, int timeoutMs) {
+    K7TcpClient(Context context, String host, int port, int timeoutMs) {
+        this.context = context.getApplicationContext();
         this.host = host == null || host.trim().isEmpty() ? DEFAULT_HOST : host.trim();
         this.port = port <= 0 ? DEFAULT_PORT : port;
         this.timeoutMs = timeoutMs <= 0 ? 1000 : timeoutMs;
@@ -74,12 +85,42 @@ final class K7TcpClient {
     }
 
     private Socket connect() throws Exception {
-        Socket socket = new Socket();
-        socket.connect(new InetSocketAddress(host, port), timeoutMs);
-        socket.setSoTimeout(20);
-        tryRead(socket, 64, 20, false);
-        socket.setSoTimeout(timeoutMs);
-        return socket;
+        Network wifi = wifiNetwork();
+        Exception last = null;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            Socket socket = wifi != null ? wifi.getSocketFactory().createSocket() : SocketFactory.getDefault().createSocket();
+            try {
+                if (wifi != null) Log.i(TAG, "connecting to " + host + ":" + port + " over WiFi network " + wifi + " attempt " + attempt);
+                else Log.w(TAG, "no WiFi network available; using default network for " + host + ":" + port + " attempt " + attempt);
+                socket.connect(new InetSocketAddress(host, port), timeoutMs);
+                socket.setSoTimeout(20);
+                tryRead(socket, 64, 20, false);
+                socket.setSoTimeout(timeoutMs);
+                return socket;
+            } catch (Exception e) {
+                last = e;
+                try {
+                    socket.close();
+                } catch (Exception ignored) {}
+                if (attempt < 3) Thread.sleep(250);
+            }
+        }
+        throw last;
+    }
+
+    private Network wifiNetwork() {
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return null;
+        Network active = cm.getActiveNetwork();
+        Network activeWifi = null;
+        for (Network network : cm.getAllNetworks()) {
+            NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                if (network.equals(active)) return network;
+                activeWifi = network;
+            }
+        }
+        return activeWifi;
     }
 
     private static void sendPacket(Socket socket, byte[] cmd, byte[] data) throws Exception {

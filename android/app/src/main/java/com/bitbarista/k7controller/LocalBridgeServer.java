@@ -23,6 +23,7 @@ final class LocalBridgeServer implements Runnable {
 
     private final Context context;
     private final SharedPreferences prefs;
+    private final Object lampLock = new Object();
     private volatile boolean running;
     private ServerSocket serverSocket;
     private Thread thread;
@@ -60,8 +61,8 @@ final class LocalBridgeServer implements Runnable {
     }
 
     private void handle(Socket socket) {
-        try (Socket s = socket) {
-            InputStream in = s.getInputStream();
+        try {
+            InputStream in = socket.getInputStream();
             byte[] headerBytes = readHeader(in);
             if (headerBytes.length == 0) return;
             String header = new String(headerBytes, StandardCharsets.UTF_8);
@@ -78,9 +79,16 @@ final class LocalBridgeServer implements Runnable {
             }
             byte[] body = readBody(in, contentLength);
             Response response = route(method, path, body);
-            writeResponse(s.getOutputStream(), response);
+            writeResponse(socket.getOutputStream(), response);
         } catch (Exception e) {
             Log.e(TAG, "request failed", e);
+            try {
+                writeResponse(socket.getOutputStream(), error(502, e.getMessage() == null ? "Lamp request failed" : e.getMessage()));
+            } catch (Exception ignored) {}
+        } finally {
+            try {
+                socket.close();
+            } catch (Exception ignored) {}
         }
     }
 
@@ -146,15 +154,20 @@ final class LocalBridgeServer implements Runnable {
     }
 
     private Response lampRead() throws Exception {
-        JSONObject lamp = client().readAll();
+        JSONObject lamp;
+        synchronized (lampLock) {
+            lamp = client().readAll();
+        }
         saveStateFromLamp(lamp);
         return json(lamp);
     }
 
     private Response lampChannels(byte[] body, boolean hand) throws Exception {
         int[] channels = intArray(new JSONObject(new String(body, StandardCharsets.UTF_8)).getJSONArray("channels"), K7TcpClient.CHANNELS);
-        if (hand) client().hand(channels);
-        else client().preview(channels);
+        synchronized (lampLock) {
+            if (hand) client().hand(channels);
+            else client().preview(channels);
+        }
         if (hand) saveState(state().put("mode", "manual").put("manual", jsonArray(channels)));
         return json(new JSONObject().put("ok", true));
     }
@@ -169,13 +182,18 @@ final class LocalBridgeServer implements Runnable {
             lunar.put("enabled", false).put("active", false);
             putObject("lunar", lunar);
         }
-        schedule = bakeEffects(schedule, getObject("siesta", defaultSiesta()), lunar);
+        JSONObject siesta = getObject("siesta", defaultSiesta());
+        int[][] baseSchedule = baseScheduleForPush(schedule, lunar);
+        schedule = bakeEffects(baseSchedule, siesta, lunar);
         int master = prefs.getInt("master", 100);
         manual = scale(manual, master);
         schedule = scale(schedule, master);
         boolean autoMode = !"manual".equals(in.optString("mode", "auto"));
-        client().push(manual, schedule, autoMode);
-        saveState(state().put("mode", autoMode ? "auto" : "manual").put("manual", jsonArray(manual)).put("schedule", scheduleJson(schedule)).put("active_preset", activePreset));
+        synchronized (lampLock) {
+            client().push(manual, schedule, autoMode);
+        }
+        putObject("base_schedule", new JSONObject().put("schedule", scheduleJson(baseSchedule)));
+        saveState(state().put("mode", autoMode ? "auto" : "manual").put("manual", jsonArray(manual)).put("schedule", scheduleJson(baseSchedule)).put("active_preset", activePreset));
         return json(new JSONObject().put("ok", true));
     }
 
@@ -206,7 +224,7 @@ final class LocalBridgeServer implements Runnable {
     }
 
     private K7TcpClient client() {
-        return new K7TcpClient(prefs.getString("host", K7TcpClient.DEFAULT_HOST), prefs.getInt("port", K7TcpClient.DEFAULT_PORT), 1000);
+        return new K7TcpClient(context, prefs.getString("host", K7TcpClient.DEFAULT_HOST), prefs.getInt("port", K7TcpClient.DEFAULT_PORT), 2000);
     }
 
     private static int[][] bakeEffects(int[][] schedule, JSONObject siesta, JSONObject lunar) {
@@ -234,6 +252,15 @@ final class LocalBridgeServer implements Runnable {
             }
         }
         return out;
+    }
+
+    private int[][] baseScheduleForPush(int[][] incoming, JSONObject lunar) throws Exception {
+        if (lunar.optBoolean("enabled") || lunar.optBoolean("active")) return incoming;
+        String raw = prefs.getString("base_schedule", null);
+        if (raw == null) return incoming;
+        JSONArray stored = new JSONObject(raw).optJSONArray("schedule");
+        if (stored == null || stored.length() != K7TcpClient.SLOTS) return incoming;
+        return scheduleArray(stored);
     }
 
     private Response setLunar(boolean enabled) throws Exception {
