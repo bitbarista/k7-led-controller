@@ -15,6 +15,15 @@
   --muted:    #6e7681;
   --hover:    #2d3748;
 }
+[data-theme="light"] {
+  --bg:       #f6f8fa;
+  --surface:  #ffffff;
+  --surface2: #eaeef2;
+  --border:   rgba(0,0,0,0.12);
+  --text:     #1c2128;
+  --muted:    #57606a;
+  --hover:    #d0d7de;
+}
 * { box-sizing: border-box; }
 body {
   background: var(--bg);
@@ -55,6 +64,18 @@ body {
   white-space: nowrap; text-decoration: none; display: inline-block;
 }
 .hdr-btn:active { background: var(--hover); color: var(--text); }
+.theme-btn {
+  align-items: center; background: transparent; border: 1px solid var(--border);
+  border-radius: 6px; color: var(--muted); cursor: pointer; display: inline-flex;
+  flex-shrink: 0; font-size: 0.95rem; height: 31px; justify-content: center;
+  line-height: 1; padding: 0; width: 34px;
+}
+.theme-btn:active { background: var(--hover); color: var(--text); }
+[data-theme="light"] .time-in::-webkit-calendar-picker-indicator { filter: none; opacity: 0.55; }
+[data-theme="light"] .public-profile-link {
+  background: rgba(14,165,233,0.12); color: #075985; border-color: rgba(3,105,161,0.35);
+}
+[data-theme="light"] .fx-tog.on-maintenance { color: #475569; }
 
 /* ── Mode toggle ── */
 .mode-row {
@@ -309,6 +330,7 @@ button:disabled { opacity: 0.4; }
   <span class="version-chip" id="versionChip" title="Firmware version"></span>
   <div class="status-dot busy" id="dot"></div>
   <span class="status-txt" id="statusMsg">Connecting…</span>
+  <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark theme" type="button">☀</button>
   <a href="/?view=desktop" class="hdr-btn">Desktop ↗</a>
 </div>
 
@@ -663,6 +685,7 @@ let warningsState = null;
 let scheduleShiftMinutes = 0;
 let outputStatusState = null;
 let lastLampReadAt = '';
+let editorDirty = false;
 let platformInfo = { platform:'esp32', transport:'controller', capabilities:{} };
 
 const DEFAULT_CAPABILITIES = {
@@ -908,6 +931,20 @@ async function loadVersionInfo() {
   } catch(_) {}
 }
 
+function applyTheme(theme) {
+  const next = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = next === 'light' ? '🌙' : '☀';
+}
+
+function toggleTheme() {
+  const light = document.documentElement.getAttribute('data-theme') === 'light';
+  const next = light ? 'dark' : 'light';
+  applyTheme(next);
+  localStorage.setItem('k7-theme', next);
+}
+
 // ── API ──────────────────────────────────────────────────────────────────
 async function api(method, url, body) {
   const opts = { method, headers: {'Content-Type':'application/json'} };
@@ -1111,6 +1148,7 @@ function updateSchedTable() {
 
 function onCell(h, i, v) {
   schedule[h][2+i] = Math.max(0, Math.min(100, parseInt(v)||0));
+  editorDirty = true;
   updateNowBars();
 }
 
@@ -1145,6 +1183,7 @@ async function readFromDevice() {
     manual          = s.manual || [0,0,0,0,0,0];
     mode            = s.mode;
     activePresetKey = s.active_preset || '';
+    editorDirty = false;
     lastLampReadAt = s.last_read_at || lastLampReadAt;
     scheduleShiftMinutes = parseInt(s.schedule_shift_minutes ?? 0) || 0;
     outputStatusState = outputStatus;
@@ -1276,6 +1315,7 @@ async function pushSchedule() {
       active_preset: activePresetKey,
       schedule_shift_minutes: scheduleShiftMinutes,
     });
+    editorDirty = false;
     if (activePresetDisablesLunar() && cap('tracked_lunar|fixed_lunar')) {
       const lunar = await api('GET', '/api/lunar/status');
       lunarState = lunar;
@@ -1649,6 +1689,7 @@ function onPresetChange() {
   if(p.manual)   manual   = p.manual;
   document.getElementById('presetDesc').textContent = p.desc || (v.startsWith('profile:') ? 'Saved profile' : '');
   activePresetKey = v;
+  editorDirty = true;
   buildSliders(); buildNowBars();
   if(document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
 }
@@ -1996,7 +2037,7 @@ async function pollEffectStates() {
       masterSlider.value = master.value;
       document.getElementById('masterVal').textContent = master.value + '%';
     }
-    if (stateData?.schedule?.length === 24) {
+    if (!editorDirty && stateData?.schedule?.length === 24) {
       schedule = stateData.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
       if (document.getElementById('schedCollapse').classList.contains('open'))
         updateSchedTable();
@@ -2091,6 +2132,7 @@ function formatControllerClock(epochSeconds) {
 
 // ── Init ─────────────────────────────────────────────────────────────────
 (async function() {
+  applyTheme(localStorage.getItem('k7-theme') || 'dark');
   await loadCapabilities();
   if (cap('persistent_controller_clock')) {
     try { await api('POST', '/api/time', {timestamp: Date.now() - new Date().getTimezoneOffset()*60000}); } catch(_) {}
