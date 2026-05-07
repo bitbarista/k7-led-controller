@@ -104,6 +104,11 @@ This app pushes schedules into the lamp's internal scheduler only when you ask
 it to. The PC does not need to stay running after a schedule has been pushed.
 ESP32-only runtime functions such as Smooth Ramp, feed/maintenance timers,
 tracked lunar, acclimation, and seasonal daylength are not available here.
+
+The graph is a planning preview. It draws smooth-looking curves to make the
+schedule easier to read, but the PC bridge pushes hourly points to the lamp.
+Unless the lamp firmware smooths between those points internally, real schedule,
+siesta, and fixed moonlight changes may happen as hourly steps.
 """
 
 
