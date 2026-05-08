@@ -1,7 +1,26 @@
 # K7 PC Bridge
 
-Experimental local bridge for controlling a Noo-Psyche K7 lamp directly from a
-PC, without an ESP32-S3 controller in the middle.
+A local bridge for controlling a Noo-Psyche K7 lamp directly from a PC, without
+an ESP32-S3 controller in the middle.
+
+## Installing (end users)
+
+Pre-built releases are available on the
+[releases page](https://github.com/bitbarista/k7-led-controller/releases).
+
+**Windows:** Download `k7-bridge-setup-v…exe` and run it. No admin password
+needed — installs to your personal files folder and creates a desktop shortcut.
+Connect to the lamp's WiFi, then double-click **K7 Bridge** to launch.
+
+**Linux:** Download `K7-Bridge-v…-x86_64.AppImage`, make it executable
+(`chmod +x K7-Bridge-*.AppImage`), connect to the lamp's WiFi, then run it.
+If FUSE is unavailable add `--appimage-extract-and-run`.
+
+**What the PC Bridge can and can't do:**
+
+- ✓ Edit and push schedules, read the lamp, save profiles and backups
+- ✗ Smooth Ramp, Feed mode, Maintenance mode, Acclimation, Seasonal Shift
+  — these always-on features require the ESP32 controller running continuously
 
 Current scope:
 

@@ -272,9 +272,12 @@
         or computer.
       </p>
       <p>
-        Once set up it runs <strong>24 hours a day</strong>, completely independently.
-        A phone or PC is only needed to make changes — a PC or laptop gives you the full desktop
-        interface with more control. The controller keeps the lighting schedule running on its own.
+        With the ESP32 controller, once set up it runs <strong>24 hours a day</strong>,
+        completely independently — a phone or PC is only needed to make changes.
+        Two no-hardware alternatives are also available: a <strong>PC Bridge</strong> for
+        Windows and Linux, and an <strong>Android app</strong>. These connect your device
+        directly to the lamp and work well for schedule editing, but always-on features
+        like Smooth Ramp require the ESP32 controller.
       </p>
       <div class="feature-grid">
         <div class="feature-item">
@@ -300,9 +303,62 @@
       </div>
     </div>
 
+    <!-- Which option -->
+    <div class="card">
+      <h3>Which option is right for you?</h3>
+      <div style="overflow-x:auto;margin-bottom:1rem">
+        <table style="width:100%;border-collapse:collapse;font-size:0.875rem">
+          <thead>
+            <tr style="border-bottom:2px solid #e2e8f0">
+              <th style="padding:0.6rem 0.75rem;text-align:left;color:#475569;font-weight:600"> </th>
+              <th style="padding:0.6rem 0.75rem;text-align:center;color:#0f172a;font-weight:700">ESP32 controller</th>
+              <th style="padding:0.6rem 0.75rem;text-align:center;color:#0f172a;font-weight:700">PC Bridge</th>
+              <th style="padding:0.6rem 0.75rem;text-align:center;color:#0f172a;font-weight:700">Android app</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #f1f5f9">
+              <td style="padding:0.5rem 0.75rem;color:#475569">Hardware needed</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#475569">ESP32-S3 board (~£3)</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#16a34a;font-weight:600">None</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#16a34a;font-weight:600">None</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f1f5f9">
+              <td style="padding:0.5rem 0.75rem;color:#475569">Edit &amp; push schedules</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center">✓</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center">✓</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center">✓</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f1f5f9">
+              <td style="padding:0.5rem 0.75rem;color:#475569">Runs 24/7 without a PC or phone</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center">✓</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#94a3b8">✗</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#94a3b8">✗</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f1f5f9">
+              <td style="padding:0.5rem 0.75rem;color:#475569">Smooth Ramp, Feed mode, Acclimation&hellip;</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center">✓</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#94a3b8">✗</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#94a3b8">✗</td>
+            </tr>
+            <tr>
+              <td style="padding:0.5rem 0.75rem;color:#475569">Platform</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#475569">Any phone or browser</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#475569">Windows, Linux</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#475569">Android</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="tip">
+        The <strong>ESP32 controller</strong> costs very little, runs all the advanced features 24/7, and is accessible from any phone or browser on the lamp's WiFi. The <strong>PC Bridge</strong> and <strong>Android app</strong> are a good fit if you want to configure a schedule without adding hardware — they don't run continuously, so runtime effects like Smooth Ramp won't apply between sessions.
+      </div>
+    </div>
+
     <!-- What you need -->
     <div class="card">
       <h3>What you need to buy</h3>
+      <p style="font-size:0.875rem;color:#64748b;margin-bottom:1.25rem">For the <strong>ESP32 controller</strong> path. Using the <a href="#pc-bridge">PC Bridge</a> or <a href="#android-app">Android app</a> instead? No hardware needed — skip ahead.</p>
 
       <div class="buy-item">
         <div class="buy-num">1</div>
@@ -394,7 +450,7 @@
       </div>
       <ul class="steps">
         <li><span class="step-letter">a.</span><span>In your WiFi settings, connect to your <strong>lamp's WiFi network</strong> — it starts with <strong>K7-</strong> followed by letters and numbers (e.g. <em>K7-mini52609</em>). This is the same network the lamp has always broadcast.</span></li>
-        <li><span class="step-letter">b.</span><span>Open a browser and go to <strong>http://k7controller.local</strong>. The controller loads and reads your lamp automatically.</span></li>
+        <li><span class="step-letter">b.</span><span>Open a browser and go to <strong>http://k7controller.local</strong>. The controller loads and reads your lamp automatically. If that address doesn't load, try the fixed IP instead: <strong>http://192.168.4.200</strong></span></li>
         <li><span class="step-letter">c.</span><span>Unplug from your computer and plug into a USB charger near the tank. The controller now runs permanently — no computer needed.</span></li>
       </ul>
       <div class="tip">
@@ -405,13 +461,68 @@
       </div>
     </div>
 
+    <!-- PC Bridge setup -->
+    <div class="card" id="pc-bridge">
+      <h3>PC Bridge — Windows &amp; Linux</h3>
+      <p>A small program that runs on your PC and talks directly to the lamp. Your PC must be connected to the lamp's WiFi when you use it. No hardware to buy — just download and run.</p>
+      <p><strong>What you can do:</strong> edit and push schedules, save profiles, read the lamp's current state, export backups.<br>
+         <strong>Not available:</strong> Smooth Ramp, Feed mode, Maintenance mode, Acclimation, Seasonal Shift — those need the ESP32 controller running 24/7.</p>
+
+      <div class="usage-item" style="margin-top:1.25rem">
+        <div class="usage-title">Windows</div>
+        <ul class="steps">
+          <li><span class="step-letter">a.</span><span>Download <strong>k7-bridge-setup-v&hellip;.exe</strong> from the <a href="https://github.com/bitbarista/k7-led-controller/releases">releases page</a>.</span></li>
+          <li><span class="step-letter">b.</span><span>Run the installer. No admin password needed — it installs to your personal files folder and creates a desktop shortcut.</span></li>
+          <li><span class="step-letter">c.</span><span>Connect your PC to the lamp's WiFi (the network starting with <strong>K7-</strong>).</span></li>
+          <li><span class="step-letter">d.</span><span>Double-click the <strong>K7 Bridge</strong> desktop shortcut. The controller opens in your browser automatically.</span></li>
+        </ul>
+      </div>
+
+      <div class="usage-item">
+        <div class="usage-title">Linux</div>
+        <ul class="steps">
+          <li><span class="step-letter">a.</span><span>Download <strong>K7-Bridge-v&hellip;-x86_64.AppImage</strong> from the <a href="https://github.com/bitbarista/k7-led-controller/releases">releases page</a>.</span></li>
+          <li><span class="step-letter">b.</span><span>Make it executable: right-click → Properties → Permissions → Allow executing as program, or run <code>chmod +x K7-Bridge-*.AppImage</code> in a terminal.</span></li>
+          <li><span class="step-letter">c.</span><span>Connect to the lamp's WiFi, then double-click the AppImage. The controller opens in your browser automatically.</span></li>
+        </ul>
+      </div>
+
+      <div class="tip">
+        <strong>Linux: FUSE error?</strong> Some Linux setups don't have FUSE available. If the AppImage fails to start, run it with: <code>./K7-Bridge-*.AppImage --appimage-extract-and-run</code>
+      </div>
+      <div class="warn" style="margin-top:0.75rem">
+        <strong>VPN users:</strong> If the bridge can't reach the lamp, disconnect your VPN first. An active VPN can block direct connections to the lamp's network even when the WiFi appears connected.
+      </div>
+    </div>
+
+    <!-- Android setup -->
+    <div class="card" id="android-app">
+      <h3>Android App</h3>
+      <p>The K7 Controller app runs a local bridge inside your phone and talks directly to the lamp over WiFi. Same features as the PC Bridge — schedule editing, profile saving, and push. The always-on runtime features require the ESP32 controller.</p>
+      <p>The app is not yet on the Play Store. For now, install it manually (sideloading):</p>
+      <ul class="steps" style="margin-top:0.75rem">
+        <li><span class="step-letter">a.</span><span>On your phone, go to <strong>Settings → Apps → Special app access → Install unknown apps</strong>. Tap your browser or file manager and turn on <em>Allow from this source</em>. (The exact path varies by Android version and manufacturer.)</span></li>
+        <li><span class="step-letter">b.</span><span>Open the <a href="https://github.com/bitbarista/k7-led-controller/releases">releases page</a> in your phone's browser and download the <strong>K7-Controller-v….apk</strong> file.</span></li>
+        <li><span class="step-letter">c.</span><span>Tap the downloaded file and tap <strong>Install</strong> when prompted.</span></li>
+        <li><span class="step-letter">d.</span><span>Connect your phone to the lamp's WiFi (the network starting with <strong>K7-</strong>).</span></li>
+        <li><span class="step-letter">e.</span><span>Open the <strong>K7 Controller</strong> app and tap <strong>Read</strong> to load the lamp's current settings.</span></li>
+      </ul>
+      <div class="tip">
+        <strong>Desktop view:</strong> The app opens in mobile view by default. Tap the desktop icon in the top bar to switch to the full desktop interface with the schedule graph.
+      </div>
+    </div>
+
     <!-- Using the controller -->
     <div class="card">
       <h3>Using the controller</h3>
 
       <div class="usage-item">
         <div class="usage-title">Setting the lighting schedule</div>
-        <div class="usage-desc">The main screen shows a graph with 24 hours across the bottom. Drag any point up or down to change the brightness for that hour. When you're happy, tap <strong>Push</strong> to send it to the lamp. The chart must be in <strong>Base</strong> mode to drag — if the toggle shows <strong>Effective Today</strong>, click it to switch back before editing.</div>
+        <div class="usage-desc">
+          <strong>Desktop:</strong> The main screen shows a graph with 24 hours across the bottom. Drag any point up or down to change the brightness for that hour. The chart must be in <strong>Base</strong> mode to drag — if the toggle shows <strong>Effective Today</strong>, click it to switch back before editing.<br><br>
+          <strong>Mobile:</strong> The mobile interface offers two ways to edit the schedule. The <strong>trapezoidal scheduler</strong> lets you define the shape of the day visually — set when the ramp starts and ends and the peak brightness for a clean sunrise/sunset profile. The <strong>granular scheduler</strong> gives you individual control over each hour for more detailed customisation. Tap <strong>Generate Schedule</strong> to apply your settings, then tap <strong>Push</strong> to send it to the lamp.<br><br>
+          On desktop, drag the chart points directly and tap <strong>Push</strong> when ready.
+        </div>
       </div>
 
       <div class="usage-item">
@@ -420,7 +531,7 @@
       </div>
 
       <div class="usage-item">
-        <div class="usage-title">Smooth Ramp</div>
+        <div class="usage-title">Smooth Ramp <span style="font-size:0.8em;font-weight:400;color:#64748b">(ESP32 only)</span></div>
         <div class="usage-desc">Without Smooth Ramp the controller sends one interpolated brightness update per hour, keeping the lamp in step with the schedule. Turn on <strong>Smooth Ramp</strong> and updates increase to about every 2 minutes, only when calculated channel values change, giving smoother sunrise and sunset transitions. Neither mode intentionally rewrites the lamp's stored 24-hour schedule; the full schedule is kept on the ESP32 controller and the lamp receives only the current output level. However, the Noo-Psyche lamp firmware is closed, so we cannot verify whether the lamp stores those live commands internally or how it manages write wear. Smooth Ramp sends commands more frequently than the hourly default, which may increase any internal write activity. Use Smooth Ramp at your own discretion.</div>
       </div>
 
@@ -430,18 +541,23 @@
       </div>
 
       <div class="usage-item">
-        <div class="usage-title">Feed mode</div>
+        <div class="usage-title">Feed mode <span style="font-size:0.8em;font-weight:400;color:#64748b">(ESP32 only)</span></div>
         <div class="usage-desc">Temporarily boosts white lighting for feeding. Tap <strong>Feed mode</strong> to start a countdown timer — the lamp returns to its normal schedule when it expires. Use the ⚙ settings to set the duration (1–60 min, default 15) and white brightness (1–100%, default 80%). A quick press of the <strong>BOOT</strong> button on the board also toggles feed mode.</div>
       </div>
 
       <div class="usage-item">
-        <div class="usage-title">Maintenance mode</div>
+        <div class="usage-title">Maintenance mode <span style="font-size:0.8em;font-weight:400;color:#64748b">(ESP32 only)</span></div>
         <div class="usage-desc">Temporarily switches the lamp to a brighter, more balanced inspection light so you can work in the tank more easily. Tap <strong>Maintenance</strong> to start a countdown timer, then let it expire or tap again to stop it early. Use the ⚙ settings to choose the duration (1–180 min, default 30) and overall profile intensity (1–100%, default 70%). Starting Maintenance mode automatically stops Feed mode, and vice versa.</div>
       </div>
 
       <div class="usage-item">
-        <div class="usage-title">Acclimation and Seasonal Shift</div>
+        <div class="usage-title">Acclimation and Seasonal Shift <span style="font-size:0.8em;font-weight:400;color:#64748b">(ESP32 only)</span></div>
         <div class="usage-desc"><strong>Acclimation</strong> starts the whole schedule dimmer, then recovers back to 100% over the number of days you choose. <strong>Seasonal Shift</strong> moves the whole photoperiod earlier and later across the year without changing the shape of the day. Both modifiers change the real output shown in the controller's <strong>Effective Today</strong> chart view.</div>
+      </div>
+
+      <div class="usage-item">
+        <div class="usage-title">Community preset browser</div>
+        <div class="usage-desc">In the Presets panel, click <strong>Browse</strong> to open the community preset browser. It fetches schedules submitted by other users directly from the online library. Presets are filtered to your lamp model by default — switch to <em>All</em> to see presets for the other model. Click <strong>Install</strong> on any preset to load it into the editor, where you can review and adjust it before pushing to the lamp.</div>
       </div>
 
       <div class="usage-item">
@@ -498,6 +614,16 @@
         <div class="trouble-q">I want to change the lamp connection</div>
         <div class="trouble-a">Hold the <strong>BOOT</strong> button on the board while powering it on, and keep it held for 3 seconds. The board will clear its config and restart into setup mode. Note down your saved profiles first as they will be erased.</div>
       </div>
+
+      <div class="trouble-item">
+        <div class="trouble-q">The PC Bridge can't reach the lamp</div>
+        <div class="trouble-a">Make sure the PC is connected to the lamp's WiFi (K7-XXXXXX), not your home network. If you have a VPN, disconnect it — even when the WiFi appears connected, an active VPN can block direct connections to the lamp's network.</div>
+      </div>
+
+      <div class="trouble-item">
+        <div class="trouble-q">The Android app can't reach the lamp</div>
+        <div class="trouble-a">Make sure the phone is connected to the lamp's WiFi before opening the app. Android may automatically switch back to your home WiFi if it detects no internet connection — check the WiFi indicator while using the app.</div>
+      </div>
     </div>
 
     <div class="footer-nav">
@@ -507,8 +633,8 @@
     <div class="card">
       <h3>Disclaimer</h3>
       <p>This project is provided "AS IS" without warranty of any kind. The author makes no representations about suitability, reliability, availability, or accuracy for any purpose.</p>
-      <p>K7 LED Controller changes live lighting output and stores controller-side schedules and settings for aquarium lamps. Incorrect settings, firmware bugs, hardware faults, WiFi issues, power loss, or unexpected lamp behaviour could affect aquarium lighting and livestock. Test changes carefully and keep your own backups.</p>
-      <p>The Noo-Psyche lamp firmware is closed. The controller sends live luminance commands to the lamp in normal operation — once per hour without Smooth Ramp, and about every 2 minutes with Smooth Ramp enabled, only when calculated channel values change. Neither mode intentionally rewrites the lamp's stored schedule, but we cannot verify whether the lamp stores those live commands internally or how it manages write wear.</p>
+      <p>K7 LED Controller changes live lighting output and stores schedules and settings locally — on the ESP32 board, on your PC, or on your phone depending on which variant you use. Incorrect settings, firmware bugs, WiFi issues, or unexpected lamp behaviour could affect aquarium lighting and livestock. With the ESP32 controller, hardware faults or power loss could also disrupt the running schedule. Test changes carefully and keep your own backups.</p>
+      <p>The Noo-Psyche lamp firmware is closed. The <strong>ESP32 controller</strong> sends live luminance commands to the lamp continuously — once per hour without Smooth Ramp, and about every 2 minutes with Smooth Ramp enabled, only when calculated channel values change. The <strong>PC Bridge</strong> and <strong>Android app</strong> send commands only when you explicitly push or preview a schedule. <strong>Push</strong> explicitly writes the 24-hour schedule to the lamp's storage. For the continuous live commands, we cannot verify whether the lamp also stores those internally or how it manages write wear.</p>
       <p><strong>Your use is at your sole risk.</strong> The author shall not be liable for any damage, livestock loss, data loss, hardware failure, or other direct, indirect, incidental, punitive, or consequential damages arising from use of this project.</p>
     </div>
 

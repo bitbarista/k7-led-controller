@@ -13,4 +13,10 @@ android {
         versionCode 1
         versionName "0.1.0"
     }
+
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach {
+            outputFileName = "K7-Controller-v${variant.versionName}.apk"
+        }
+    }
 }

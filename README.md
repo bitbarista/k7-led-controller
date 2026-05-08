@@ -15,6 +15,18 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 
 ![K7 LED Controller UI](docs/screenshot.png)
 
+## Variants
+
+| Variant | Platform | Always-on runtime |
+|---------|----------|-------------------|
+| **ESP32 controller** *(recommended)* | Any phone or browser | Yes — Smooth Ramp, Lunar, Feed mode, and more |
+| **PC Bridge** | Windows, Linux | No — schedule push only |
+| **Android app** | Android | No — schedule push only |
+
+The ESP32 controller is the full-featured option: a small board runs 24/7 beside the tank and provides the complete web interface from any device. The PC Bridge and Android app connect directly to the lamp for schedule editing but do not run continuously. All three share the same web UI.
+
+---
+
 ## Features
 
 - Read the current schedule and mode directly from the lamp
@@ -40,7 +52,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 
 ---
 
-## Hardware
+## Hardware (ESP32 controller)
 
 An ESP32-S3 board sits between your lamp and your devices, creating its own WiFi network. No PC required — the controller runs 24/7 and is always accessible from any phone or browser.
 
@@ -111,7 +123,7 @@ The controller uses a **static IP of 192.168.4.200** so the address never change
 
 - Profiles and settings are saved to flash and survive power cycles
 - Smooth ramp, lunar cycle, feed mode, maintenance mode, and other schedule modifiers run entirely on the device — no browser needed once configured
-- **Live luminance commands and NVR:** The controller sends live luminance commands to the lamp in both modes — once per hour without Smooth Ramp, and about every 2 minutes with Smooth Ramp enabled, only when calculated channel values change. Neither mode intentionally rewrites the lamp's stored 24-hour schedule; the full schedule is kept on the ESP32 controller and the lamp receives only the current output level. However, the Noo-Psyche lamp firmware is closed, so we cannot verify whether the lamp stores those live commands internally or how it manages write wear. Smooth Ramp sends commands more frequently than the hourly default, which may increase any internal write activity. Use Smooth Ramp at your own discretion.
+- **Live luminance commands and NVR:** The ESP32 controller sends live luminance commands to the lamp continuously — once per hour without Smooth Ramp, and about every 2 minutes with Smooth Ramp enabled, only when calculated channel values change. The PC Bridge and Android app send commands only when you explicitly push or preview. Push explicitly writes the 24-hour schedule to the lamp's storage. For the continuous live commands, the Noo-Psyche lamp firmware is closed so we cannot verify whether the lamp also stores those internally or how it manages write wear. Smooth Ramp sends commands more frequently, which may increase any internal write activity — use it at your own discretion.
 - Normal firmware updates and LittleFS web UI flashes no longer erase saved profiles and config; only a full erase/factory reset clears them
 - After updating firmware, reselect and push a built-in preset once if you want the controller to replace an older saved schedule with the latest preset definition
 - Dino Suppression is a temporary light-reduction preset for Ostreopsis/Prorocentrum pressure management; it disables Lunar/moonlight when pushed so nights remain fully dark
@@ -134,9 +146,9 @@ The lamp communicates over TCP on port 8266 using a simple binary framing protoc
 
 This project is provided "AS IS" without warranty of any kind. The author makes no representations about suitability, reliability, availability, or accuracy for any purpose.
 
-K7 LED Controller changes live lighting output and stores controller-side schedules and settings for aquarium lamps. Incorrect settings, firmware bugs, hardware faults, WiFi issues, power loss, or unexpected lamp behaviour could affect aquarium lighting and livestock. Test changes carefully and keep your own backups.
+K7 LED Controller changes live lighting output and stores schedules and settings locally — on the ESP32 board, on your PC, or on your phone depending on which variant you use. Incorrect settings, firmware bugs, WiFi issues, or unexpected lamp behaviour could affect aquarium lighting and livestock. With the ESP32 controller, hardware faults or power loss could also disrupt the running schedule. Test changes carefully and keep your own backups.
 
-The Noo-Psyche lamp firmware is closed. The controller sends live luminance commands to the lamp in normal operation — once per hour without Smooth Ramp, and about every 2 minutes with Smooth Ramp enabled, only when calculated channel values change. Neither mode intentionally rewrites the lamp's stored schedule, but we cannot verify whether the lamp stores those live commands internally or how it manages write wear.
+The Noo-Psyche lamp firmware is closed. The ESP32 controller sends live luminance commands to the lamp continuously — once per hour without Smooth Ramp, and about every 2 minutes with Smooth Ramp enabled, only when calculated channel values change. The PC Bridge and Android app send commands only when you explicitly push or preview a schedule. Push explicitly writes the 24-hour schedule to the lamp's storage. For the continuous live commands, we cannot verify whether the lamp also stores those internally or how it manages write wear.
 
 **Your use is at your sole risk.** The author shall not be liable for any damage, livestock loss, data loss, hardware failure, or other direct, indirect, incidental, punitive, or consequential damages arising from use of this project.
 
