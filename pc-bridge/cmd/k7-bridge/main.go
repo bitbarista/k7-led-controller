@@ -19,12 +19,22 @@ func main() {
 	noOpen := flag.Bool("no-open", false, "do not open the local UI in the default browser")
 	flag.Parse()
 
+	uiURL := browserURL(*listen)
+
+	// If our bridge is already running, just bring up the browser and exit.
+	if isOurBridgeRunning(uiURL) {
+		log.Printf("K7 PC bridge already running at %s", uiURL)
+		if !*noOpen {
+			openBrowser(uiURL) //nolint:errcheck
+		}
+		return
+	}
+
 	srv, err := bridge.NewServer(*configPath, *timeout)
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
 
-	uiURL := browserURL(*listen)
 	log.Printf("K7 PC bridge listening on %s", uiURL)
 	log.Printf("Lamp target is %s:%d", srv.Config().Host, srv.Config().Port)
 	if !*noOpen {
@@ -39,6 +49,16 @@ func main() {
 	if err := http.ListenAndServe(*listen, srv.Routes()); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func isOurBridgeRunning(uiURL string) bool {
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	resp, err := client.Get(uiURL + "api/version")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 func browserURL(listen string) string {
