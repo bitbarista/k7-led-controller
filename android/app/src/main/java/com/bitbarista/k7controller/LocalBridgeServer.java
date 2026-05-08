@@ -24,6 +24,9 @@ final class LocalBridgeServer implements Runnable {
     private final Context context;
     private final SharedPreferences prefs;
     private final Object lampLock = new Object();
+    private K7TcpClient lampClient;
+    private String lampClientHost = "";
+    private int lampClientPort = -1;
     private volatile boolean running;
     private ServerSocket serverSocket;
     private Thread thread;
@@ -138,6 +141,15 @@ final class LocalBridgeServer implements Runnable {
                     .putInt("port", in.optInt("port", K7TcpClient.DEFAULT_PORT))
                     .putString("device", in.optString("device", "k7mini"))
                     .apply();
+            synchronized (lampLock) {
+                if (lampClient != null) {
+                    lampClient.close();
+                    lampClient = null;
+                }
+            }
+        }
+        if ("GET".equals(method)) {
+            warmLampSocket();
         }
         return json(new JSONObject()
                 .put("host", prefs.getString("host", K7TcpClient.DEFAULT_HOST))
@@ -183,7 +195,7 @@ final class LocalBridgeServer implements Runnable {
             putObject("lunar", lunar);
         }
         JSONObject siesta = getObject("siesta", defaultSiesta());
-        int[][] baseSchedule = baseScheduleForPush(schedule, lunar);
+        int[][] baseSchedule = copy(schedule);
         schedule = bakeEffects(baseSchedule, siesta, lunar);
         int master = prefs.getInt("master", 100);
         manual = scale(manual, master);
@@ -194,7 +206,7 @@ final class LocalBridgeServer implements Runnable {
         }
         putObject("base_schedule", new JSONObject().put("schedule", scheduleJson(baseSchedule)));
         saveState(state().put("mode", autoMode ? "auto" : "manual").put("manual", jsonArray(manual)).put("schedule", scheduleJson(baseSchedule)).put("active_preset", activePreset));
-        return json(new JSONObject().put("ok", true));
+        return json(new JSONObject().put("ok", true).put("verified", false));
     }
 
     private Response presets() throws Exception {
@@ -224,7 +236,27 @@ final class LocalBridgeServer implements Runnable {
     }
 
     private K7TcpClient client() {
-        return new K7TcpClient(context, prefs.getString("host", K7TcpClient.DEFAULT_HOST), prefs.getInt("port", K7TcpClient.DEFAULT_PORT), 2000);
+        String host = prefs.getString("host", K7TcpClient.DEFAULT_HOST);
+        int port = prefs.getInt("port", K7TcpClient.DEFAULT_PORT);
+        if (lampClient == null || !host.equals(lampClientHost) || port != lampClientPort) {
+            if (lampClient != null) lampClient.close();
+            lampClient = new K7TcpClient(context, host, port, 2000);
+            lampClientHost = host;
+            lampClientPort = port;
+        }
+        return lampClient;
+    }
+
+    private void warmLampSocket() {
+        new Thread(() -> {
+            synchronized (lampLock) {
+                try {
+                    client().warmup();
+                } catch (Exception e) {
+                    Log.w(TAG, "lamp socket warmup failed", e);
+                }
+            }
+        }, "k7-lamp-warmup").start();
     }
 
     private static int[][] bakeEffects(int[][] schedule, JSONObject siesta, JSONObject lunar) {
@@ -252,15 +284,6 @@ final class LocalBridgeServer implements Runnable {
             }
         }
         return out;
-    }
-
-    private int[][] baseScheduleForPush(int[][] incoming, JSONObject lunar) throws Exception {
-        if (lunar.optBoolean("enabled") || lunar.optBoolean("active")) return incoming;
-        String raw = prefs.getString("base_schedule", null);
-        if (raw == null) return incoming;
-        JSONArray stored = new JSONObject(raw).optJSONArray("schedule");
-        if (stored == null || stored.length() != K7TcpClient.SLOTS) return incoming;
-        return scheduleArray(stored);
     }
 
     private Response setLunar(boolean enabled) throws Exception {
