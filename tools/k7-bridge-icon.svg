@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="120" fill="#1a1a2e"/>
+  <!-- Lamp glow -->
+  <circle cx="128" cy="100" r="48" fill="#00cfff" opacity="0.15"/>
+  <!-- Lamp bulb body -->
+  <path d="M104 100 Q104 72 128 68 Q152 72 152 100 Q152 118 140 128 L140 140 L116 140 L116 128 Q104 118 104 100Z"
+        fill="#00cfff" opacity="0.9"/>
+  <!-- Lamp base -->
+  <rect x="112" y="140" width="32" height="8" rx="3" fill="#0099bb"/>
+  <rect x="114" y="148" width="28" height="6" rx="3" fill="#0099bb"/>
+  <rect x="118" y="154" width="20" height="5" rx="3" fill="#0077aa"/>
+  <!-- Rays -->
+  <line x1="128" y1="44" x2="128" y2="30" stroke="#00cfff" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  <line x1="172" y1="56" x2="182" y2="46" stroke="#00cfff" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  <line x1="84"  y1="56" x2="74"  y2="46" stroke="#00cfff" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  <line x1="192" y1="100" x2="206" y2="100" stroke="#00cfff" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  <line x1="64"  y1="100" x2="50"  y2="100" stroke="#00cfff" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  <!-- K7 label -->
+  <text x="128" y="210" font-family="sans-serif" font-weight="bold" font-size="36"
+        fill="#00cfff" text-anchor="middle" opacity="0.95">K7</text>
+</svg>

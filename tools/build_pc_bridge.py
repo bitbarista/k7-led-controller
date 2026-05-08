@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 BRIDGE = ROOT / "pc-bridge"
 DEFAULT_OUT = ROOT / "dist" / "pc-bridge"
 NSI_TEMPLATE = ROOT / "tools" / "k7-bridge-installer.nsi.template"
+APPIMAGE_TOOL = ROOT / "tools" / "appimagetool-x86_64.AppImage"
+APP_ICON_PNG = ROOT / "tools" / "k7-bridge-icon.png"
 
 TARGETS = {
     "linux-amd64": {
@@ -123,6 +125,50 @@ def copy_runtime_files(package_dir: Path, target: str, version: str) -> None:
     (package_dir / "README.txt").write_text(readme_text(version, target), encoding="utf-8")
 
 
+def build_appimage(package_dir: Path, version: str, out_dir: Path) -> Path | None:
+    if not APPIMAGE_TOOL.exists():
+        print("appimagetool not found — skipping AppImage")
+        return None
+
+    appdir = out_dir / "K7Bridge.AppDir"
+    if appdir.exists():
+        shutil.rmtree(appdir)
+    bin_dir = appdir / "usr" / "bin"
+    bin_dir.mkdir(parents=True)
+
+    shutil.copy2(package_dir / "k7-bridge", bin_dir / "k7-bridge")
+    (bin_dir / "k7-bridge").chmod(0o755)
+
+    desktop = (
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        "Name=K7 Bridge\n"
+        "Comment=K7 lamp controller PC bridge\n"
+        "Exec=k7-bridge\n"
+        "Icon=k7-bridge\n"
+        "Categories=Utility;\n"
+        "Terminal=false\n"
+    )
+    (appdir / "k7-bridge.desktop").write_text(desktop, encoding="utf-8")
+
+    apprun = "#!/usr/bin/env sh\nexec \"$(dirname \"$0\")/usr/bin/k7-bridge\" \"$@\"\n"
+    apprun_path = appdir / "AppRun"
+    apprun_path.write_text(apprun, encoding="utf-8")
+    apprun_path.chmod(0o755)
+
+    if APP_ICON_PNG.exists():
+        shutil.copy2(APP_ICON_PNG, appdir / "k7-bridge.png")
+
+    outfile = out_dir / f"K7-Bridge-v{version}-x86_64.AppImage"
+    env = os.environ.copy()
+    env["ARCH"] = "x86_64"
+    run([str(APPIMAGE_TOOL), str(appdir), str(outfile)], env=env)
+    outfile.chmod(0o755)
+    shutil.rmtree(appdir)
+    print(f"wrote {outfile}")
+    return outfile
+
+
 def build_nsis_installer(package_dir: Path, version: str, out_dir: Path) -> Path | None:
     makensis = shutil.which("makensis")
     if not makensis:
@@ -170,6 +216,11 @@ def build_target(target: str, version: str, out_dir: Path, go_bin: str) -> list[
     archive = shutil.make_archive(str(archive_base), spec["archive"], root_dir=out_dir, base_dir=package_name)
     print(f"wrote {archive}")
     outputs = [Path(archive)]
+
+    if target.startswith("linux-"):
+        appimage = build_appimage(package_dir, version, out_dir)
+        if appimage:
+            outputs.append(appimage)
 
     if target.startswith("windows-"):
         installer = build_nsis_installer(package_dir, version, out_dir)
