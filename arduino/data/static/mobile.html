@@ -328,6 +328,8 @@ button:disabled { opacity: 0.4; }
   <span class="version-chip" id="versionChip" title="Firmware version"></span>
   <div class="status-dot busy" id="dot"></div>
   <span class="status-txt" id="statusMsg">Connecting…</span>
+  <button id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark theme"
+          class="hdr-btn" style="width:2.2em;text-align:center;padding:6px 0">☀</button>
   <a href="/?view=desktop" class="hdr-btn">Desktop ↗</a>
 </div>
 
@@ -2310,8 +2312,20 @@ function formatControllerClock(epochSeconds) {
   return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')}`;
 }
 
+// ── Theme ────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const light = document.documentElement.getAttribute('data-theme') === 'light';
+  const next  = light ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  document.getElementById('themeBtn').textContent = next === 'light' ? '🌙' : '☀';
+  localStorage.setItem('k7-theme', next);
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────
 (async function() {
+  const savedTheme = localStorage.getItem('k7-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  document.getElementById('themeBtn').textContent = savedTheme === 'light' ? '🌙' : '☀';
   await loadCapabilities();
   if (cap('persistent_controller_clock')) {
     try { await api('POST', '/api/time', {timestamp: Date.now() - new Date().getTimezoneOffset()*60000}); } catch(_) {}

@@ -96,8 +96,13 @@ final class LocalBridgeServer implements Runnable {
     }
 
     private Response route(String method, String rawPath, byte[] body) throws Exception {
-        String path = rawPath.split("\\?", 2)[0];
-        if (path.equals("/")) return redirect("/static/mobile.html");
+        String[] parts = rawPath.split("\\?", 2);
+        String path  = parts[0];
+        String query = parts.length > 1 ? parts[1] : "";
+        if (path.equals("/")) {
+            boolean desktop = query.contains("view=desktop");
+            return redirect(desktop ? "/static/index.html" : "/static/mobile.html");
+        }
         if (path.startsWith("/static/")) return asset(path.substring(1));
         if (path.equals("/api/version")) return json(new JSONObject().put("bridge", "android").put("platform", "android").put("transport", "direct_lamp"));
         if (path.equals("/api/capabilities")) return json(capabilities());
