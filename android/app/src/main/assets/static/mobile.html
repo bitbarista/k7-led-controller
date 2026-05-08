@@ -1260,6 +1260,7 @@ async function pushSchedule() {
     return;
   }
   setBusy('Pushing…');
+  _suppressPoll('schedule');
   document.getElementById('pushBtn').disabled = true;
   try {
     const man = Array(6).fill(0);
@@ -1295,7 +1296,7 @@ function activePresetDisablesLunar() {
 
 // ── Effects ──────────────────────────────────────────────────────────────
 // Suppress poll overwriting optimistic toggle state for this many ms.
-const _suppress = { ramp: 0, siesta: 0, lunar: 0 };
+const _suppress = { ramp: 0, siesta: 0, lunar: 0, schedule: 0 };
 function _suppressPoll(key) { _suppress[key] = Date.now() + 4000; }
 function _pollOk(key)       { return Date.now() >= _suppress[key]; }
 
@@ -1643,6 +1644,7 @@ function onPresetChange() {
   if(!p) return;
   if(p.schedule) schedule = p.schedule.map(r => Array.isArray(r)?r:Object.values(r));
   if(p.manual)   manual   = p.manual;
+  _suppressPoll('schedule');
   document.getElementById('presetDesc').textContent = p.desc || (v.startsWith('profile:') ? 'Saved profile' : '');
   activePresetKey = v;
   buildSliders(); buildNowBars();
@@ -1992,7 +1994,7 @@ async function pollEffectStates() {
       masterSlider.value = master.value;
       document.getElementById('masterVal').textContent = master.value + '%';
     }
-    if (stateData?.schedule?.length === 24) {
+    if (stateData?.schedule?.length === 24 && _pollOk('schedule')) {
       schedule = stateData.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
       if (document.getElementById('schedCollapse').classList.contains('open'))
         updateSchedTable();
