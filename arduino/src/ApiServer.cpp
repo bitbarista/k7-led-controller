@@ -461,6 +461,7 @@ void setupApiServer(WebServer& server) {
         caps["manual_preview"] = true;
         caps["profiles"] = true;
         caps["community_presets"] = true;
+        caps["community_presets_browse"] = true;
         caps["backup_restore"] = true;
         caps["fixed_lunar"] = true;
         caps["siesta_baked_schedule"] = false;
