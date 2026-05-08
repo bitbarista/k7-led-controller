@@ -24,3 +24,6 @@ requirements.txt
 run.bat
 run.sh
 .aider*
+.codex
+.pio/
+archive/
