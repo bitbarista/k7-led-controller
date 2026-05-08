@@ -119,13 +119,14 @@ final class LocalBridgeServer implements Runnable {
         if (path.equals("/api/lunar/start")) return setLunar(true);
         if (path.equals("/api/lunar/stop")) return setLunar(false);
         if (path.equals("/api/backup")) return json(new JSONObject().put("kind", "k7_android_backup").put("state", state()));
+        if (path.equals("/api/community-presets")) return communityPresets();
         return error(404, "Not found");
     }
 
     private JSONObject capabilities() throws Exception {
         JSONObject caps = new JSONObject();
         caps.put("read_lamp", true).put("push_schedule", true).put("manual_preview", true);
-        caps.put("profiles", true).put("community_presets", true).put("backup_restore", true);
+        caps.put("profiles", true).put("community_presets", true).put("community_presets_browse", true).put("backup_restore", true);
         caps.put("fixed_lunar", true).put("siesta_baked_schedule", true);
         caps.put("smooth_ramp", false).put("tracked_lunar", false).put("acclimation", false);
         caps.put("seasonal_daylength", false).put("feed_mode", false).put("maintenance_mode", false);
@@ -207,6 +208,27 @@ final class LocalBridgeServer implements Runnable {
         putObject("base_schedule", new JSONObject().put("schedule", scheduleJson(baseSchedule)));
         saveState(state().put("mode", autoMode ? "auto" : "manual").put("manual", jsonArray(manual)).put("schedule", scheduleJson(baseSchedule)).put("active_preset", activePreset));
         return json(new JSONObject().put("ok", true).put("verified", false));
+    }
+
+    private static final String COMMUNITY_PRESETS_URL = "https://bitbarista.github.io/k7-led-controller/community-presets/index.json";
+
+    private Response communityPresets() throws Exception {
+        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(COMMUNITY_PRESETS_URL).openConnection();
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(10000);
+        conn.setRequestProperty("Accept", "application/json");
+        try {
+            int status = conn.getResponseCode();
+            if (status != 200) throw new Exception("Community presets fetch failed: HTTP " + status);
+            try (InputStream in = conn.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                return new Response(200, "application/json", out.toByteArray());
+            }
+        } finally {
+            conn.disconnect();
+        }
     }
 
     private Response presets() throws Exception {

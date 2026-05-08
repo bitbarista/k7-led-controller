@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -133,6 +134,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/lunar/schedule", s.handleLunarSchedule)
 	mux.HandleFunc("/api/lunar/start", s.handleLunarStart)
 	mux.HandleFunc("/api/lunar/stop", s.handleLunarStop)
+	mux.HandleFunc("/api/community-presets", s.handleCommunityPresets)
 	return withCORS(mux)
 }
 
@@ -166,6 +168,29 @@ func mustSub(fsys fs.FS, dir string) fs.FS {
 	return sub
 }
 
+const communityPresetsURL = "https://bitbarista.github.io/k7-led-controller/community-presets/index.json"
+
+func (s *Server) handleCommunityPresets(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(communityPresetsURL)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("Community presets fetch failed: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("Community presets fetch failed: HTTP %d", resp.StatusCode))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, resp.Body) //nolint:errcheck
+}
+
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
@@ -192,6 +217,7 @@ func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 			"manual_preview":              true,
 			"profiles":                    true,
 			"community_presets":           true,
+			"community_presets_browse":    true,
 			"backup_restore":              true,
 			"fixed_lunar":                 true,
 			"siesta_baked_schedule":       true,
