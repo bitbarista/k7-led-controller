@@ -8,12 +8,14 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 BRIDGE = ROOT / "pc-bridge"
 DEFAULT_OUT = ROOT / "dist" / "pc-bridge"
+NSI_TEMPLATE = ROOT / "tools" / "k7-bridge-installer.nsi.template"
 
 TARGETS = {
     "linux-amd64": {
@@ -121,7 +123,30 @@ def copy_runtime_files(package_dir: Path, target: str, version: str) -> None:
     (package_dir / "README.txt").write_text(readme_text(version, target), encoding="utf-8")
 
 
-def build_target(target: str, version: str, out_dir: Path, go_bin: str) -> Path:
+def build_nsis_installer(package_dir: Path, version: str, out_dir: Path) -> Path | None:
+    makensis = shutil.which("makensis")
+    if not makensis:
+        return None
+    template = NSI_TEMPLATE.read_text(encoding="utf-8")
+    outfile = out_dir / f"k7-bridge-setup-v{version}.exe"
+    nsi = (
+        template
+        .replace("${VERSION}", version)
+        .replace("${OUTFILE}", str(outfile))
+        .replace("${SRCDIR}", str(package_dir))
+    )
+    with tempfile.NamedTemporaryFile(suffix=".nsi", mode="w", encoding="utf-8", delete=False) as f:
+        f.write(nsi)
+        nsi_path = Path(f.name)
+    try:
+        run([makensis, str(nsi_path)])
+    finally:
+        nsi_path.unlink(missing_ok=True)
+    print(f"wrote {outfile}")
+    return outfile
+
+
+def build_target(target: str, version: str, out_dir: Path, go_bin: str) -> list[Path]:
     spec = TARGETS[target]
     package_name = f"k7-pc-bridge-{target}-v{version}"
     package_dir = out_dir / package_name
@@ -144,7 +169,16 @@ def build_target(target: str, version: str, out_dir: Path, go_bin: str) -> Path:
             stale.unlink()
     archive = shutil.make_archive(str(archive_base), spec["archive"], root_dir=out_dir, base_dir=package_name)
     print(f"wrote {archive}")
-    return Path(archive)
+    outputs = [Path(archive)]
+
+    if target.startswith("windows-"):
+        installer = build_nsis_installer(package_dir, version, out_dir)
+        if installer:
+            outputs.append(installer)
+        else:
+            print("makensis not found — skipping Windows installer")
+
+    return outputs
 
 
 def main() -> int:
@@ -171,13 +205,15 @@ def main() -> int:
     if not args.skip_tests:
         run([args.go, "test", "./..."], cwd=BRIDGE)
 
-    archives = [build_target(target, version, args.out, args.go) for target in targets]
-    print("\nBuilt PC bridge archives:")
-    for archive in archives:
+    all_outputs: list[Path] = []
+    for target in targets:
+        all_outputs.extend(build_target(target, version, args.out, args.go))
+    print("\nBuilt PC bridge outputs:")
+    for output in all_outputs:
         try:
-            display = archive.relative_to(ROOT)
+            display = output.relative_to(ROOT)
         except ValueError:
-            display = archive
+            display = output
         print(f"  {display}")
     return 0
 
