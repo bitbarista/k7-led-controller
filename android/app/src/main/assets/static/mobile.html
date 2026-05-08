@@ -1107,7 +1107,6 @@ function updateSchedTable() {
 
 function onCell(h, i, v) {
   schedule[h][2+i] = Math.max(0, Math.min(100, parseInt(v)||0));
-  editorDirty = true;
   updateNowBars();
 }
 
