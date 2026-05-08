@@ -34,15 +34,19 @@ Section "Install"
     SetOutPath "${INST_DIR}"
     File "${SRCDIR}\k7-bridge.exe"
     File "${SRCDIR}\README.txt"
+    File "${SRCDIR}\fix-wifi-profile.ps1"
 
     ; Desktop shortcut
     CreateShortcut "$DESKTOP\K7 Bridge.lnk" "${INST_DIR}\${APP_EXE}" \
         "" "${INST_DIR}\${APP_EXE}" 0 SW_SHOWMINIMIZED
 
-    ; Start Menu shortcut
+    ; Start Menu shortcuts
     CreateDirectory "$SMPROGRAMS\K7 Bridge"
     CreateShortcut "$SMPROGRAMS\K7 Bridge\K7 Bridge.lnk" "${INST_DIR}\${APP_EXE}" \
         "" "${INST_DIR}\${APP_EXE}" 0 SW_SHOWMINIMIZED
+    CreateShortcut "$SMPROGRAMS\K7 Bridge\Fix WiFi Profile (run once).lnk" \
+        "powershell.exe" \
+        "-ExecutionPolicy Bypass -WindowStyle Normal -File '$INSTDIR\fix-wifi-profile.ps1'"
     CreateShortcut "$SMPROGRAMS\K7 Bridge\Uninstall K7 Bridge.lnk" \
         "${INST_DIR}\uninstall.exe"
 
@@ -67,11 +71,13 @@ SectionEnd
 Section "Uninstall"
     Delete "${INST_DIR}\k7-bridge.exe"
     Delete "${INST_DIR}\README.txt"
+    Delete "${INST_DIR}\fix-wifi-profile.ps1"
     Delete "${INST_DIR}\uninstall.exe"
     RMDir  "${INST_DIR}"
 
     Delete "$DESKTOP\K7 Bridge.lnk"
     Delete "$SMPROGRAMS\K7 Bridge\K7 Bridge.lnk"
+    Delete "$SMPROGRAMS\K7 Bridge\Fix WiFi Profile (run once).lnk"
     Delete "$SMPROGRAMS\K7 Bridge\Uninstall K7 Bridge.lnk"
     RMDir  "$SMPROGRAMS\K7 Bridge"
 

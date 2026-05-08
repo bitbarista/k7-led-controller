@@ -116,6 +116,40 @@ siesta, and fixed moonlight changes may happen as hourly steps.
 """
 
 
+FIX_WIFI_PS1 = """\
+# K7 Bridge - Fix WiFi Network Profile
+# Run this once while connected to the lamp WiFi.
+# It sets the network profile to Private so K7 Bridge can reach the lamp.
+
+# Self-elevate to administrator if needed
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Start-Process powershell -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    exit
+}
+
+$profiles = Get-NetConnectionProfile | Where-Object {
+    $_.NetworkCategory -eq 'Public' -and $_.InterfaceAlias -match 'Wi-Fi'
+}
+if ($profiles) {
+    $profiles | Set-NetConnectionProfile -NetworkCategory Private
+    Write-Host "Done! Your WiFi network has been set to Private."
+    Write-Host "K7 Bridge can now connect to the lamp."
+} else {
+    $any = Get-NetConnectionProfile | Where-Object { $_.InterfaceAlias -match 'Wi-Fi' }
+    if ($any) {
+        Write-Host "WiFi is already set to Private - no change needed."
+        Write-Host "You can go ahead and start K7 Bridge."
+    } else {
+        Write-Host "Not connected to WiFi yet - please wait for the connection to complete,"
+        Write-Host "then run this again."
+    }
+}
+Write-Host ""
+Write-Host "Press any key to close..."
+$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+"""
+
+
 def copy_runtime_files(package_dir: Path, target: str, version: str) -> None:
     launcher_name, launcher = launcher_text(target)
     launcher_path = package_dir / launcher_name
@@ -123,6 +157,8 @@ def copy_runtime_files(package_dir: Path, target: str, version: str) -> None:
     if target.startswith("linux-"):
         launcher_path.chmod(0o755)
     (package_dir / "README.txt").write_text(readme_text(version, target), encoding="utf-8")
+    if target.startswith("windows-"):
+        (package_dir / "fix-wifi-profile.ps1").write_text(FIX_WIFI_PS1, encoding="utf-8", newline="")
 
 
 def build_appimage(package_dir: Path, version: str, out_dir: Path) -> Path | None:
