@@ -380,6 +380,47 @@ button:disabled { opacity: 0.4; }
       <span class="master-val" id="masterVal">100%</span>
     </div>
     <div id="nowBars"></div>
+    <div class="expander" onclick="toggleWizard()">
+      <span>Quick Setup</span>
+      <span class="exp-icon" id="wizardIcon">▸</span>
+    </div>
+    <div class="collapse" id="wizardCollapse">
+      <div style="padding:10px 14px 14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+          <label style="display:flex;flex-direction:column;gap:3px;font-size:0.78rem;color:var(--muted)">
+            Lights on
+            <input type="time" id="wzStart" value="08:00" class="time-in">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:3px;font-size:0.78rem;color:var(--muted)">
+            Lights off
+            <input type="time" id="wzEnd" value="20:00" class="time-in">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:3px;font-size:0.78rem;color:var(--muted)">
+            Ramp up
+            <select id="wzRampUp" class="time-in">
+              <option value="0.5">30 min</option>
+              <option value="1" selected>1 h</option>
+              <option value="1.5">1.5 h</option>
+              <option value="2">2 h</option>
+              <option value="3">3 h</option>
+            </select>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:3px;font-size:0.78rem;color:var(--muted)">
+            Ramp down
+            <select id="wzRampDown" class="time-in">
+              <option value="0.5">30 min</option>
+              <option value="1">1 h</option>
+              <option value="1.5">1.5 h</option>
+              <option value="2" selected>2 h</option>
+              <option value="3">3 h</option>
+            </select>
+          </label>
+        </div>
+        <div id="wzChannels" style="margin-bottom:10px"></div>
+        <div id="wzErr" style="color:#f85149;font-size:0.78rem;margin-bottom:8px;display:none"></div>
+        <button class="btn-push" style="width:100%;font-size:0.9rem" onclick="wizardGenerate()">↺ Generate Schedule</button>
+      </div>
+    </div>
     <div class="expander" onclick="toggleSched()">
       <span>Schedule</span>
       <span class="exp-icon" id="schedIcon">▾</span>
@@ -1115,6 +1156,65 @@ function toggleSched() {
   const open = c.classList.toggle('open');
   document.getElementById('schedIcon').classList.toggle('open', open);
   if(open) buildSchedTable();
+}
+
+// ── Schedule Wizard ──────────────────────────────────────────────────────────
+const WZ_DEFAULTS = { white:50, royal_blue:80, blue:70, green:30, uv:40, cyan:50, red:20 };
+
+function toggleWizard() {
+  const c = document.getElementById('wizardCollapse');
+  const open = c.classList.toggle('open');
+  document.getElementById('wizardIcon').classList.toggle('open', open);
+  if (open) buildWizardChannels();
+}
+
+function buildWizardChannels() {
+  document.getElementById('wzChannels').innerHTML = chs().map((ch, i) => {
+    const c = CH[ch];
+    const def = WZ_DEFAULTS[ch] ?? 50;
+    return `<div class="ch-row">
+      <div class="ch-swatch" style="background:${c.css}"></div>
+      <span class="ch-name">${c.label}</span>
+      <input type="range" class="ch-slider" min="0" max="100" value="${def}"
+             style="accent-color:${c.css}"
+             oninput="document.getElementById('wzv${i}').textContent=this.value+'%'">
+      <span class="ch-val" id="wzv${i}">${def}%</span>
+    </div>`;
+  }).join('');
+}
+
+function wizardGenerate() {
+  const [sh, sm] = document.getElementById('wzStart').value.split(':').map(Number);
+  const [eh, em] = document.getElementById('wzEnd').value.split(':').map(Number);
+  const startH   = sh + sm / 60;
+  const endH     = eh + em / 60;
+  const rampUp   = parseFloat(document.getElementById('wzRampUp').value);
+  const rampDown = parseFloat(document.getElementById('wzRampDown').value);
+  const errEl    = document.getElementById('wzErr');
+
+  if (endH <= startH)              { errEl.textContent = 'End time must be after start time.';             errEl.style.display = ''; return; }
+  if (rampUp + rampDown > endH - startH) { errEl.textContent = 'Ramp durations exceed the available time window.'; errEl.style.display = ''; return; }
+  errEl.style.display = 'none';
+
+  const peakStart = startH + rampUp;
+  const peakEnd   = endH   - rampDown;
+  const peaks     = Array.from(document.getElementById('wzChannels').querySelectorAll('input[type=range]'), s => parseInt(s.value));
+
+  for (let h = 0; h < 24; h++) {
+    chs().forEach((_, i) => {
+      const peak = peaks[i] ?? 0;
+      let v = 0;
+      if      (h >= startH  && h < peakStart) v = Math.round(peak * (h - startH)  / rampUp);
+      else if (h >= peakStart && h <= peakEnd) v = peak;
+      else if (h >  peakEnd  && h <  endH)    v = Math.round(peak * (endH - h)    / rampDown);
+      schedule[h][2 + i] = Math.max(0, Math.min(100, v));
+    });
+  }
+
+  _suppressPoll('schedule');
+  if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
+  buildNowBars();
+  setOk('Schedule generated — review then Push');
 }
 
 // ── Read from device ─────────────────────────────────────────────────────
