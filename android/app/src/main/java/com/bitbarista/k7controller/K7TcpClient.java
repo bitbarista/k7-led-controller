@@ -1,6 +1,9 @@
 package com.bitbarista.k7controller;
 
 import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -142,10 +145,23 @@ final class K7TcpClient {
         return out.toString();
     }
 
+    private SocketFactory wifiSocketFactory() {
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return SocketFactory.getDefault();
+        for (Network net : cm.getAllNetworks()) {
+            NetworkCapabilities caps = cm.getNetworkCapabilities(net);
+            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                return net.getSocketFactory();
+            }
+        }
+        return SocketFactory.getDefault();
+    }
+
     private Connection openConnection() throws Exception {
+        SocketFactory sf = wifiSocketFactory();
         Exception last = null;
         for (int attempt = 1; attempt <= 3; attempt++) {
-            Socket socket = SocketFactory.getDefault().createSocket();
+            Socket socket = sf.createSocket();
             try {
                 Log.i(TAG, "connecting to " + host + ":" + port + " attempt " + attempt);
                 socket.connect(new InetSocketAddress(host, port), timeoutMs);

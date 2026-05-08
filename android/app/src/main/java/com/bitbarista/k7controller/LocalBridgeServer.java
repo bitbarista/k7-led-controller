@@ -107,8 +107,8 @@ final class LocalBridgeServer implements Runnable {
         if (path.equals("/api/state")) return json(state());
         if (path.equals("/api/lamp/read")) return lampRead();
         if (path.equals("/api/presets")) return presets();
-        if (path.equals("/api/profiles")) return json(new JSONObject());
-        if (path.startsWith("/api/profiles/")) return json(new JSONObject().put("ok", true));
+        if (path.equals("/api/profiles")) return "POST".equals(method) ? profilesPost(body) : profilesGet();
+        if (path.startsWith("/api/profiles/")) return "DELETE".equals(method) ? profilesDelete(path) : json(new JSONObject().put("ok", true));
         if (path.equals("/api/preview")) return lampChannels(body, false);
         if (path.equals("/api/hand")) return lampChannels(body, true);
         if (path.equals("/api/push")) return push(body);
@@ -229,6 +229,30 @@ final class LocalBridgeServer implements Runnable {
         } finally {
             conn.disconnect();
         }
+    }
+
+    private Response profilesGet() {
+        String raw = prefs.getString("profiles", "{}");
+        return new Response(200, "application/json", raw.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private Response profilesPost(byte[] body) throws Exception {
+        JSONObject profile = new JSONObject(new String(body, StandardCharsets.UTF_8));
+        String name = profile.optString("name", "").trim();
+        if (name.isEmpty()) return error(400, "Name required");
+        JSONObject profiles = new JSONObject(prefs.getString("profiles", "{}"));
+        profiles.put(name, profile);
+        prefs.edit().putString("profiles", profiles.toString()).apply();
+        return json(new JSONObject().put("ok", true));
+    }
+
+    private Response profilesDelete(String path) throws Exception {
+        String name = URLDecoder.decode(path.substring("/api/profiles/".length()), "UTF-8").trim();
+        if (name.isEmpty()) return error(400, "Name required");
+        JSONObject profiles = new JSONObject(prefs.getString("profiles", "{}"));
+        profiles.remove(name);
+        prefs.edit().putString("profiles", profiles.toString()).apply();
+        return json(new JSONObject().put("ok", true));
     }
 
     private Response presets() throws Exception {
