@@ -669,9 +669,7 @@ button:disabled { opacity: 0.4; }
   </div>
   <div class="profile-row" style="padding-top:0">
     <button class="profile-save" style="flex:1" onclick="submitCommunityPreset()" title="Open a GitHub issue draft for community preset review">Submit Preset</button>
-  </div>
-  <div class="profile-row" style="padding-top:0" data-cap="community_presets_browse">
-    <button class="profile-save" style="flex:1" onclick="openCommunityBrowser()" title="Browse and install community presets from the online library">Browse Presets</button>
+    <button class="profile-save" style="flex:1" data-cap="community_presets_browse" onclick="openCommunityBrowser()" title="Browse and install community presets from the online library">Browse Presets</button>
   </div>
   <div class="profile-desc" id="presetDesc"></div>
 </div>
@@ -744,7 +742,7 @@ const DEFAULT_CAPABILITIES = {
   manual_preview: true,
   profiles: true,
   community_presets: true,
-  community_presets_browse: false,
+  community_presets_browse: true,
   backup_restore: true,
   fixed_lunar: true,
   siesta_baked_schedule: false,
@@ -2006,10 +2004,19 @@ function setCpbFilter(filter) {
   if (cpbIndex) renderCommunityPresetList();
 }
 
+const COMMUNITY_PRESETS_URL = 'https://bitbarista.github.io/k7-led-controller/community-presets/index.json';
+
 async function loadCommunityPresets() {
   document.getElementById('cpbList').innerHTML = '<div class="cpb-status">Loading…</div>';
   try {
-    const resp = await api('GET', '/api/community-presets');
+    let resp;
+    try {
+      resp = await api('GET', '/api/community-presets');
+    } catch(_) {
+      const r = await fetch(COMMUNITY_PRESETS_URL);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      resp = await r.json();
+    }
     if (!resp || !Array.isArray(resp.presets)) throw new Error('Invalid preset index');
     cpbIndex = resp;
     renderCommunityPresetList();
