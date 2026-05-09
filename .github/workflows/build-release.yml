@@ -1,20 +1,21 @@
-name: Build Release
+name: Build Check
 
 on:
   push:
-    tags: ['v*']
+    branches: [master]
+    paths:
+      - 'arduino/**'
+      - 'shared-ui/**'
+      - '.github/workflows/build-release.yml'
+  pull_request:
+    paths:
+      - 'arduino/**'
+      - 'shared-ui/**'
+      - '.github/workflows/build-release.yml'
   workflow_dispatch:
-    inputs:
-      version_override:
-        description: 'Override version (e.g., 1.0.0-beta)'
-        required: false
-        type: string
 
 permissions:
-  contents: write
-  actions: write
-  pages: write
-  id-token: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -33,7 +34,7 @@ jobs:
         python-version: '3.13'
 
     - name: Install tools
-      run: pip install platformio esptool
+      run: pip install platformio
 
     - name: Cache PlatformIO
       uses: actions/cache@v4
@@ -42,26 +43,9 @@ jobs:
         key: pio-${{ hashFiles('arduino/platformio.ini') }}
         restore-keys: pio-
 
-    - name: Resolve version
-      id: version
-      run: |
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "IS_RELEASE=true" >> $GITHUB_OUTPUT
-        elif [[ -n "${{ github.event.inputs.version_override }}" ]]; then
-          VERSION="${{ github.event.inputs.version_override }}"
-          echo "IS_RELEASE=false" >> $GITHUB_OUTPUT
-        else
-          VERSION="dev-$(date +%Y%m%d)-$(git rev-parse --short HEAD)"
-          echo "IS_RELEASE=false" >> $GITHUB_OUTPUT
-        fi
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "Building version: $VERSION"
-
     - name: Build SuperMini firmware + filesystem
       run: |
         export PATH="$HOME/.platformio/packages/tool-mklittlefs:$PATH"
-        export PLATFORMIO_BUILD_FLAGS="-DK7_FIRMWARE_VERSION=${{ steps.version.outputs.VERSION }} -DK7_BUILD_GIT=${GITHUB_SHA::7}"
         cd arduino
         pio run -e supermini
         pio run -e supermini -t buildfs
@@ -69,270 +53,6 @@ jobs:
     - name: Build XIAO firmware + filesystem
       run: |
         export PATH="$HOME/.platformio/packages/tool-mklittlefs:$PATH"
-        export PLATFORMIO_BUILD_FLAGS="-DK7_FIRMWARE_VERSION=${{ steps.version.outputs.VERSION }} -DK7_BUILD_GIT=${GITHUB_SHA::7}"
         cd arduino
         pio run -e xiao
         pio run -e xiao -t buildfs
-
-    - name: Merge SuperMini binary
-      run: |
-        VERSION=${{ steps.version.outputs.VERSION }}
-        BOOT_APP=$(find ~/.platformio -name "boot_app0.bin" | head -1)
-        esptool --chip esp32s3 merge_bin \
-          --flash_mode dio --flash_freq 80m --flash_size 4MB \
-          -o k7controller-supermini-v${VERSION}.bin \
-          0x0      arduino/.pio/build/supermini/bootloader.bin \
-          0x8000   arduino/.pio/build/supermini/partitions.bin \
-          0xe000   $BOOT_APP \
-          0x10000  arduino/.pio/build/supermini/firmware.bin \
-          0x300000 arduino/.pio/build/supermini/littlefs.bin
-        echo "SuperMini binary: $(wc -c < k7controller-supermini-v${VERSION}.bin) bytes"
-
-    - name: Merge XIAO binary
-      run: |
-        VERSION=${{ steps.version.outputs.VERSION }}
-        BOOT_APP=$(find ~/.platformio -name "boot_app0.bin" | head -1)
-        esptool --chip esp32s3 merge_bin \
-          --flash_mode dio --flash_freq 80m --flash_size 8MB \
-          -o k7controller-xiao-v${VERSION}.bin \
-          0x0      arduino/.pio/build/xiao/bootloader.bin \
-          0x8000   arduino/.pio/build/xiao/partitions.bin \
-          0xe000   $BOOT_APP \
-          0x10000  arduino/.pio/build/xiao/firmware.bin \
-          0x300000 arduino/.pio/build/xiao/littlefs.bin
-        echo "XIAO binary: $(wc -c < k7controller-xiao-v${VERSION}.bin) bytes"
-
-    - name: Generate manifests
-      run: |
-        VERSION=${{ steps.version.outputs.VERSION }}
-        BOOT_APP=$(find ~/.platformio -name "boot_app0.bin" | head -1)
-
-        cp arduino/.pio/build/supermini/bootloader.bin  k7controller-supermini-bootloader-v${VERSION}.bin
-        cp arduino/.pio/build/supermini/partitions.bin  k7controller-supermini-partitions-v${VERSION}.bin
-        cp "$BOOT_APP"                                  k7controller-supermini-bootapp-v${VERSION}.bin
-        cp arduino/.pio/build/supermini/firmware.bin    k7controller-supermini-firmware-v${VERSION}.bin
-        cp arduino/.pio/build/supermini/littlefs.bin    k7controller-supermini-littlefs-v${VERSION}.bin
-
-        cp arduino/.pio/build/xiao/bootloader.bin       k7controller-xiao-bootloader-v${VERSION}.bin
-        cp arduino/.pio/build/xiao/partitions.bin       k7controller-xiao-partitions-v${VERSION}.bin
-        cp "$BOOT_APP"                                  k7controller-xiao-bootapp-v${VERSION}.bin
-        cp arduino/.pio/build/xiao/firmware.bin         k7controller-xiao-firmware-v${VERSION}.bin
-        cp arduino/.pio/build/xiao/littlefs.bin         k7controller-xiao-littlefs-v${VERSION}.bin
-
-        cat > manifest-supermini.json << EOF
-        {
-          "name": "K7 LED Controller (SuperMini)",
-          "version": "${VERSION}",
-          "new_install_prompt_erase": true,
-          "funding_url": "https://ko-fi.com/bitbarista",
-          "builds": [
-            {
-              "chipFamily": "ESP32-S3",
-              "parts": [
-                { "path": "k7controller-supermini-bootloader-v${VERSION}.bin", "offset": 0 },
-                { "path": "k7controller-supermini-partitions-v${VERSION}.bin", "offset": 32768 },
-                { "path": "k7controller-supermini-bootapp-v${VERSION}.bin", "offset": 57344 },
-                { "path": "k7controller-supermini-firmware-v${VERSION}.bin", "offset": 65536 },
-                { "path": "k7controller-supermini-littlefs-v${VERSION}.bin", "offset": 3145728 }
-              ]
-            }
-          ]
-        }
-        EOF
-        cat > manifest-xiao.json << EOF
-        {
-          "name": "K7 LED Controller (XIAO)",
-          "version": "${VERSION}",
-          "new_install_prompt_erase": true,
-          "funding_url": "https://ko-fi.com/bitbarista",
-          "builds": [
-            {
-              "chipFamily": "ESP32-S3",
-              "parts": [
-                { "path": "k7controller-xiao-bootloader-v${VERSION}.bin", "offset": 0 },
-                { "path": "k7controller-xiao-partitions-v${VERSION}.bin", "offset": 32768 },
-                { "path": "k7controller-xiao-bootapp-v${VERSION}.bin", "offset": 57344 },
-                { "path": "k7controller-xiao-firmware-v${VERSION}.bin", "offset": 65536 },
-                { "path": "k7controller-xiao-littlefs-v${VERSION}.bin", "offset": 3145728 }
-              ]
-            }
-          ]
-        }
-        EOF
-        cp manifest-supermini.json manifest-supermini-v${VERSION}.json
-        cp manifest-xiao.json manifest-xiao-v${VERSION}.json
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: k7controller-v${{ steps.version.outputs.VERSION }}
-        path: |
-          k7controller-supermini-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-xiao-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-supermini-bootloader-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-supermini-partitions-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-supermini-bootapp-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-supermini-firmware-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-supermini-littlefs-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-xiao-bootloader-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-xiao-partitions-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-xiao-bootapp-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-xiao-firmware-v${{ steps.version.outputs.VERSION }}.bin
-          k7controller-xiao-littlefs-v${{ steps.version.outputs.VERSION }}.bin
-          manifest-supermini.json
-          manifest-xiao.json
-          manifest-supermini-v${{ steps.version.outputs.VERSION }}.json
-          manifest-xiao-v${{ steps.version.outputs.VERSION }}.json
-        retention-days: 90
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        ref: master
-
-    - name: Extract version from tag
-      id: version
-      run: |
-        VERSION=${GITHUB_REF#refs/tags/v}
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: k7controller-v${{ steps.version.outputs.VERSION }}
-        path: artifacts/
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ steps.version.outputs.VERSION }}
-        name: K7 LED Controller v${{ steps.version.outputs.VERSION }}
-        files: artifacts/*
-        body: |
-          ## K7 LED Controller v${{ steps.version.outputs.VERSION }}
-
-          ### Installation
-
-          **Easiest — browser-based flash (Chrome/Edge/Opera):**
-          Visit the [flash page](https://bitbarista.github.io/k7-led-controller/flash.html), connect your board via USB, and click Install.
-
-          **Manual — esptool:**
-          ```
-          # ESP32-S3 SuperMini (4 MB flash)
-          esptool --chip esp32s3 write_flash 0x0 k7controller-supermini-v${{ steps.version.outputs.VERSION }}.bin
-
-          # Seeed XIAO ESP32-S3 (8 MB flash)
-          esptool --chip esp32s3 write_flash 0x0 k7controller-xiao-v${{ steps.version.outputs.VERSION }}.bin
-          ```
-
-          ### After flashing
-          1. Connect to **K7-Setup** WiFi (open network)
-          2. Browse to **http://192.168.5.1**
-          3. Select your lamp and save
-          4. Connect to your **lamp's WiFi** (K7-XXXXXX)
-          5. Browse to **http://k7controller.local**
-
-          > To reset to setup mode, hold the BOOT button on the board while powering on for 3 seconds.
-
-          If the project has helped you, you can support the developer on [Ko-fi](https://ko-fi.com/bitbarista).
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Update website with latest binaries and manifests
-      run: |
-        VERSION=${{ steps.version.outputs.VERSION }}
-
-        # Copy new binaries and manifests. Keep older versioned binaries so
-        # cached manifests can still complete an install during CDN rollover.
-        cp artifacts/k7controller-*.bin website/releases/latest/
-
-        cat > website/releases/latest/manifest-supermini.json << EOF
-        {
-          "name": "K7 LED Controller (SuperMini)",
-          "version": "${VERSION}",
-          "new_install_prompt_erase": true,
-          "funding_url": "https://ko-fi.com/bitbarista",
-          "builds": [
-            {
-              "chipFamily": "ESP32-S3",
-              "parts": [
-                { "path": "k7controller-supermini-bootloader-v${VERSION}.bin", "offset": 0 },
-                { "path": "k7controller-supermini-partitions-v${VERSION}.bin", "offset": 32768 },
-                { "path": "k7controller-supermini-bootapp-v${VERSION}.bin", "offset": 57344 },
-                { "path": "k7controller-supermini-firmware-v${VERSION}.bin", "offset": 65536 },
-                { "path": "k7controller-supermini-littlefs-v${VERSION}.bin", "offset": 3145728 }
-              ]
-            }
-          ]
-        }
-        EOF
-
-        cat > website/releases/latest/manifest-xiao.json << EOF
-        {
-          "name": "K7 LED Controller (XIAO)",
-          "version": "${VERSION}",
-          "new_install_prompt_erase": true,
-          "funding_url": "https://ko-fi.com/bitbarista",
-          "builds": [
-            {
-              "chipFamily": "ESP32-S3",
-              "parts": [
-                { "path": "k7controller-xiao-bootloader-v${VERSION}.bin", "offset": 0 },
-                { "path": "k7controller-xiao-partitions-v${VERSION}.bin", "offset": 32768 },
-                { "path": "k7controller-xiao-bootapp-v${VERSION}.bin", "offset": 57344 },
-                { "path": "k7controller-xiao-firmware-v${VERSION}.bin", "offset": 65536 },
-                { "path": "k7controller-xiao-littlefs-v${VERSION}.bin", "offset": 3145728 }
-              ]
-            }
-          ]
-        }
-        EOF
-
-        cp website/releases/latest/manifest-supermini.json website/releases/latest/manifest-supermini-v${VERSION}.json
-        cp website/releases/latest/manifest-xiao.json website/releases/latest/manifest-xiao-v${VERSION}.json
-
-        sed -i -E "s#manifest=\"[^\"]*manifest-supermini\\.json([^\"]*)?\"#manifest=\"https://bitbarista.github.io/k7-led-controller/releases/latest/manifest-supermini.json?v=v${VERSION}\"#" website/flash.html
-        sed -i -E "s#manifest=\"[^\"]*manifest-xiao\\.json([^\"]*)?\"#manifest=\"https://bitbarista.github.io/k7-led-controller/releases/latest/manifest-xiao.json?v=v${VERSION}\"#" website/flash.html
-
-    - name: Commit and push
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add website/releases/latest/ website/flash.html
-        git commit -m "Update flash binaries and manifests for v${{ steps.version.outputs.VERSION }}"
-        git push origin master
-
-    - name: Deploy updated website from master
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        gh workflow run deploy-pages.yml --ref master
-        sleep 5
-
-        RUN_ID=""
-        for i in {1..20}; do
-          RUN_ID=$(gh run list \
-            --workflow "Deploy GitHub Pages" \
-            --branch master \
-            --event workflow_dispatch \
-            --json databaseId,status,createdAt \
-            --jq 'map(select(.status != "completed")) | .[0].databaseId // empty')
-          if [[ -n "$RUN_ID" ]]; then
-            break
-          fi
-          sleep 3
-        done
-
-        if [[ -z "$RUN_ID" ]]; then
-          echo "Could not find dispatched Pages deployment run"
-          exit 1
-        fi
-
-        gh run watch "$RUN_ID" --exit-status
