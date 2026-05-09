@@ -2479,7 +2479,9 @@ function initChart() {
         tooltip: { enabled: false },
       },
       scales: {
-        x: { ticks:{ color:cssVar('--muted'), font:{size:9}, maxRotation:0 }, grid:{ color:cssVar('--chart-grid') }, afterFit(axis) { axis.paddingRight = 8; } },
+        x: { ticks:{ color:cssVar('--muted'), font:{size:9}, maxRotation:0, autoSkip:false,
+               callback:(v,i) => i===23 ? '00:00' : (i%4===0 ? `${String(i).padStart(2,'0')}:00` : null) },
+             grid:{ color:cssVar('--chart-grid') }, afterFit(axis) { axis.paddingRight = 8; } },
         y: { min:0, max:105,
              ticks:{ color:cssVar('--muted'), font:{size:9}, callback: v => v<=100 ? v+'%':'' },
              grid:{ color:cssVar('--chart-grid') } }
