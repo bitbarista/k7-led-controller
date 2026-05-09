@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>K7 LED Controller</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪸</text></svg>">
+<link rel="icon" type="image/png" href="/static/favicon.png">
 <style>
 :root {
   --bg:                   #0d1117;
@@ -28,26 +28,33 @@
   --cal-icon-filter:      invert(0.6);
 }
 [data-theme="light"] {
-  --bg:                   #ffffff;
-  --surface:              #f6f8fa;
-  --surface2:             #eaeef2;
-  --border:               rgba(0,0,0,0.12);
+  --bg:                   #edf1f5;
+  --surface:              #ffffff;
+  --surface2:             #d0d8e0;
+  --border:               rgba(0,0,0,0.15);
   --text:                 #24292f;
   --muted:                #57606a;
-  --hover:                #d0d7de;
+  --hover:                #bcc6d0;
   --chart-grid:           rgba(0,0,0,0.07);
   --nowline:              rgba(0,0,0,0.4);
   --nowline-label:        rgba(0,0,0,0.6);
   --slider-thumb-border:  rgba(0,0,0,0.35);
   --master-thumb-bg:      #57606a;
-  --sched-cell-border:    rgba(0,0,0,0.06);
-  --input-focus-border:   rgba(0,0,0,0.25);
+  --sched-cell-border:    rgba(0,0,0,0.10);
+  --input-focus-border:   rgba(0,0,0,0.30);
   --on-maintenance-text:  #334155;
   --publink-bg:           rgba(3,105,161,0.12);
   --publink-border:       rgba(3,105,161,0.4);
   --publink-text:         #0369a1;
   --cal-icon-filter:      none;
 }
+[data-theme="light"] .fx-tog.on-ramp        { color: #0284c7; }
+[data-theme="light"] .fx-tog.on-feed        { color: #c2410c; }
+[data-theme="light"] .fx-tog.on-lunar       { color: #4338ca; }
+[data-theme="light"] .fx-tog.on-seasonal    { color: #b45309; }
+[data-theme="light"] .fx-tog.on-acclimation { color: #047857; }
+[data-theme="light"] .fx-tog.on-maintenance { border-color: rgba(100,116,139,0.6); background: rgba(100,116,139,0.12); }
+[data-theme="light"] .sched-tbl tr.cur td { background: rgba(2,132,199,0.14); }
 * { box-sizing: border-box; }
 body {
   background: var(--bg);
@@ -159,6 +166,7 @@ body {
 .ch-slider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
   cursor: pointer; border: 2px solid var(--slider-thumb-border);
+  background: var(--ch-color, #888);
 }
 .ch-val { width: 40px; text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .apply-row { padding: 12px 14px; }
@@ -277,7 +285,7 @@ body {
   color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 600;
 }
 .sched-tbl td { padding: 4px 2px; text-align: center; border-bottom: 1px solid var(--sched-cell-border); }
-.sched-tbl tr.cur td { background: rgba(56,189,248,0.08); }
+.sched-tbl tr.cur td { background: rgba(56,189,248,0.13); }
 .sched-tbl td input {
   width: 36px; background: transparent; border: 1px solid transparent;
   color: var(--text); text-align: center; font-size: 0.78rem; padding: 3px 1px; border-radius: 4px;
@@ -285,8 +293,34 @@ body {
 .sched-tbl td input:focus { border-color: var(--input-focus-border); background: var(--surface2); outline: none; }
 
 /* ── Schedule chart ── */
-.chart-wrap { height: 190px; position: relative; margin-top: 6px; }
+.chart-wrap { height: 190px; position: relative; margin-top: 6px; cursor: pointer; }
 .chart-wrap canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+
+/* ── Hour editor bottom sheet ── */
+#hourSheet { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; justify-content: flex-end; }
+#hourSheet[hidden] { display: none !important; }
+.hs-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
+.hs-panel { position: relative; background: var(--surface); border-radius: 16px 16px 0 0; border-top: 1px solid var(--border); overflow: hidden; }
+.hs-header { display: flex; align-items: center; gap: 8px; padding: 14px 14px 12px; border-bottom: 1px solid var(--border); }
+.hs-title { flex: 1; text-align: center; font-weight: 700; font-size: 1rem; }
+.hs-nav { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; width: 38px; height: 38px; font-size: 1.4rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.hs-done { background: #238636; border: none; border-radius: 8px; color: #fff; padding: 8px 18px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+.hs-chips { display: flex; gap: 8px; padding: 12px 14px; overflow-x: auto; scrollbar-width: none; }
+.hs-chips::-webkit-scrollbar { display: none; }
+.hs-chip { display: flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 20px; border: 2px solid var(--border); background: var(--surface2); cursor: pointer; font-size: 0.82rem; font-weight: 600; white-space: nowrap; flex-shrink: 0; transition: border-color 0.15s, background 0.15s; }
+.hs-chip.active { border-color: var(--hs-ch-css); background: var(--hs-ch-bg); }
+.hs-chip-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+.hs-chip.active .hs-chip-val { color: var(--text); }
+.hs-wheel-wrap { padding: 0 14px; }
+.wheel-outer { position: relative; height: 220px; overflow: hidden; border-radius: 10px; }
+.wheel-outer::before, .wheel-outer::after { content:''; position:absolute; left:0; right:0; height:88px; z-index:2; pointer-events:none; }
+.wheel-outer::before { top:0;    background: linear-gradient(to bottom, var(--surface) 10%, transparent); }
+.wheel-outer::after  { bottom:0; background: linear-gradient(to top,   var(--surface) 10%, transparent); }
+.wheel-sel-bar { position:absolute; top:50%; transform:translateY(-50%); left:0; right:0; height:44px; background:var(--surface2); border-top:1px solid var(--border); border-bottom:1px solid var(--border); z-index:1; pointer-events:none; }
+.wheel-scroll { height:100%; overflow-y:scroll; scroll-snap-type:y mandatory; scrollbar-width:none; }
+.wheel-scroll::-webkit-scrollbar { display:none; }
+.wheel-item { height:44px; display:flex; align-items:center; justify-content:center; font-size:1.5rem; font-weight:600; scroll-snap-align:center; position:relative; z-index:3; }
+.hs-note { min-height:24px; padding:6px 14px 14px; font-size:0.75rem; color:var(--muted); text-align:center; }
 
 /* ── Effects ── */
 .fx-card { border-top: 1px solid var(--border); }
@@ -361,10 +395,11 @@ button:disabled { opacity: 0.4; }
 
 <!-- Header -->
 <div class="hdr">
-  <span class="hdr-title">🪸 K7 Controller</span>
+  <span class="hdr-title">K7 Controller</span>
   <span class="version-chip" id="versionChip" title="Firmware version"></span>
   <div class="status-dot busy" id="dot"></div>
   <span class="status-txt" id="statusMsg">Connecting…</span>
+  <a id="desktopLink" href="/?view=desktop" class="hdr-btn" style="display:none">Desktop ↗</a>
   <button id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark theme"
           class="hdr-btn" style="width:2.2em;text-align:center;padding:6px 0">☀</button>
 </div>
@@ -496,9 +531,25 @@ button:disabled { opacity: 0.4; }
 
 <!-- Schedule chart -->
 <div class="card" style="margin-top:10px">
-  <div class="card-hd">Schedule Preview</div>
+  <div class="card-hd">Schedule Preview <span style="font-weight:400;font-size:0.68rem;font-style:italic;color:var(--muted)">— tap to edit</span></div>
   <div class="chart-wrap">
     <canvas id="schedChart"></canvas>
+  </div>
+</div>
+
+<!-- Hour editor bottom sheet -->
+<div id="hourSheet" hidden>
+  <div class="hs-backdrop" onclick="closeHourSheet()"></div>
+  <div class="hs-panel">
+    <div class="hs-header">
+      <button class="hs-nav" onclick="stepHour(-1)">‹</button>
+      <span class="hs-title" id="hsTitle">Hour 00</span>
+      <button class="hs-nav" onclick="stepHour(1)">›</button>
+      <button class="hs-done" onclick="closeHourSheet()">Done</button>
+    </div>
+    <div class="hs-chips" id="hsChips"></div>
+    <div class="hs-wheel-wrap" id="hsWheelWrap"></div>
+    <div class="hs-note" id="hsNote"></div>
   </div>
 </div>
 
@@ -748,14 +799,17 @@ button:disabled { opacity: 0.4; }
 <script>
 // ── Channel metadata ─────────────────────────────────────────────────────
 const CH = {
-  uv:         { label:'UV',         rgb:[138,43,226],  css:'#8b2be2' },
-  royal_blue: { label:'Royal Blue', rgb:[65,105,225],  css:'#4169e1' },
-  blue:       { label:'Blue',       rgb:[30,144,255],  css:'#1e90ff' },
-  green:      { label:'Green',      rgb:[40,220,40],   css:'#28dc28' },
-  white:      { label:'White',      rgb:[210,210,210], css:'#d2d2d2' },
-  cyan:       { label:'Cyan',       rgb:[120,220,255], css:'#78dcff' },
-  red:        { label:'Red',        rgb:[220,50,50],   css:'#dc3232' },
+  uv:         { label:'UV',         rgb:[138,43,226],  css:'#8b2be2', darkCss:'#7c3aed' },
+  royal_blue: { label:'Royal Blue', rgb:[65,105,225],  css:'#4169e1', darkCss:'#1d4ed8' },
+  blue:       { label:'Blue',       rgb:[30,144,255],  css:'#1e90ff', darkCss:'#1d6fcc' },
+  green:      { label:'Green',      rgb:[40,220,40],   css:'#28dc28', darkCss:'#15803d' },
+  white:      { label:'White',      rgb:[210,210,210], css:'#d2d2d2', darkCss:'#64748b' },
+  cyan:       { label:'Cyan',       rgb:[120,220,255], css:'#78dcff', darkCss:'#0891b2' },
+  red:        { label:'Red',        rgb:[220,50,50],   css:'#dc3232', darkCss:'#b91c1c' },
 };
+function chTextColor(ch) {
+  return document.documentElement.dataset.theme === 'light' ? CH[ch].darkCss : CH[ch].css;
+}
 const DEVICES = {
   k7mini: { channels:['white','royal_blue','blue'] },
   k7pro:  { channels:['white','royal_blue','green','uv','cyan','red'] },
@@ -852,6 +906,7 @@ function applyCapabilityUI() {
     const names = (el.dataset.cap || '').split(/\s+/).filter(Boolean);
     el.classList.toggle('cap-hidden', names.some(name => !cap(name)));
   });
+  document.getElementById('desktopLink').style.display = platformInfo.platform !== 'android' ? '' : 'none';
 }
 
 async function readControllerState() {
@@ -1055,7 +1110,7 @@ function buildSliders() {
       <div class="ch-swatch" style="background:${c.css}"></div>
       <span class="ch-name">${c.label}</span>
       <input type="range" class="ch-slider" min="0" max="100" value="${manual[i]||0}"
-             style="accent-color:${c.css}"
+             style="accent-color:${c.css};--ch-color:${c.css}"
              oninput="onSlider(${i},this.value)" onchange="previewManual()">
       <span class="ch-val" id="sv${i}">${manual[i]||0}%</span>
     </div>`;
@@ -1196,14 +1251,14 @@ function buildSchedTable() {
   const channels = chs(), cur = new Date().getHours();
   document.getElementById('schedThead').innerHTML =
     '<th>Hr</th>' + channels.map(ch =>
-      `<th style="color:${CH[ch].css}">${CH[ch].label.replace(' ','<br>')}</th>`
+      `<th style="color:${chTextColor(ch)}">${CH[ch].label.replace(' ','<br>')}</th>`
     ).join('');
   document.getElementById('schedTbody').innerHTML = schedule.map((row,h) =>
     `<tr id="sr${h}" class="${h===cur?'cur':''}">
       <td>${String(h).padStart(2,'0')}</td>
       ${channels.map((ch,i) =>
         `<td><input type="number" min="0" max="100" value="${row[2+i]||0}"
-           style="color:${CH[ch].css}"
+           style="color:${chTextColor(ch)}"
            onchange="onCell(${h},${i},this.value)"></td>`
       ).join('')}
     </tr>`
@@ -1253,7 +1308,7 @@ function buildWizardChannels() {
       <div class="ch-swatch" style="background:${c.css}"></div>
       <span class="ch-name">${c.label}</span>
       <input type="range" class="ch-slider" min="0" max="100" value="${def}"
-             style="accent-color:${c.css}"
+             style="accent-color:${c.css};--ch-color:${c.css}"
              oninput="document.getElementById('wzv${i}').textContent=this.value+'%'">
       <span class="ch-val" id="wzv${i}">${def}%</span>
     </div>`;
@@ -1696,6 +1751,7 @@ async function toggleLunar() {
   _suppressPoll('lunar');
   try {
     await api('POST', on ? '/api/lunar/stop' : '/api/lunar/start');
+    updateChart();
   } catch(e) { setLunarBtn(on); _suppress.lunar = 0; setErr(e.message); }
 }
 
@@ -1715,6 +1771,7 @@ async function onLmChange() {
       day_threshold: parseInt(document.getElementById('lmDayThreshold').value)||0,
     });
   } catch(_) {}
+  updateChart();
 }
 
 async function onSiestaChange() {
@@ -1742,6 +1799,7 @@ async function onSiestaChange() {
       : 'Off';
   updateSiestaHint(siesta);
   updateNowBars();
+  updateChart();
 }
 
 async function onAcclimationChange() {
@@ -1826,7 +1884,7 @@ function onPresetChange() {
   _suppressPoll('schedule');
   document.getElementById('presetDesc').textContent = p.desc || (v.startsWith('profile:') ? 'Saved profile' : '');
   activePresetKey = v;
-  buildSliders(); buildNowBars();
+  buildSliders(); buildNowBars(); updateChart();
   if(document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
 }
 
@@ -1896,8 +1954,7 @@ function confirmCommunityPresetSource() {
   )) return false;
   schedule = p.schedule.map(row => [...row]);
   manual = [...p.manual];
-  buildSliders();
-  buildNowBars();
+  buildSliders(); buildNowBars(); updateChart();
   if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
   document.getElementById('presetDesc').textContent = p.desc || '';
   setOk(`Preset reloaded: ${p.name}`);
@@ -1953,8 +2010,7 @@ function applyCommunityPreset(p) {
   schedule = p.schedule.map(row => [...row]);
   manual = [...p.manual];
   activePresetKey = '';
-  buildSliders();
-  buildNowBars();
+  buildSliders(); buildNowBars(); updateChart();
   if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
   document.getElementById('presetDesc').textContent = p.notes || 'Imported community preset';
   return true;
@@ -2363,6 +2419,27 @@ let mobileChart = null;
 
 function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
+let hsHour     = null;
+let hsChName   = null;
+let hsWheelDeb = null;
+const WHEEL_ITEM_H = 44;
+
+const selectedHourPlugin = {
+  id: 'selectedHour',
+  afterDraw(chart) {
+    if (hsHour === null) return;
+    const { ctx, chartArea, scales } = chart;
+    const x0 = scales.x.getPixelForValue(0);
+    const x1 = scales.x.getPixelForValue(1);
+    const barW = x1 - x0;
+    const x  = scales.x.getPixelForValue(hsHour);
+    ctx.save();
+    ctx.fillStyle = 'rgba(99,102,241,0.18)';
+    ctx.fillRect(x - barW / 2, chartArea.top, barW, chartArea.bottom - chartArea.top);
+    ctx.restore();
+  }
+};
+
 const nowLinePlugin = {
   id: 'nowLine',
   afterDraw(c) {
@@ -2386,12 +2463,13 @@ const nowLinePlugin = {
 };
 
 function initChart() {
-  const ctx = document.getElementById('schedChart')?.getContext('2d');
+  const canvas = document.getElementById('schedChart');
+  const ctx = canvas?.getContext('2d');
   if (!ctx) return;
   mobileChart = new Chart(ctx, {
     type: 'line',
     data: { labels: Array.from({length:24}, (_,h) => `${String(h).padStart(2,'0')}:00`), datasets: [] },
-    plugins: [nowLinePlugin],
+    plugins: [nowLinePlugin, selectedHourPlugin],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       plugins: {
@@ -2407,6 +2485,37 @@ function initChart() {
       elements: { point:{ radius:0, hoverRadius:0 }, line:{ borderWidth:1.5 } },
     }
   });
+
+  // Tap to edit an hour
+  let tapX, tapY;
+  canvas.addEventListener('touchstart', e => {
+    tapX = e.touches[0].clientX; tapY = e.touches[0].clientY;
+  }, { passive: true });
+  canvas.addEventListener('touchend', e => {
+    const t = e.changedTouches[0];
+    if (Math.abs(t.clientX - tapX) < 12 && Math.abs(t.clientY - tapY) < 12) {
+      const h = Math.round(mobileChart.scales.x.getValueForPixel(t.clientX - canvas.getBoundingClientRect().left));
+      if (h >= 0 && h <= 23) { e.preventDefault(); openHourSheet(h); }
+    }
+  }, { passive: false });
+  canvas.addEventListener('click', e => {
+    const h = Math.round(mobileChart.scales.x.getValueForPixel(e.clientX - canvas.getBoundingClientRect().left));
+    if (h >= 0 && h <= 23) openHourSheet(h);
+  });
+}
+
+function effectiveChartValue(h, chName, chIdx) {
+  const mins = h * 60;
+  let v = (schedule[h][2 + chIdx] || 0) * siestaFactorAt(mins);
+  if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
+    const lunarFloor = lunarState.max_intensity * (lunarState.illumination ?? 100) / 100;
+    const lunarWin   = lunarWindow(lunarState);
+    if (_minsInWindow(mins, lunarWin.start, lunarWin.end)) {
+      if (chName === 'royal_blue') v = Math.max(v, lunarFloor);
+      else if (chName === 'cyan')  v = Math.max(v, lunarFloor * 0.7);
+    }
+  }
+  return Math.min(100, Math.round(v));
 }
 
 function updateChart() {
@@ -2419,7 +2528,7 @@ function updateChart() {
     const lineColor = (ch === 'white' && light) ? '#888888' : CH[ch].css;
     return {
       label: CH[ch].label,
-      data: schedule.map(row => row[2 + ci]),
+      data: schedule.map((row, h) => effectiveChartValue(h, ch, ci)),
       borderColor: lineColor,
       backgroundColor: `rgba(${r},${g},${b},0.15)`,
       fill: true, tension: 0.35,
@@ -2433,6 +2542,120 @@ function updateChart() {
   mobileChart.update('none');
 }
 
+// ── Hour editor ──────────────────────────────────────────────────────────
+function openHourSheet(h) {
+  hsHour = Math.max(0, Math.min(23, h));
+  const channels = chs();
+  if (!hsChName || !channels.includes(hsChName)) hsChName = channels[0];
+  document.getElementById('hourSheet').removeAttribute('hidden');
+  renderHourSheet();
+  // Scroll chart into view just below the sticky header
+  const chartCard = document.getElementById('schedChart').closest('.card');
+  const headerH   = document.querySelector('.hdr').offsetHeight;
+  const y = chartCard.getBoundingClientRect().top + window.scrollY - headerH - 8;
+  window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+}
+
+function closeHourSheet() {
+  document.getElementById('hourSheet').setAttribute('hidden', '');
+  hsHour = null;
+  if (mobileChart) mobileChart.update('none');
+}
+
+function stepHour(d) {
+  hsHour = Math.max(0, Math.min(23, hsHour + d));
+  renderHourSheet();
+}
+
+function renderHourSheet() {
+  document.getElementById('hsTitle').textContent = `Hour ${String(hsHour).padStart(2,'0')}`;
+  renderHsChips();
+  renderHsWheel();
+  document.getElementById('hsNote').textContent = '';
+  if (mobileChart) mobileChart.update('none');
+}
+
+function renderHsChips() {
+  const channels = chs();
+  document.getElementById('hsChips').innerHTML = channels.map(ch => {
+    const c   = CH[ch];
+    const idx = channels.indexOf(ch);
+    const val = schedule[hsHour][2 + idx] ?? 0;
+    const active = ch === hsChName;
+    return `<div class="hs-chip${active ? ' active' : ''}"
+                 style="${active ? `--hs-ch-css:${c.css};--hs-ch-bg:${c.css}22` : ''}"
+                 onclick="selectHsCh('${ch}')">
+      <div style="width:9px;height:9px;border-radius:50%;background:${c.css};flex-shrink:0"></div>
+      <span>${c.label}</span>
+      <span class="hs-chip-val" id="hsv-${ch}">${val}%</span>
+    </div>`;
+  }).join('');
+}
+
+function selectHsCh(ch) {
+  hsChName = ch;
+  renderHsChips();
+  renderHsWheel();
+  document.getElementById('hsNote').textContent = '';
+}
+
+function renderHsWheel() {
+  const channels = chs();
+  const chIdx = channels.indexOf(hsChName);
+  const val   = schedule[hsHour][2 + chIdx] ?? 0;
+  const light = document.documentElement.dataset.theme === 'light';
+  const color = light ? CH[hsChName].darkCss : CH[hsChName].css;
+
+  let items = '';
+  for (let i = 0; i <= 100; i++) items += `<div class="wheel-item">${i}</div>`;
+
+  document.getElementById('hsWheelWrap').innerHTML = `
+    <div class="wheel-outer">
+      <div class="wheel-sel-bar"></div>
+      <div class="wheel-scroll" id="hsWheel" style="color:${color}">
+        <div style="height:${2 * WHEEL_ITEM_H}px"></div>
+        ${items}
+        <div style="height:${2 * WHEEL_ITEM_H}px"></div>
+      </div>
+    </div>`;
+
+  const wheel = document.getElementById('hsWheel');
+  wheel.scrollTop = val * WHEEL_ITEM_H;
+  wheel.addEventListener('scroll', () => {
+    clearTimeout(hsWheelDeb);
+    hsWheelDeb = setTimeout(() => onWheelSettle(wheel), 120);
+  }, { passive: true });
+}
+
+function onWheelSettle(wheel) {
+  const val = Math.max(0, Math.min(100, Math.round(wheel.scrollTop / WHEEL_ITEM_H)));
+  wheel.scrollTop = val * WHEEL_ITEM_H;
+  applyHsValue(val);
+}
+
+function applyHsValue(val) {
+  const channels = chs();
+  const chIdx  = channels.indexOf(hsChName);
+  const oldVal = schedule[hsHour][2 + chIdx] ?? 0;
+  if (val === oldVal) return;
+
+  // Forward plateau fill: from hsHour, extend across consecutive hours with same old value
+  let end = hsHour;
+  while (end < 23 && (schedule[end + 1][2 + chIdx] ?? 0) === oldVal) end++;
+  for (let i = hsHour; i <= end; i++) schedule[i][2 + chIdx] = val;
+
+  const noteEl = document.getElementById('hsNote');
+  noteEl.textContent = end > hsHour
+    ? `Applied to hours ${String(hsHour).padStart(2,'0')}–${String(end).padStart(2,'0')}`
+    : '';
+
+  const chipVal = document.getElementById(`hsv-${hsChName}`);
+  if (chipVal) chipVal.textContent = val + '%';
+
+  updateChart();
+  if (document.getElementById('schedCollapse').classList.contains('open')) updateSchedTable();
+}
+
 // ── Theme ────────────────────────────────────────────────────────────────
 function toggleTheme() {
   const light = document.documentElement.getAttribute('data-theme') === 'light';
@@ -2441,6 +2664,7 @@ function toggleTheme() {
   document.getElementById('themeBtn').textContent = next === 'light' ? '🌙' : '☀';
   localStorage.setItem('k7-theme', next);
   updateChart();
+  if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────

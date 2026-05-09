@@ -18,8 +18,8 @@ ShowUnInstDetails hide
 ; Modern UI
 !include "MUI2.nsh"
 !define MUI_ABORTWARNING
-!define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
-!define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
+!define MUI_ICON "${ICONFILE}"
+!define MUI_UNICON "${ICONFILE}"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
@@ -34,14 +34,15 @@ Section "Install"
     SetOutPath "${INST_DIR}"
     File "${SRCDIR}\k7-bridge.exe"
     File "${SRCDIR}\README.txt"
+    File "${SRCDIR}\k7-bridge.ico"
     ; Desktop shortcut
     CreateShortcut "$DESKTOP\K7 Bridge.lnk" "${INST_DIR}\${APP_EXE}" \
-        "" "${INST_DIR}\${APP_EXE}" 0 SW_SHOWMINIMIZED
+        "" "${INST_DIR}\k7-bridge.ico" 0 SW_SHOWMINIMIZED
 
     ; Start Menu shortcuts
     CreateDirectory "$SMPROGRAMS\K7 Bridge"
     CreateShortcut "$SMPROGRAMS\K7 Bridge\K7 Bridge.lnk" "${INST_DIR}\${APP_EXE}" \
-        "" "${INST_DIR}\${APP_EXE}" 0 SW_SHOWMINIMIZED
+        "" "${INST_DIR}\k7-bridge.ico" 0 SW_SHOWMINIMIZED
     CreateShortcut "$SMPROGRAMS\K7 Bridge\Uninstall K7 Bridge.lnk" \
         "${INST_DIR}\uninstall.exe"
 
@@ -66,6 +67,7 @@ SectionEnd
 Section "Uninstall"
     Delete "${INST_DIR}\k7-bridge.exe"
     Delete "${INST_DIR}\README.txt"
+    Delete "${INST_DIR}\k7-bridge.ico"
     Delete "${INST_DIR}\uninstall.exe"
     RMDir  "${INST_DIR}"
 

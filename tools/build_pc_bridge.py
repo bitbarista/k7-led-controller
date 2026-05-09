@@ -18,6 +18,7 @@ DEFAULT_OUT = ROOT / "dist" / "pc-bridge"
 NSI_TEMPLATE = ROOT / "tools" / "k7-bridge-installer.nsi.template"
 APPIMAGE_TOOL = ROOT / "tools" / "appimagetool-x86_64.AppImage"
 APP_ICON_PNG = ROOT / "tools" / "k7-bridge-icon.png"
+APP_ICON_ICO = ROOT / "tools" / "k7-bridge.ico"
 
 TARGETS = {
     "linux-amd64": {
@@ -123,6 +124,8 @@ def copy_runtime_files(package_dir: Path, target: str, version: str) -> None:
     if target.startswith("linux-"):
         launcher_path.chmod(0o755)
     (package_dir / "README.txt").write_text(readme_text(version, target), encoding="utf-8")
+    if target.startswith("windows-") and APP_ICON_ICO.exists():
+        shutil.copy2(APP_ICON_ICO, package_dir / "k7-bridge.ico")
 
 
 def build_appimage(package_dir: Path, version: str, out_dir: Path) -> Path | None:
@@ -180,6 +183,7 @@ def build_nsis_installer(package_dir: Path, version: str, out_dir: Path) -> Path
         .replace("${VERSION}", version)
         .replace("${OUTFILE}", str(outfile))
         .replace("${SRCDIR}", str(package_dir))
+        .replace("${ICONFILE}", str(package_dir / "k7-bridge.ico"))
     )
     with tempfile.NamedTemporaryFile(suffix=".nsi", mode="w", encoding="utf-8", delete=False) as f:
         f.write(nsi)

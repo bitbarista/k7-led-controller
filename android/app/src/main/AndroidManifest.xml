@@ -6,7 +6,9 @@
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme"
-        android:label="K7 Controller">
+        android:label="K7 Controller"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
         <activity
             android:name=".MainActivity"
             android:configChanges="keyboardHidden|orientation|screenSize"
