@@ -13,6 +13,7 @@ local.properties
 .env
 profiles.json
 lightning_schedule.json
+k7-pc-bridge.json
 
 # PC development server (kept locally for reference, not part of this project)
 server.py
