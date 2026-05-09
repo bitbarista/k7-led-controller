@@ -28,26 +28,31 @@
   --cal-icon-filter:      invert(0.6);
 }
 [data-theme="light"] {
-  --bg:                   #ffffff;
-  --surface:              #f6f8fa;
-  --surface2:             #eaeef2;
-  --border:               rgba(0,0,0,0.12);
+  --bg:                   #edf1f5;
+  --surface:              #ffffff;
+  --surface2:             #d0d8e0;
+  --border:               rgba(0,0,0,0.15);
   --text:                 #24292f;
   --muted:                #57606a;
-  --hover:                #d0d7de;
+  --hover:                #bcc6d0;
   --chart-grid:           rgba(0,0,0,0.07);
   --nowline:              rgba(0,0,0,0.4);
   --nowline-label:        rgba(0,0,0,0.6);
   --slider-thumb-border:  rgba(0,0,0,0.35);
   --master-thumb-bg:      #57606a;
-  --sched-cell-border:    rgba(0,0,0,0.06);
-  --input-focus-border:   rgba(0,0,0,0.25);
+  --sched-cell-border:    rgba(0,0,0,0.10);
+  --input-focus-border:   rgba(0,0,0,0.30);
   --on-maintenance-text:  #334155;
   --publink-bg:           rgba(3,105,161,0.12);
   --publink-border:       rgba(3,105,161,0.4);
   --publink-text:         #0369a1;
   --cal-icon-filter:      none;
 }
+[data-theme="light"] .fx-tog.on-ramp     { color: #0284c7; }
+[data-theme="light"] .fx-tog.on-lunar    { color: #4338ca; }
+[data-theme="light"] .fx-tog.on-seasonal { color: #b45309; }
+[data-theme="light"] .fx-tog.on-maintenance { border-color: rgba(100,116,139,0.6); background: rgba(100,116,139,0.12); }
+[data-theme="light"] .sched-tbl tr.cur td { background: rgba(2,132,199,0.14); }
 * { box-sizing: border-box; }
 body {
   background: var(--bg);
@@ -159,6 +164,7 @@ body {
 .ch-slider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
   cursor: pointer; border: 2px solid var(--slider-thumb-border);
+  background: var(--ch-color, #888);
 }
 .ch-val { width: 40px; text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .apply-row { padding: 12px 14px; }
@@ -748,14 +754,17 @@ button:disabled { opacity: 0.4; }
 <script>
 // ── Channel metadata ─────────────────────────────────────────────────────
 const CH = {
-  uv:         { label:'UV',         rgb:[138,43,226],  css:'#8b2be2' },
-  royal_blue: { label:'Royal Blue', rgb:[65,105,225],  css:'#4169e1' },
-  blue:       { label:'Blue',       rgb:[30,144,255],  css:'#1e90ff' },
-  green:      { label:'Green',      rgb:[40,220,40],   css:'#28dc28' },
-  white:      { label:'White',      rgb:[210,210,210], css:'#d2d2d2' },
-  cyan:       { label:'Cyan',       rgb:[120,220,255], css:'#78dcff' },
-  red:        { label:'Red',        rgb:[220,50,50],   css:'#dc3232' },
+  uv:         { label:'UV',         rgb:[138,43,226],  css:'#8b2be2', darkCss:'#7c3aed' },
+  royal_blue: { label:'Royal Blue', rgb:[65,105,225],  css:'#4169e1', darkCss:'#1d4ed8' },
+  blue:       { label:'Blue',       rgb:[30,144,255],  css:'#1e90ff', darkCss:'#1d6fcc' },
+  green:      { label:'Green',      rgb:[40,220,40],   css:'#28dc28', darkCss:'#15803d' },
+  white:      { label:'White',      rgb:[210,210,210], css:'#d2d2d2', darkCss:'#64748b' },
+  cyan:       { label:'Cyan',       rgb:[120,220,255], css:'#78dcff', darkCss:'#0891b2' },
+  red:        { label:'Red',        rgb:[220,50,50],   css:'#dc3232', darkCss:'#b91c1c' },
 };
+function chTextColor(ch) {
+  return document.documentElement.dataset.theme === 'light' ? CH[ch].darkCss : CH[ch].css;
+}
 const DEVICES = {
   k7mini: { channels:['white','royal_blue','blue'] },
   k7pro:  { channels:['white','royal_blue','green','uv','cyan','red'] },
@@ -1055,7 +1064,7 @@ function buildSliders() {
       <div class="ch-swatch" style="background:${c.css}"></div>
       <span class="ch-name">${c.label}</span>
       <input type="range" class="ch-slider" min="0" max="100" value="${manual[i]||0}"
-             style="accent-color:${c.css}"
+             style="accent-color:${c.css};--ch-color:${c.css}"
              oninput="onSlider(${i},this.value)" onchange="previewManual()">
       <span class="ch-val" id="sv${i}">${manual[i]||0}%</span>
     </div>`;
@@ -1196,14 +1205,14 @@ function buildSchedTable() {
   const channels = chs(), cur = new Date().getHours();
   document.getElementById('schedThead').innerHTML =
     '<th>Hr</th>' + channels.map(ch =>
-      `<th style="color:${CH[ch].css}">${CH[ch].label.replace(' ','<br>')}</th>`
+      `<th style="color:${chTextColor(ch)}">${CH[ch].label.replace(' ','<br>')}</th>`
     ).join('');
   document.getElementById('schedTbody').innerHTML = schedule.map((row,h) =>
     `<tr id="sr${h}" class="${h===cur?'cur':''}">
       <td>${String(h).padStart(2,'0')}</td>
       ${channels.map((ch,i) =>
         `<td><input type="number" min="0" max="100" value="${row[2+i]||0}"
-           style="color:${CH[ch].css}"
+           style="color:${chTextColor(ch)}"
            onchange="onCell(${h},${i},this.value)"></td>`
       ).join('')}
     </tr>`
@@ -1253,7 +1262,7 @@ function buildWizardChannels() {
       <div class="ch-swatch" style="background:${c.css}"></div>
       <span class="ch-name">${c.label}</span>
       <input type="range" class="ch-slider" min="0" max="100" value="${def}"
-             style="accent-color:${c.css}"
+             style="accent-color:${c.css};--ch-color:${c.css}"
              oninput="document.getElementById('wzv${i}').textContent=this.value+'%'">
       <span class="ch-val" id="wzv${i}">${def}%</span>
     </div>`;
@@ -2441,6 +2450,7 @@ function toggleTheme() {
   document.getElementById('themeBtn').textContent = next === 'light' ? '🌙' : '☀';
   localStorage.setItem('k7-theme', next);
   updateChart();
+  if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────
