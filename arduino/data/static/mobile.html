@@ -2457,7 +2457,9 @@ const nowLinePlugin = {
     ctx.strokeStyle = cssVar('--nowline'); ctx.lineWidth = 1.5; ctx.setLineDash([4,4]); ctx.stroke();
     ctx.setLineDash([]);
     ctx.font = '600 10px system-ui,sans-serif'; ctx.fillStyle = cssVar('--nowline-label');
-    ctx.textAlign = 'center'; ctx.fillText(label, x, ys.top - 4);
+    const labelW = ctx.measureText(label).width;
+    const align = x + labelW / 2 > c.chartArea.right ? 'right' : (x - labelW / 2 < c.chartArea.left ? 'left' : 'center');
+    ctx.textAlign = align; ctx.fillText(label, x, ys.top - 4);
     ctx.restore();
   }
 };
@@ -2472,12 +2474,15 @@ function initChart() {
     plugins: [nowLinePlugin, selectedHourPlugin],
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { right: 20 } },
       plugins: {
         legend: { position:'bottom', labels:{ color:cssVar('--text'), boxWidth:10, font:{size:10} } },
         tooltip: { enabled: false },
       },
       scales: {
-        x: { ticks:{ color:cssVar('--muted'), font:{size:9}, maxRotation:0 }, grid:{ color:cssVar('--chart-grid') } },
+        x: { ticks:{ color:cssVar('--muted'), font:{size:9}, maxRotation:0, autoSkip:false,
+               callback:(v,i) => i===23 ? '00:00' : (i%4===0 ? `${String(i).padStart(2,'0')}:00` : null) },
+             grid:{ color:cssVar('--chart-grid') }, afterFit(axis) { axis.paddingRight = 8; } },
         y: { min:0, max:105,
              ticks:{ color:cssVar('--muted'), font:{size:9}, callback: v => v<=100 ? v+'%':'' },
              grid:{ color:cssVar('--chart-grid') } }
@@ -2504,6 +2509,21 @@ function initChart() {
   });
 }
 
+function shiftedCompositeAt(wallClockH) {
+  const totalShift = scheduleShiftMinutes + seasonalShiftNow();
+  const baseMins = ((wallClockH * 60 - totalShift) % 1440 + 1440) % 1440;
+  const baseH    = Math.floor(baseMins / 60) % 24;
+  const baseFrac = (baseMins % 60) / 60;
+  const chs = DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels;
+  let total = 0;
+  for (let ci = 0; ci < chs.length; ci++) {
+    const lo = schedule[baseH][2 + ci] || 0;
+    const hi = schedule[(baseH + 1) % 24][2 + ci] || 0;
+    total += lo + baseFrac * (hi - lo);
+  }
+  return Math.min(100, Math.round(total / chs.length));
+}
+
 function effectiveChartValue(h, chName, chIdx) {
   const mins = h * 60;
   let v = (schedule[h][2 + chIdx] || 0) * siestaFactorAt(mins);
@@ -2522,7 +2542,7 @@ function updateChart() {
   if (!mobileChart) return;
   const chs   = DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels;
   const light = document.documentElement.getAttribute('data-theme') === 'light';
-  mobileChart.data.datasets = chs.map(ch => {
+  const datasets = chs.map(ch => {
     const ci = chs.indexOf(ch);
     const [r,g,b] = CH[ch].rgb;
     const lineColor = (ch === 'white' && light) ? '#888888' : CH[ch].css;
@@ -2534,6 +2554,21 @@ function updateChart() {
       fill: true, tension: 0.35,
     };
   });
+  const totalShift = scheduleShiftMinutes + seasonalShiftNow();
+  if (Math.abs(totalShift) >= 15) {
+    const sign = totalShift > 0 ? '+' : '';
+    datasets.push({
+      label: `Effective today (${sign}${totalShift} min)`,
+      data: Array.from({length: 24}, (_, h) => shiftedCompositeAt(h)),
+      borderColor: light ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.6)',
+      backgroundColor: 'transparent',
+      fill: false,
+      tension: 0.35,
+      borderDash: [5, 4],
+      borderWidth: 2,
+    });
+  }
+  mobileChart.data.datasets = datasets;
   mobileChart.options.plugins.legend.labels.color = cssVar('--text');
   mobileChart.options.scales.x.ticks.color  = cssVar('--muted');
   mobileChart.options.scales.x.grid.color   = cssVar('--chart-grid');
