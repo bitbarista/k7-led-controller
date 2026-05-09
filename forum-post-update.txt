@@ -1,30 +1,52 @@
-Update: mobile schedule chart editor, new app icon, and download page
+Update: PC Bridge app, Android app, mobile schedule chart editor, and more
 
-A few nice additions since the last update.
+The biggest additions since the last update are two new ways to control the lamp — one for desktop, one for Android.
+
+
+PC Bridge (Windows & Linux)
+
+The K7 Controller is no longer ESP32-only. The PC Bridge is a small program that runs on your Windows or Linux PC and talks directly to the lamp over WiFi. It serves the full controller UI in your browser — the same schedule editor, presets, profiles, and push that you get on the ESP32 version.
+
+No hardware to buy. Download, run, connect to the lamp's WiFi, and you're in.
+
+Windows: run the installer, double-click the desktop shortcut.
+Linux: download the AppImage, make it executable, double-click.
+
+Download links are on the setup guide (see below).
+
+
+Android App
+
+There's now a native Android app. Same idea as the PC Bridge — it runs a local bridge inside your phone and talks to the lamp directly over WiFi. Full schedule editing, community presets, profiles, backup/restore, and push. No ESP32 required.
+
+Not on the Play Store yet (Google charges a publishing fee for a free open-source project). Sideloading takes about two minutes — the setup guide walks through it step by step.
 
 
 Mobile schedule chart editor
 
-This is the big one. The Android app (and mobile browser on the ESP32 version) now has a proper interactive schedule chart — the same visual graph you get on desktop. Tap any hour bar to select it, then scroll up or down to adjust the brightness. The colour preview strip updates live as you edit so you can see the blended output across the day at a glance.
+Both the Android app and the mobile browser view now have a proper interactive schedule chart. Tap any hour bar and scroll to adjust brightness. The colour preview strip updates live so you can see the blended output across the day as you edit.
 
-Before this, editing a schedule on mobile meant using the trapezoidal generator (good for quick sunrise/sunset shapes) or the granular list (fine-grained but a bit tedious). The chart editor gives you the full desktop experience in your hand. Once you're happy, tap Push and it goes straight to the lamp.
+The trapezoidal generator and granular list editors are still there, but the chart is a much better starting point for most edits.
 
-The trapezoidal and granular editors are still there if you prefer them — the chart is just a much better starting point for most edits.
+
+Community preset browser
+
+All variants — ESP32, PC Bridge, and Android — now include a built-in browser for the community presets. Browse and apply any preset without leaving the app.
 
 
 New app icon
 
-Gave the app a proper icon — shows in the launcher, the taskbar, and the Windows installer. Small thing but it makes it feel a lot more finished.
+A proper icon across all variants: launcher, taskbar, Windows exe, and installer. Small thing but it makes it feel a lot more finished.
 
 
 Download page
 
-The setup guide now has a downloads section right at the top — buttons for Windows, Linux, and Android that always link to the current release automatically. No hunting through the GitHub releases page. Direct link: https://bitbarista.github.io/k7-led-controller/guide.html
+The setup guide now has a downloads section at the top — buttons for Windows, Linux, and Android that always link to the current release automatically. No hunting through GitHub.
 
 
 What works on PC/Android
 
-Full schedule chart editor (new), all built-in presets, community preset browser, profiles, backup/restore, push to lamp.
+Full schedule chart editor, all built-in presets, community preset browser, profiles, backup/restore, push to lamp.
 
 
 What still needs the ESP32
@@ -34,7 +56,7 @@ Smooth Ramp, Feed mode, Maintenance mode, Acclimation, Seasonal Shift — anythi
 
 A note on Android and iOS availability
 
-The Android app isn't on the Play Store because Google charges a registration fee to publish there, and this is a free open-source project. There's no iOS version for the same reason: Apple requires an annual developer fee. If either of those situations changes in the future I'll look at it, but for now Android sideloading is straightforward and only takes a couple of minutes — the setup guide walks you through it.
+The Android app isn't on the Play Store because Google charges a registration fee to publish there, and this is a free open-source project. There's no iOS version for the same reason: Apple requires an annual developer fee. If either changes in future I'll look at it, but Android sideloading is straightforward and the guide covers it.
 
 
 Links
