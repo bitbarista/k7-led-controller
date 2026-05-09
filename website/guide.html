@@ -232,6 +232,35 @@
     }
 
     .footer-nav { text-align: center; font-size: 0.875rem; color: #64748b; margin-top: 2rem; }
+
+    /* ── Downloads ── */
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+    .download-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 1.1rem 0.75rem;
+      border-radius: 10px;
+      border: 2px solid #e2e8f0;
+      background: #fff;
+      text-decoration: none;
+      color: #0f172a;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      cursor: pointer;
+    }
+    .download-btn:hover { border-color: #0369a1; box-shadow: 0 2px 8px rgba(3,105,161,0.12); text-decoration: none; }
+    .download-btn.disabled { opacity: 0.45; pointer-events: none; }
+    .download-icon { font-size: 2rem; }
+    .download-label { font-weight: 700; font-size: 0.95rem; }
+    .download-sub { font-size: 0.75rem; color: #64748b; text-align: center; }
+    .download-version { font-size: 0.7rem; color: #94a3b8; margin-top: 0.1rem; }
+    .download-loading { text-align: center; color: #94a3b8; font-size: 0.875rem; padding: 1rem 0; }
   </style>
 </head>
 <body>
@@ -352,6 +381,18 @@
       </div>
       <div class="tip">
         The <strong>ESP32 controller</strong> costs very little, runs all the advanced features 24/7, and is accessible from any phone or browser on the lamp's WiFi. The <strong>PC Bridge</strong> and <strong>Android app</strong> are a good fit if you want to configure a schedule without adding hardware — they don't run continuously, so runtime effects like Smooth Ramp won't apply between sessions.
+      </div>
+    </div>
+
+    <!-- Downloads -->
+    <div class="card" id="downloads">
+      <h3>Downloads</h3>
+      <p>Everything is free. Pick the right download for your device, or use the <a href="flash.html">browser flasher</a> if you have an ESP32 board.</p>
+      <div class="download-grid" id="downloadGrid">
+        <div class="download-loading">Loading latest release&hellip;</div>
+      </div>
+      <div class="tip" style="margin-top:1.25rem">
+        <strong>Android users:</strong> After downloading the APK you will need to allow installation from unknown sources — the app is not yet on the Play Store. See the <a href="#android-app">Android setup section</a> below for step-by-step instructions.
       </div>
     </div>
 
@@ -647,5 +688,94 @@
     <a href="https://ko-fi.com/bitbarista">Ko-fi</a>
   </footer>
 
+  <script>
+    (function () {
+      const REPO = 'bitbarista/k7-led-controller';
+      const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
+
+      const PLATFORMS = [
+        {
+          id: 'esp32',
+          icon: '🔌',
+          label: 'ESP32 Flash',
+          sub: 'SuperMini &amp; XIAO',
+          href: 'flash.html',
+          version: null,
+          match: null,
+        },
+        {
+          id: 'windows',
+          icon: '🖥',
+          label: 'Windows',
+          sub: 'Installer (.exe)',
+          match: a => a.name.match(/^k7-bridge-setup-v.*\.exe$/i),
+        },
+        {
+          id: 'linux',
+          icon: '🐧',
+          label: 'Linux',
+          sub: 'AppImage (x86-64)',
+          match: a => a.name.match(/^K7-Bridge-v.*-x86_64\.AppImage$/),
+        },
+        {
+          id: 'android',
+          icon: '📱',
+          label: 'Android',
+          sub: 'APK (sideload)',
+          match: a => a.name.match(/^K7-Controller-v.*\.apk$/i),
+        },
+      ];
+
+      function buildGrid(platforms) {
+        const grid = document.getElementById('downloadGrid');
+        grid.innerHTML = '';
+        for (const p of platforms) {
+          const a = document.createElement('a');
+          a.className = 'download-btn' + (p.href ? '' : ' disabled');
+          a.href = p.href || RELEASES_PAGE;
+          if (p.href && !p.href.startsWith('flash')) a.target = '_blank';
+          a.rel = 'noopener';
+          a.innerHTML = `
+            <span class="download-icon">${p.icon}</span>
+            <span class="download-label">${p.label}</span>
+            <span class="download-sub">${p.sub}</span>
+            ${p.version ? `<span class="download-version">${p.version}</span>` : ''}
+          `;
+          grid.appendChild(a);
+        }
+      }
+
+      async function loadDownloads() {
+        try {
+          const resp = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+            headers: { Accept: 'application/vnd.github+json' },
+          });
+          if (!resp.ok) throw new Error(resp.status);
+          const release = await resp.json();
+          const tag = release.tag_name || '';
+
+          const resolved = PLATFORMS.map(p => {
+            if (!p.match) return p;
+            const asset = (release.assets || []).find(p.match);
+            return {
+              ...p,
+              href: asset ? asset.browser_download_url : RELEASES_PAGE,
+              version: tag || null,
+            };
+          });
+          buildGrid(resolved);
+        } catch (_) {
+          // API failed — show static buttons pointing to releases page
+          const fallback = PLATFORMS.map(p => ({
+            ...p,
+            href: p.href || RELEASES_PAGE,
+          }));
+          buildGrid(fallback);
+        }
+      }
+
+      loadDownloads();
+    })();
+  </script>
 </body>
 </html>
