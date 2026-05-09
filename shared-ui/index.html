@@ -1154,7 +1154,9 @@ const nowLinePlugin = {
     ctx.strokeStyle = cssVar('--nowline'); ctx.lineWidth = 1.5; ctx.setLineDash([4,4]); ctx.stroke();
     ctx.setLineDash([]);
     ctx.font = '600 11px system-ui,sans-serif'; ctx.fillStyle = cssVar('--nowline-label');
-    ctx.textAlign = 'center'; ctx.fillText(label, x, ys.top - 5);
+    const labelW = ctx.measureText(label).width;
+    const align = x + labelW / 2 > chart.chartArea.right ? 'right' : (x - labelW / 2 < chart.chartArea.left ? 'left' : 'center');
+    ctx.textAlign = align; ctx.fillText(label, x, ys.top - 5);
     const shiftMins = signedShiftMinutes();
     if (shiftMins !== 0) {
       const shifted = _wrapMins(nowMins - shiftMins);
@@ -1251,6 +1253,7 @@ function initChart() {
     plugins: [nowLinePlugin],
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 20 } },
       interaction: { mode:'nearest', intersect:true },
       plugins: {
         legend: { position:'bottom', labels:{ color:cssVar('--text'), boxWidth:12, font:{size:12} } },
@@ -1263,7 +1266,9 @@ function initChart() {
         dragData: dragDataConfig,
       },
       scales: {
-        x: { ticks:{ color:cssVar('--muted'), font:{size:11} }, grid:{ color:cssVar('--chart-grid') } },
+        x: { ticks:{ color:cssVar('--muted'), font:{size:11}, autoSkip:false,
+               callback:(v,i) => i===23 ? '00:00' : (i%4===0 ? `${String(i).padStart(2,'0')}:00` : null) },
+             grid:{ color:cssVar('--chart-grid') }, afterFit(axis) { axis.paddingRight = 8; } },
         y: { min:0, max:105,
              ticks:{ color:cssVar('--muted'), font:{size:11}, callback: v => v <= 100 ? v+'%' : '' },
              grid:{ color:cssVar('--chart-grid') } }
