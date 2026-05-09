@@ -13,7 +13,10 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 
 > This is an independent, community-developed project. It is not affiliated with or endorsed by Noo-Psyche.
 
-![K7 LED Controller UI](docs/screenshot.png)
+<div align="center">
+<img src="docs/screenshot.png" alt="K7 LED Controller UI" width="90%">
+<br><em>ESP32 Controller — browser UI served from the board</em>
+</div>
 
 ## Variants
 
@@ -26,7 +29,11 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 The ESP32 controller is the full-featured option: a small board runs 24/7 beside the tank and provides the complete web interface from any device. The PC Bridge and Android app connect directly to the lamp for schedule editing but do not run continuously. All three share the same web UI.
 
 <div align="center">
-<img src="docs/screenshot-pc-bridge.png" alt="K7 PC Bridge" width="48%"> <img src="docs/screenshot-android.png" alt="K7 Android App" width="48%">
+<img src="docs/screenshot-pc-bridge.png" alt="K7 PC Bridge" width="90%">
+<br><em>PC Bridge — Windows &amp; Linux</em>
+<br><br>
+<img src="docs/screenshot-android.png" alt="K7 Android App" width="28%">
+<br><em>Android App</em>
 </div>
 
 ---
