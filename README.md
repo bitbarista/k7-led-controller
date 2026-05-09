@@ -25,12 +25,16 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 
 The ESP32 controller is the full-featured option: a small board runs 24/7 beside the tank and provides the complete web interface from any device. The PC Bridge and Android app connect directly to the lamp for schedule editing but do not run continuously. All three share the same web UI.
 
+<div align="center">
+<img src="docs/screenshot-pc-bridge.png" alt="K7 PC Bridge" width="48%"> <img src="docs/screenshot-android.png" alt="K7 Android App" width="48%">
+</div>
+
 ---
 
 ## Features
 
 - Read the current schedule and mode directly from the lamp
-- Edit the 24-hour lighting schedule on an interactive drag-and-drop chart
+- Edit the 24-hour lighting schedule on an interactive drag-and-drop chart (desktop) or the mobile chart editor with scroll-wheel hour editing
 - Additive colour preview strip showing the blended light output for each hour
 - Built-in preset library for Fish Only, LPS Reef, SPS Reef, Mixed Reef, Soft Mixed Reef, Acclimation Mixed, LPS Low Energy, Shallow SPS, and temporary Dino Suppression with dark overnight periods, practical coral photoperiods, and short dusk tails
 - Master brightness slider and per-channel intensity sliders (absolute output ceiling per channel)
