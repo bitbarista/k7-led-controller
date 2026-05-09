@@ -2457,7 +2457,9 @@ const nowLinePlugin = {
     ctx.strokeStyle = cssVar('--nowline'); ctx.lineWidth = 1.5; ctx.setLineDash([4,4]); ctx.stroke();
     ctx.setLineDash([]);
     ctx.font = '600 10px system-ui,sans-serif'; ctx.fillStyle = cssVar('--nowline-label');
-    ctx.textAlign = 'center'; ctx.fillText(label, x, ys.top - 4);
+    const labelW = ctx.measureText(label).width;
+    const align = x + labelW / 2 > c.chartArea.right ? 'right' : (x - labelW / 2 < c.chartArea.left ? 'left' : 'center');
+    ctx.textAlign = align; ctx.fillText(label, x, ys.top - 4);
     ctx.restore();
   }
 };
@@ -2477,7 +2479,7 @@ function initChart() {
         tooltip: { enabled: false },
       },
       scales: {
-        x: { ticks:{ color:cssVar('--muted'), font:{size:9}, maxRotation:0 }, grid:{ color:cssVar('--chart-grid') } },
+        x: { ticks:{ color:cssVar('--muted'), font:{size:9}, maxRotation:0 }, grid:{ color:cssVar('--chart-grid') }, afterFit(axis) { axis.paddingRight = 8; } },
         y: { min:0, max:105,
              ticks:{ color:cssVar('--muted'), font:{size:9}, callback: v => v<=100 ? v+'%':'' },
              grid:{ color:cssVar('--chart-grid') } }
