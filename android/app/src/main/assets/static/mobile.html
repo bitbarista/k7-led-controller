@@ -2574,6 +2574,7 @@ function updateChart() {
   mobileChart.options.scales.x.grid.color   = cssVar('--chart-grid');
   mobileChart.options.scales.y.ticks.color  = cssVar('--muted');
   mobileChart.options.scales.y.grid.color   = cssVar('--chart-grid');
+  mobileChart.resize();
   mobileChart.update('none');
 }
 
@@ -2714,6 +2715,9 @@ function toggleTheme() {
   }
   loadVersionInfo();
   await readFromDevice();
+  // Force a resize+redraw after layout settles — Android WebView may have
+  // initialised the chart before the canvas had its final dimensions.
+  setTimeout(() => { if (mobileChart) { mobileChart.resize(); mobileChart.update('none'); } }, 300);
 })();
 </script>
 </body>
