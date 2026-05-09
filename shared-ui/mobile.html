@@ -7,22 +7,46 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪸</text></svg>">
 <style>
 :root {
-  --bg:       #0d1117;
-  --surface:  #161b22;
-  --surface2: #1f2937;
-  --border:   rgba(255,255,255,0.10);
-  --text:     #c9d1d9;
-  --muted:    #6e7681;
-  --hover:    #2d3748;
+  --bg:                   #0d1117;
+  --surface:              #161b22;
+  --surface2:             #1f2937;
+  --border:               rgba(255,255,255,0.10);
+  --text:                 #c9d1d9;
+  --muted:                #6e7681;
+  --hover:                #2d3748;
+  --chart-grid:           rgba(255,255,255,0.05);
+  --nowline:              rgba(255,255,255,0.5);
+  --nowline-label:        rgba(255,255,255,0.7);
+  --slider-thumb-border:  rgba(255,255,255,0.35);
+  --master-thumb-bg:      #c9d1d9;
+  --sched-cell-border:    rgba(255,255,255,0.04);
+  --input-focus-border:   rgba(255,255,255,0.2);
+  --on-maintenance-text:  #e2e8f0;
+  --publink-bg:           rgba(3,105,161,0.34);
+  --publink-border:       rgba(56,189,248,0.65);
+  --publink-text:         #dbeafe;
+  --cal-icon-filter:      invert(0.6);
 }
 [data-theme="light"] {
-  --bg:       #ffffff;
-  --surface:  #f6f8fa;
-  --surface2: #eaeef2;
-  --border:   rgba(0,0,0,0.12);
-  --text:     #24292f;
-  --muted:    #57606a;
-  --hover:    #d0d7de;
+  --bg:                   #ffffff;
+  --surface:              #f6f8fa;
+  --surface2:             #eaeef2;
+  --border:               rgba(0,0,0,0.12);
+  --text:                 #24292f;
+  --muted:                #57606a;
+  --hover:                #d0d7de;
+  --chart-grid:           rgba(0,0,0,0.07);
+  --nowline:              rgba(0,0,0,0.4);
+  --nowline-label:        rgba(0,0,0,0.6);
+  --slider-thumb-border:  rgba(0,0,0,0.35);
+  --master-thumb-bg:      #57606a;
+  --sched-cell-border:    rgba(0,0,0,0.06);
+  --input-focus-border:   rgba(0,0,0,0.25);
+  --on-maintenance-text:  #334155;
+  --publink-bg:           rgba(3,105,161,0.12);
+  --publink-border:       rgba(3,105,161,0.4);
+  --publink-text:         #0369a1;
+  --cal-icon-filter:      none;
 }
 * { box-sizing: border-box; }
 body {
@@ -104,11 +128,10 @@ body {
 }
 .card-hd-row .card-hd { padding: 0; }
 .public-profile-link {
-  background: rgba(3,105,161,0.34);
-  border: 1px solid rgba(56,189,248,0.65);
+  background: var(--publink-bg);
+  border: 1px solid var(--publink-border);
   border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(14,165,233,0.12) inset;
-  color: #dbeafe;
+  color: var(--publink-text);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0;
@@ -117,7 +140,7 @@ body {
   text-transform: none;
   white-space: nowrap;
 }
-.public-profile-link:active { background: rgba(3,105,161,0.55); border-color: #7dd3fc; color: #ffffff; }
+.public-profile-link:active { opacity: 0.75; }
 
 /* ── Channel sliders ── */
 .ch-row {
@@ -135,7 +158,7 @@ body {
 }
 .ch-slider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
-  cursor: pointer; border: 2px solid rgba(255,255,255,0.25);
+  cursor: pointer; border: 2px solid var(--slider-thumb-border);
 }
 .ch-val { width: 40px; text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .apply-row { padding: 12px 14px; }
@@ -195,7 +218,7 @@ body {
 }
 .master-slider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
-  background: #c9d1d9; cursor: pointer; border: 2px solid rgba(255,255,255,0.25);
+  background: var(--master-thumb-bg); cursor: pointer; border: 2px solid var(--slider-thumb-border);
 }
 .master-val { width: 44px; text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 
@@ -253,13 +276,17 @@ body {
   padding: 6px 3px; text-align: center;
   color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 600;
 }
-.sched-tbl td { padding: 4px 2px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.sched-tbl td { padding: 4px 2px; text-align: center; border-bottom: 1px solid var(--sched-cell-border); }
 .sched-tbl tr.cur td { background: rgba(56,189,248,0.08); }
 .sched-tbl td input {
   width: 36px; background: transparent; border: 1px solid transparent;
   color: var(--text); text-align: center; font-size: 0.78rem; padding: 3px 1px; border-radius: 4px;
 }
-.sched-tbl td input:focus { border-color: rgba(255,255,255,0.2); background: var(--surface2); outline: none; }
+.sched-tbl td input:focus { border-color: var(--input-focus-border); background: var(--surface2); outline: none; }
+
+/* ── Schedule chart ── */
+.chart-wrap { height: 190px; position: relative; margin-top: 6px; }
+.chart-wrap canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
 
 /* ── Effects ── */
 .fx-card { border-top: 1px solid var(--border); }
@@ -275,7 +302,7 @@ body {
 }
 .fx-tog.on-ramp  { border-color: rgba(56,189,248,0.6);  background: rgba(56,189,248,0.12);  color: #38bdf8; }
 .fx-tog.on-feed  { border-color: rgba(249,115,22,0.6);  background: rgba(249,115,22,0.12);  color: #f97316; }
-.fx-tog.on-maintenance { border-color: rgba(203,213,225,0.65); background: rgba(203,213,225,0.12); color: #e2e8f0; }
+.fx-tog.on-maintenance { border-color: rgba(203,213,225,0.65); background: rgba(203,213,225,0.12); color: var(--on-maintenance-text); }
 .fx-tog.on-acclimation { border-color: rgba(16,185,129,0.6); background: rgba(16,185,129,0.12); color: #10b981; }
 .fx-tog.on-seasonal { border-color: rgba(234,179,8,0.6); background: rgba(234,179,8,0.12); color: #eab308; }
 .fx-tog.on-lunar { border-color: rgba(99,102,241,0.6);  background: rgba(99,102,241,0.15);  color: #818cf8; }
@@ -292,7 +319,7 @@ body {
   background: var(--surface2); border: 1px solid var(--border); color: var(--text);
   border-radius: 6px; padding: 7px 8px; font-size: 0.85rem; width: 105px;
 }
-.time-in::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+.time-in::-webkit-calendar-picker-indicator { filter: var(--cal-icon-filter); cursor: pointer; }
 .num-in {
   background: var(--surface2); border: 1px solid var(--border); color: var(--text);
   border-radius: 6px; padding: 7px 8px; font-size: 0.85rem; width: 60px; text-align: center;
@@ -328,6 +355,7 @@ body {
 button:disabled { opacity: 0.4; }
 .cap-hidden { display:none !important; }
 </style>
+<script src="/static/vendor/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -339,7 +367,6 @@ button:disabled { opacity: 0.4; }
   <span class="status-txt" id="statusMsg">Connecting…</span>
   <button id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark theme"
           class="hdr-btn" style="width:2.2em;text-align:center;padding:6px 0">☀</button>
-  <a href="/?view=desktop" class="hdr-btn">Desktop ↗</a>
 </div>
 
 <div class="consent-backdrop" id="rampConsentModal" hidden>
@@ -465,6 +492,14 @@ button:disabled { opacity: 0.4; }
 <div class="card" style="margin-top:10px" data-cap="logs">
   <div class="card-hd">Checks</div>
   <div class="warn-list" id="warningsList"></div>
+</div>
+
+<!-- Schedule chart -->
+<div class="card" style="margin-top:10px">
+  <div class="card-hd">Schedule Preview</div>
+  <div class="chart-wrap">
+    <canvas id="schedChart"></canvas>
+  </div>
 </div>
 
 <!-- Effects -->
@@ -713,13 +748,13 @@ button:disabled { opacity: 0.4; }
 <script>
 // ── Channel metadata ─────────────────────────────────────────────────────
 const CH = {
-  uv:         { label:'UV',         css:'#8b2be2' },
-  royal_blue: { label:'Royal Blue', css:'#4169e1' },
-  blue:       { label:'Blue',       css:'#1e90ff' },
-  green:      { label:'Green',      css:'#28dc28' },
-  white:      { label:'White',      css:'#d2d2d2' },
-  cyan:       { label:'Cyan',       css:'#78dcff' },
-  red:        { label:'Red',        css:'#dc3232' },
+  uv:         { label:'UV',         rgb:[138,43,226],  css:'#8b2be2' },
+  royal_blue: { label:'Royal Blue', rgb:[65,105,225],  css:'#4169e1' },
+  blue:       { label:'Blue',       rgb:[30,144,255],  css:'#1e90ff' },
+  green:      { label:'Green',      rgb:[40,220,40],   css:'#28dc28' },
+  white:      { label:'White',      rgb:[210,210,210], css:'#d2d2d2' },
+  cyan:       { label:'Cyan',       rgb:[120,220,255], css:'#78dcff' },
+  red:        { label:'Red',        rgb:[220,50,50],   css:'#dc3232' },
 };
 const DEVICES = {
   k7mini: { channels:['white','royal_blue','blue'] },
@@ -1256,6 +1291,7 @@ function wizardGenerate() {
   _suppressPoll('schedule');
   if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
   buildNowBars();
+  updateChart();
   setOk('Schedule generated — review then Push');
 }
 
@@ -1387,6 +1423,7 @@ async function readFromDevice() {
     renderWarnings(warnings);
 
     await loadPresetsProfiles();
+    updateChart();
     setOk((cfg.device==='k7mini' ? 'K7 Mini' : 'K7 Pro') + ' · ' + mode);
   } catch(e) {
     setErr(e.message);
@@ -2321,6 +2358,81 @@ function formatControllerClock(epochSeconds) {
   return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')}`;
 }
 
+// ── Schedule chart ───────────────────────────────────────────────────────
+let mobileChart = null;
+
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+const nowLinePlugin = {
+  id: 'nowLine',
+  afterDraw(c) {
+    const now  = new Date();
+    const hours = now.getHours() + now.getMinutes() / 60;
+    const xs = c.scales.x, ys = c.scales.y;
+    const h = Math.floor(hours);
+    const x1 = xs.getPixelForValue(h);
+    const x2 = h < 23 ? xs.getPixelForValue(h + 1) : x1;
+    const x  = x1 + (hours - h) * (x2 - x1);
+    const label = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const ctx = c.ctx;
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(x, ys.top); ctx.lineTo(x, ys.bottom);
+    ctx.strokeStyle = cssVar('--nowline'); ctx.lineWidth = 1.5; ctx.setLineDash([4,4]); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '600 10px system-ui,sans-serif'; ctx.fillStyle = cssVar('--nowline-label');
+    ctx.textAlign = 'center'; ctx.fillText(label, x, ys.top - 4);
+    ctx.restore();
+  }
+};
+
+function initChart() {
+  const ctx = document.getElementById('schedChart')?.getContext('2d');
+  if (!ctx) return;
+  mobileChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: Array.from({length:24}, (_,h) => `${String(h).padStart(2,'0')}:00`), datasets: [] },
+    plugins: [nowLinePlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: {
+        legend: { position:'bottom', labels:{ color:cssVar('--text'), boxWidth:10, font:{size:10} } },
+        tooltip: { enabled: false },
+      },
+      scales: {
+        x: { ticks:{ color:cssVar('--muted'), font:{size:9}, maxRotation:0 }, grid:{ color:cssVar('--chart-grid') } },
+        y: { min:0, max:105,
+             ticks:{ color:cssVar('--muted'), font:{size:9}, callback: v => v<=100 ? v+'%':'' },
+             grid:{ color:cssVar('--chart-grid') } }
+      },
+      elements: { point:{ radius:0, hoverRadius:0 }, line:{ borderWidth:1.5 } },
+    }
+  });
+}
+
+function updateChart() {
+  if (!mobileChart) return;
+  const chs   = DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels;
+  const light = document.documentElement.getAttribute('data-theme') === 'light';
+  mobileChart.data.datasets = chs.map(ch => {
+    const ci = chs.indexOf(ch);
+    const [r,g,b] = CH[ch].rgb;
+    const lineColor = (ch === 'white' && light) ? '#888888' : CH[ch].css;
+    return {
+      label: CH[ch].label,
+      data: schedule.map(row => row[2 + ci]),
+      borderColor: lineColor,
+      backgroundColor: `rgba(${r},${g},${b},0.15)`,
+      fill: true, tension: 0.35,
+    };
+  });
+  mobileChart.options.plugins.legend.labels.color = cssVar('--text');
+  mobileChart.options.scales.x.ticks.color  = cssVar('--muted');
+  mobileChart.options.scales.x.grid.color   = cssVar('--chart-grid');
+  mobileChart.options.scales.y.ticks.color  = cssVar('--muted');
+  mobileChart.options.scales.y.grid.color   = cssVar('--chart-grid');
+  mobileChart.update('none');
+}
+
 // ── Theme ────────────────────────────────────────────────────────────────
 function toggleTheme() {
   const light = document.documentElement.getAttribute('data-theme') === 'light';
@@ -2328,13 +2440,15 @@ function toggleTheme() {
   document.documentElement.setAttribute('data-theme', next);
   document.getElementById('themeBtn').textContent = next === 'light' ? '🌙' : '☀';
   localStorage.setItem('k7-theme', next);
+  updateChart();
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────
 (async function() {
-  const savedTheme = localStorage.getItem('k7-theme') || 'dark';
+  const savedTheme = localStorage.getItem('k7-theme') || 'light';
   document.documentElement.setAttribute('data-theme', savedTheme);
   document.getElementById('themeBtn').textContent = savedTheme === 'light' ? '🌙' : '☀';
+  initChart();
   await loadCapabilities();
   if (cap('persistent_controller_clock')) {
     try { await api('POST', '/api/time', {timestamp: Date.now() - new Date().getTimezoneOffset()*60000}); } catch(_) {}
