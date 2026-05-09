@@ -2504,6 +2504,21 @@ function initChart() {
   });
 }
 
+function shiftedCompositeAt(wallClockH) {
+  const totalShift = scheduleShiftMinutes + seasonalShiftNow();
+  const baseMins = ((wallClockH * 60 - totalShift) % 1440 + 1440) % 1440;
+  const baseH    = Math.floor(baseMins / 60) % 24;
+  const baseFrac = (baseMins % 60) / 60;
+  const chs = DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels;
+  let total = 0;
+  for (let ci = 0; ci < chs.length; ci++) {
+    const lo = schedule[baseH][2 + ci] || 0;
+    const hi = schedule[(baseH + 1) % 24][2 + ci] || 0;
+    total += lo + baseFrac * (hi - lo);
+  }
+  return Math.min(100, Math.round(total / chs.length));
+}
+
 function effectiveChartValue(h, chName, chIdx) {
   const mins = h * 60;
   let v = (schedule[h][2 + chIdx] || 0) * siestaFactorAt(mins);
@@ -2522,7 +2537,7 @@ function updateChart() {
   if (!mobileChart) return;
   const chs   = DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels;
   const light = document.documentElement.getAttribute('data-theme') === 'light';
-  mobileChart.data.datasets = chs.map(ch => {
+  const datasets = chs.map(ch => {
     const ci = chs.indexOf(ch);
     const [r,g,b] = CH[ch].rgb;
     const lineColor = (ch === 'white' && light) ? '#888888' : CH[ch].css;
@@ -2534,6 +2549,21 @@ function updateChart() {
       fill: true, tension: 0.35,
     };
   });
+  const totalShift = scheduleShiftMinutes + seasonalShiftNow();
+  if (Math.abs(totalShift) >= 15) {
+    const sign = totalShift > 0 ? '+' : '';
+    datasets.push({
+      label: `Effective today (${sign}${totalShift} min)`,
+      data: Array.from({length: 24}, (_, h) => shiftedCompositeAt(h)),
+      borderColor: light ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.6)',
+      backgroundColor: 'transparent',
+      fill: false,
+      tension: 0.35,
+      borderDash: [5, 4],
+      borderWidth: 2,
+    });
+  }
+  mobileChart.data.datasets = datasets;
   mobileChart.options.plugins.legend.labels.color = cssVar('--text');
   mobileChart.options.scales.x.ticks.color  = cssVar('--muted');
   mobileChart.options.scales.x.grid.color   = cssVar('--chart-grid');
