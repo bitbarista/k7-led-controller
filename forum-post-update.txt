@@ -1,0 +1,49 @@
+Update: mobile schedule chart editor, new app icon, and download page
+
+A few nice additions since the last update.
+
+
+Mobile schedule chart editor
+
+This is the big one. The Android app (and mobile browser on the ESP32 version) now has a proper interactive schedule chart — the same visual graph you get on desktop. Tap any hour bar to select it, then scroll up or down to adjust the brightness. The colour preview strip updates live as you edit so you can see the blended output across the day at a glance.
+
+Before this, editing a schedule on mobile meant using the trapezoidal generator (good for quick sunrise/sunset shapes) or the granular list (fine-grained but a bit tedious). The chart editor gives you the full desktop experience in your hand. Once you're happy, tap Push and it goes straight to the lamp.
+
+The trapezoidal and granular editors are still there if you prefer them — the chart is just a much better starting point for most edits.
+
+
+New app icon
+
+Gave the app a proper icon — shows in the launcher, the taskbar, and the Windows installer. Small thing but it makes it feel a lot more finished.
+
+
+Download page
+
+The setup guide now has a downloads section right at the top — buttons for Windows, Linux, and Android that always link to the current release automatically. No hunting through the GitHub releases page. Direct link: https://bitbarista.github.io/k7-led-controller/guide.html
+
+
+What works on PC/Android
+
+Full schedule chart editor (new), all built-in presets, community preset browser, profiles, backup/restore, push to lamp.
+
+
+What still needs the ESP32
+
+Smooth Ramp, Feed mode, Maintenance mode, Acclimation, Seasonal Shift — anything that needs to keep running while you're not connected. The ESP32 version isn't going anywhere.
+
+
+A note on Android and iOS availability
+
+The Android app isn't on the Play Store because Google charges a registration fee to publish there, and this is a free open-source project. There's no iOS version for the same reason: Apple requires an annual developer fee. If either of those situations changes in the future I'll look at it, but for now Android sideloading is straightforward and only takes a couple of minutes — the setup guide walks you through it.
+
+
+Links
+
+Setup guide + downloads (covers all variants): https://bitbarista.github.io/k7-led-controller/guide.html
+GitHub / releases / flash tool: https://github.com/bitbarista/k7-led-controller
+
+
+K7 Pro users — still would love feedback on whether the 6-channel presets look sensible on your setup.
+
+
+This is a spare-time community project — I do it because I enjoy it and hopefully it's useful to others. No guarantees, but happy to help where I can.
