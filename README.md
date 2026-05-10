@@ -24,7 +24,7 @@ An unofficial web-based controller for **Noo-Psyche K7 Mini** and **K7 Pro** LED
 |---------|----------|-------------------|
 | **ESP32 controller** *(recommended)* | Any phone or browser | Yes — Smooth Ramp, Lunar, Feed mode, and more |
 | **PC Bridge** | Windows, Linux | No — schedule push only |
-| **Android app** | Android | No — schedule push only |
+| **Android app** | Android | No — schedule push; Feed & Maintenance mode via home screen widget |
 
 The ESP32 controller is the full-featured option: a small board runs 24/7 beside the tank and provides the complete web interface from any device. The PC Bridge and Android app connect directly to the lamp for schedule editing but do not run continuously. All three share the same web UI.
 

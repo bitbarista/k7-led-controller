@@ -8,8 +8,18 @@ Connect your phone to the lamp's WiFi before using Read, Preview, or Push.
 **What the Android app can and can't do:**
 
 - ✓ Edit and push schedules, read the lamp, save profiles and backups
-- ✗ Smooth Ramp, Feed mode, Maintenance mode, Acclimation, Seasonal Shift
-  — these always-on features require the ESP32 controller
+- ✓ Feed mode and Maintenance mode — via the home screen widget (works without the app open)
+- ✗ Smooth Ramp, Acclimation, Seasonal Shift — these always-on features require the ESP32 controller
+
+## Home screen widget
+
+The app includes a **K7 Feed & Maintenance** home screen widget. Long-press your home screen, choose Widgets, and add it. The widget works independently — the app does not need to be open.
+
+- Tap **Feed** to start a 10-minute bright-white boost for feeding; tap again to cancel early
+- Tap **Maintenance** to start a 30-minute balanced inspection light; tap again to cancel early
+- A live countdown timer appears below the active button and ticks down automatically
+- The active button changes colour so you can see the mode at a glance
+- Starting one mode automatically cancels the other
 
 ## Sideloading (end users)
 

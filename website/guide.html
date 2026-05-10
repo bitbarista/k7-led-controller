@@ -365,7 +365,13 @@
               <td style="padding:0.5rem 0.75rem;text-align:center;color:#94a3b8">✗</td>
             </tr>
             <tr style="border-bottom:1px solid #f1f5f9">
-              <td style="padding:0.5rem 0.75rem;color:#475569">Smooth Ramp, Feed mode, Acclimation&hellip;</td>
+              <td style="padding:0.5rem 0.75rem;color:#475569">Feed &amp; Maintenance mode</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center">✓</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#94a3b8">✗</td>
+              <td style="padding:0.5rem 0.75rem;text-align:center;color:#475569">Widget</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f1f5f9">
+              <td style="padding:0.5rem 0.75rem;color:#475569">Smooth Ramp, Acclimation, Seasonal Shift&hellip;</td>
               <td style="padding:0.5rem 0.75rem;text-align:center">✓</td>
               <td style="padding:0.5rem 0.75rem;text-align:center;color:#94a3b8">✗</td>
               <td style="padding:0.5rem 0.75rem;text-align:center;color:#94a3b8">✗</td>
@@ -539,7 +545,7 @@
     <!-- Android setup -->
     <div class="card" id="android-app">
       <h3>Android App</h3>
-      <p>The K7 Controller app runs a local bridge inside your phone and talks directly to the lamp over WiFi. Same features as the PC Bridge — schedule editing, profile saving, and push. The always-on runtime features require the ESP32 controller.</p>
+      <p>The K7 Controller app runs a local bridge inside your phone and talks directly to the lamp over WiFi. It covers schedule editing, profile saving, and push — plus <strong>Feed and Maintenance mode</strong> via a home screen widget that works even when the app is closed. Always-on runtime features (Smooth Ramp, Acclimation, Lunar) still require the ESP32 controller.</p>
       <p>The app is not yet on the Play Store. For now, install it manually (sideloading):</p>
       <ul class="steps" style="margin-top:0.75rem">
         <li><span class="step-letter">a.</span><span>On your phone, go to <strong>Settings → Apps → Special app access → Install unknown apps</strong>. Tap your browser or file manager and turn on <em>Allow from this source</em>. (The exact path varies by Android version and manufacturer.)</span></li>
@@ -550,6 +556,9 @@
       </ul>
       <div class="tip">
         <strong>Schedule chart:</strong> The app includes a full schedule chart editor. Tap any hour bar and scroll to adjust its brightness, or use the trapezoidal scheduler to generate a clean sunrise/sunset shape in one step. A desktop view is also available via the icon in the top bar.
+      </div>
+      <div class="tip" style="margin-top:0.75rem">
+        <strong>Home screen widget:</strong> Long-press your home screen, choose <em>Widgets</em>, and add <em>K7 Feed &amp; Maintenance</em>. Tap <strong>Feed</strong> for a 10-minute white boost during feeding, or <strong>Maintenance</strong> for a 30-minute balanced inspection light. A countdown timer appears on the widget while a mode is active. Tap the active button again to cancel early. The widget works without the app open and without the ESP32 controller — it connects directly to the lamp over WiFi.
       </div>
     </div>
 
@@ -583,13 +592,13 @@
       </div>
 
       <div class="usage-item">
-        <div class="usage-title">Feed mode <span style="font-size:0.8em;font-weight:400;color:#64748b">(ESP32 only)</span></div>
-        <div class="usage-desc">Temporarily boosts white lighting for feeding. Tap <strong>Feed mode</strong> to start a countdown timer — the lamp returns to its normal schedule when it expires. Use the ⚙ settings to set the duration (1–60 min, default 15) and white brightness (1–100%, default 80%). A quick press of the <strong>BOOT</strong> button on the board also toggles feed mode.</div>
+        <div class="usage-title">Feed mode <span style="font-size:0.8em;font-weight:400;color:#64748b">(ESP32 / Android widget)</span></div>
+        <div class="usage-desc">Temporarily boosts white lighting for feeding. Tap <strong>Feed mode</strong> to start a countdown timer — the lamp returns to its normal schedule when it expires. Use the ⚙ settings to set the duration (1–60 min, default 15) and white brightness (1–100%, default 80%). A quick press of the <strong>BOOT</strong> button on the board also toggles feed mode. On Android, Feed mode is also available directly from the home screen widget — no app or ESP32 controller required.</div>
       </div>
 
       <div class="usage-item">
-        <div class="usage-title">Maintenance mode <span style="font-size:0.8em;font-weight:400;color:#64748b">(ESP32 only)</span></div>
-        <div class="usage-desc">Temporarily switches the lamp to a brighter, more balanced inspection light so you can work in the tank more easily. Tap <strong>Maintenance</strong> to start a countdown timer, then let it expire or tap again to stop it early. Use the ⚙ settings to choose the duration (1–180 min, default 30) and overall profile intensity (1–100%, default 70%). Starting Maintenance mode automatically stops Feed mode, and vice versa.</div>
+        <div class="usage-title">Maintenance mode <span style="font-size:0.8em;font-weight:400;color:#64748b">(ESP32 / Android widget)</span></div>
+        <div class="usage-desc">Temporarily switches the lamp to a brighter, more balanced inspection light so you can work in the tank more easily. Tap <strong>Maintenance</strong> to start a countdown timer, then let it expire or tap again to stop it early. Use the ⚙ settings to choose the duration (1–180 min, default 30) and overall profile intensity (1–100%, default 70%). Starting Maintenance mode automatically stops Feed mode, and vice versa. On Android, Maintenance mode is also available directly from the home screen widget — no app or ESP32 controller required.</div>
       </div>
 
       <div class="usage-item">
