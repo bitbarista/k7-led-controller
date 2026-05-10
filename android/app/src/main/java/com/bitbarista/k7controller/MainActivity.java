@@ -14,13 +14,11 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 
 public class MainActivity extends Activity {
-    private LocalBridgeServer server;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        server = new LocalBridgeServer(this);
-        server.start();
+        startService(new android.content.Intent(this, K7BridgeService.class));
 
         FrameLayout root = new FrameLayout(this);
         WebView webView = new WebView(this);
@@ -79,7 +77,6 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        if (server != null) server.stop();
         super.onDestroy();
     }
 }

@@ -125,6 +125,12 @@ final class LocalBridgeServer implements Runnable {
         if (path.equals("/api/lunar/stop")) return setLunar(false);
         if (path.equals("/api/backup")) return json(new JSONObject().put("kind", "k7_android_backup").put("state", state()));
         if (path.equals("/api/community-presets")) return communityPresets();
+        if (path.equals("/api/feed/status"))        return modeStatus("feed",  10 * 60);
+        if (path.equals("/api/feed/start"))         return modeStart("feed",   10 * 60);
+        if (path.equals("/api/feed/stop"))          return modeStop("feed");
+        if (path.equals("/api/maintenance/status")) return modeStatus("maint", 30 * 60);
+        if (path.equals("/api/maintenance/start"))  return modeStart("maint",  30 * 60);
+        if (path.equals("/api/maintenance/stop"))   return modeStop("maint");
         return error(404, "Not found");
     }
 
@@ -213,6 +219,69 @@ final class LocalBridgeServer implements Runnable {
         putObject("base_schedule", new JSONObject().put("schedule", scheduleJson(baseSchedule)));
         saveState(state().put("mode", autoMode ? "auto" : "manual").put("manual", jsonArray(manual)).put("schedule", scheduleJson(baseSchedule)).put("active_preset", activePreset));
         return json(new JSONObject().put("ok", true).put("verified", false));
+    }
+
+    private Response modeStatus(String key, int defaultSecs) throws Exception {
+        boolean active = prefs.getBoolean(key + "_active", false);
+        int remaining = 0;
+        if (active) {
+            long startedAt = prefs.getLong(key + "_started_at", 0);
+            int duration = prefs.getInt(key + "_duration", defaultSecs);
+            remaining = duration - (int) ((System.currentTimeMillis() - startedAt) / 1000);
+            if (remaining <= 0) {
+                try { restoreAuto(); } catch (Exception ignored) {}
+                prefs.edit().putBoolean(key + "_active", false).apply();
+                active = false;
+                remaining = 0;
+            }
+        }
+        return json(new JSONObject().put("active", active).put("remaining", Math.max(0, remaining)));
+    }
+
+    private static final int[] FEED_MINI  = {80, 10, 10,  0,  0, 0};
+    private static final int[] FEED_PRO   = {80, 10, 40, 80, 10, 0};
+    private static final int[] MAINT_MINI = {100, 40, 50,  0,  0, 0};
+    private static final int[] MAINT_PRO  = {100, 30, 55, 15, 40, 5};
+    private static final int MAINT_INTENSITY = 70;
+
+    private Response modeStart(String key, int defaultSecs) throws Exception {
+        String other = "feed".equals(key) ? "maint" : "feed";
+        prefs.edit().putBoolean(other + "_active", false).apply();
+        boolean isFeed = "feed".equals(key);
+        boolean isPro = "k7pro".equals(prefs.getString("device", "k7mini"));
+        int master = prefs.getInt("master", 100);
+        int[] base = isFeed ? (isPro ? FEED_PRO : FEED_MINI) : (isPro ? MAINT_PRO : MAINT_MINI);
+        int[] channels = new int[K7TcpClient.CHANNELS];
+        for (int i = 0; i < K7TcpClient.CHANNELS; i++) {
+            int v = base[i];
+            if (!isFeed) v = v * MAINT_INTENSITY / 100;
+            channels[i] = v * master / 100;
+        }
+        synchronized (lampLock) { client().hand(channels); }
+        prefs.edit()
+                .putBoolean(key + "_active", true)
+                .putLong(key + "_started_at", System.currentTimeMillis())
+                .putInt(key + "_duration", defaultSecs)
+                .apply();
+        return json(new JSONObject().put("ok", true));
+    }
+
+    private Response modeStop(String key) throws Exception {
+        prefs.edit().putBoolean(key + "_active", false).apply();
+        restoreAuto();
+        return json(new JSONObject().put("ok", true));
+    }
+
+    private void restoreAuto() throws Exception {
+        JSONObject s = state();
+        if (!s.has("schedule")) return;
+        int[] manual = intArray(s.getJSONArray("manual"), K7TcpClient.CHANNELS);
+        int[][] base = scheduleArray(s.getJSONArray("schedule"));
+        int master = prefs.getInt("master", 100);
+        int[] scaledManual = scale(manual, master);
+        int[][] effSchedule = scale(bakeEffects(base, getObject("siesta", defaultSiesta()), getObject("lunar", defaultLunar())), master);
+        synchronized (lampLock) { client().push(scaledManual, effSchedule, true); }
+        saveState(state().put("mode", "auto"));
     }
 
     private static final String COMMUNITY_PRESETS_URL = "https://bitbarista.github.io/k7-led-controller/community-presets/index.json";

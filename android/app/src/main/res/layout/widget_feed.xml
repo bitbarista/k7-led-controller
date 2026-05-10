@@ -1,68 +1,101 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Outer FrameLayout is transparent and fills the cell allocation.
+     Inner LinearLayout wraps content so the background card doesn't
+     extend into empty cell space below the buttons. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@drawable/widget_background"
-    android:padding="8dp">
+    android:layout_height="match_parent">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingBottom="6dp">
+        android:orientation="vertical"
+        android:background="@drawable/widget_background"
+        android:padding="6dp">
 
-        <ImageView
-            android:layout_width="14dp"
-            android:layout_height="14dp"
-            android:src="@mipmap/ic_launcher"
-            android:scaleType="fitCenter"/>
-
-        <TextView
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:text="K7 Controller"
-            android:textColor="#FFFFFF"
-            android:textSize="11sp"/>
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="4dp">
 
-        <TextView
-            android:id="@+id/widget_status"
-            android:layout_width="wrap_content"
+            <ImageView
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:src="@mipmap/ic_launcher"
+                android:scaleType="fitCenter"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="K7 Controller"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btn_feed"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginEnd="3dp"
+                android:background="@drawable/widget_btn"
+                android:gravity="center"
+                android:text="Feed"
+                android:textColor="#B0B8C4"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end"/>
+
+            <TextView
+                android:id="@+id/btn_maint"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/widget_btn"
+                android:gravity="center"
+                android:text="Maintenance"
+                android:textColor="#B0B8C4"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/timer_row"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#FF6B6B"
-            android:textSize="10sp"/>
+            android:orientation="horizontal"
+            android:paddingTop="3dp"
+            android:visibility="gone">
+
+            <Chronometer
+                android:id="@+id/feed_timer"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="3dp"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:visibility="gone"/>
+
+            <Chronometer
+                android:id="@+id/maint_timer"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:visibility="gone"/>
+        </LinearLayout>
     </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/btn_feed"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/widget_btn"
-            android:gravity="center"
-            android:text="Feed"
-            android:textColor="#B0B8C4"
-            android:textSize="13sp"/>
-
-        <TextView
-            android:id="@+id/btn_maint"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="@drawable/widget_btn"
-            android:gravity="center"
-            android:text="Maintenance"
-            android:textColor="#B0B8C4"
-            android:textSize="13sp"/>
-    </LinearLayout>
-</LinearLayout>
+</FrameLayout>
