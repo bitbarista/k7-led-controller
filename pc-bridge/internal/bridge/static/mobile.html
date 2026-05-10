@@ -911,7 +911,7 @@ function applyCapabilityUI() {
 
 async function readControllerState() {
   if (isPCBridge()) {
-    await api('GET', '/api/lamp/read');
+    try { await api('GET', '/api/lamp/read'); } catch(_) {}
   }
   return api('GET', '/api/state');
 }
