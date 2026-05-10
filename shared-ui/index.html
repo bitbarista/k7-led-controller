@@ -921,7 +921,7 @@ async function readFromDevice() {
       cap('logs') ? api('GET', '/api/output/status').catch(() => null) : Promise.resolve(null),
     ]);
     mode            = s.mode;
-    activePresetKey = s.active_preset || '';
+    activePresetKey = s.active_preset || localStorage.getItem('k7-activePreset') || '';
     lastLampReadAt = s.last_read_at || lastLampReadAt;
     outputStatusState = outputStatus;
     if (rampStatus.active && mode === 'manual') mode = 'auto';
@@ -2246,13 +2246,13 @@ function rebuildPresetDropdown() {
 function onPresetChange() {
   const val = document.getElementById('presetSel').value;
   document.getElementById('deleteProfileBtn').style.display = 'none';
-  if (!val) { document.getElementById('presetDesc').textContent = ''; activePresetKey = ''; return; }
+  if (!val) { document.getElementById('presetDesc').textContent = ''; activePresetKey = ''; localStorage.removeItem('k7-activePreset'); return; }
   if (val.startsWith('preset:')) {
     const key = val.slice(7); const p = presets[key]; if (!p) return;
     document.getElementById('presetDesc').textContent = p.desc;
     scheduleBase = p.schedule.map(row => [...row]); manual = [...p.manual];
     resetMaster(); updateChart(); updateColorStrip(); updateNowBars(); renderSliders();
-    activePresetKey = val; setOk(`Preset loaded: ${p.name} — click Push to apply`);
+    activePresetKey = val; localStorage.setItem('k7-activePreset', val); setOk(`Preset loaded: ${p.name} — click Push to apply`);
   } else if (val.startsWith('saved:')) {
     const name = val.slice(6); const p = savedProfiles[name]; if (!p) return;
     document.getElementById('presetDesc').textContent = p.device !== cfg.device ? `⚠ Saved for ${p.device}` : `Saved profile`;
@@ -2265,7 +2265,7 @@ function onPresetChange() {
     const sv = document.getElementById('shiftVal');
     if (sv) { const d = dayShift; sv.textContent = d===0?'+0h':d<=12?`+${d}h`:`-${24-d}h`; }
     renderChannelScales(); applyMaster(); updateChart(); updateColorStrip(); updateNowBars(); renderSliders();
-    activePresetKey = val; setOk(`Profile loaded: ${name} — click Push to apply`);
+    activePresetKey = val; localStorage.setItem('k7-activePreset', val); setOk(`Profile loaded: ${name} — click Push to apply`);
   }
 }
 

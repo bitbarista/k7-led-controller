@@ -1373,7 +1373,7 @@ async function readFromDevice() {
     schedule        = s.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
     manual          = s.manual || [0,0,0,0,0,0];
     mode            = s.mode;
-    activePresetKey = s.active_preset || '';
+    activePresetKey = s.active_preset || localStorage.getItem('k7-activePreset') || '';
     lastLampReadAt = s.last_read_at || lastLampReadAt;
     scheduleShiftMinutes = parseInt(s.schedule_shift_minutes ?? 0) || 0;
     outputStatusState = outputStatus;
@@ -1874,7 +1874,7 @@ async function loadPresetsProfiles() {
 
 function onPresetChange() {
   const v = document.getElementById('presetSel').value;
-  if(!v) { document.getElementById('presetDesc').textContent=''; activePresetKey=''; return; }
+  if(!v) { document.getElementById('presetDesc').textContent=''; activePresetKey=''; localStorage.removeItem('k7-activePreset'); return; }
   let p;
   if(v.startsWith('preset:'))       p = presets[v.slice(7)];
   else if(v.startsWith('profile:')) p = savedProfiles[v.slice(8)];
@@ -1884,6 +1884,7 @@ function onPresetChange() {
   _suppressPoll('schedule');
   document.getElementById('presetDesc').textContent = p.desc || (v.startsWith('profile:') ? 'Saved profile' : '');
   activePresetKey = v;
+  localStorage.setItem('k7-activePreset', v);
   buildSliders(); buildNowBars(); updateChart();
   if(document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
 }
@@ -2025,6 +2026,7 @@ async function saveImportedPresetAsProfile(p) {
   const sel = document.getElementById('presetSel');
   sel.value = 'profile:' + name.trim();
   activePresetKey = sel.value;
+  localStorage.setItem('k7-activePreset', activePresetKey);
   document.getElementById('presetDesc').textContent = 'Saved profile';
   return true;
 }
