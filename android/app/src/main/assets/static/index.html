@@ -921,7 +921,8 @@ async function readFromDevice() {
       cap('logs') ? api('GET', '/api/output/status').catch(() => null) : Promise.resolve(null),
     ]);
     mode            = s.mode;
-    activePresetKey = s.active_preset || localStorage.getItem('k7-activePreset') || '';
+    const rawPreset = s.active_preset || localStorage.getItem('k7-activePreset') || '';
+    activePresetKey = rawPreset.startsWith('profile:') ? 'saved:' + rawPreset.slice(8) : rawPreset;
     lastLampReadAt = s.last_read_at || lastLampReadAt;
     outputStatusState = outputStatus;
     if (rampStatus.active && mode === 'manual') mode = 'auto';

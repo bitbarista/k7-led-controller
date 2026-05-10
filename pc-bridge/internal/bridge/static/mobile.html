@@ -1373,7 +1373,8 @@ async function readFromDevice() {
     schedule        = s.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
     manual          = s.manual || [0,0,0,0,0,0];
     mode            = s.mode;
-    activePresetKey = s.active_preset || localStorage.getItem('k7-activePreset') || '';
+    const rawPreset = s.active_preset || localStorage.getItem('k7-activePreset') || '';
+    activePresetKey = rawPreset.startsWith('saved:') ? 'profile:' + rawPreset.slice(6) : rawPreset;
     lastLampReadAt = s.last_read_at || lastLampReadAt;
     scheduleShiftMinutes = parseInt(s.schedule_shift_minutes ?? 0) || 0;
     outputStatusState = outputStatus;
