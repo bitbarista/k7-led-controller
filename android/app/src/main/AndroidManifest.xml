@@ -18,5 +18,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <receiver
+            android:name=".FeedWidget"
+            android:exported="true"
+            android:label="K7 Feed &amp; Maintenance">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+                <action android:name="com.bitbarista.k7controller.TOGGLE_FEED"/>
+                <action android:name="com.bitbarista.k7controller.TOGGLE_MAINT"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_feed_info"/>
+        </receiver>
     </application>
 </manifest>
