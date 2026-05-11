@@ -2,18 +2,26 @@ package com.bitbarista.k7controller;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.View;
 import android.view.WindowInsets;
+import android.webkit.JavascriptInterface;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
+import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 
 public class MainActivity extends Activity {
+
+    private WebView webView;
+    private boolean pageLoaded = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -21,7 +29,7 @@ public class MainActivity extends Activity {
         startService(new android.content.Intent(this, K7BridgeService.class));
 
         FrameLayout root = new FrameLayout(this);
-        WebView webView = new WebView(this);
+        webView = new WebView(this);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -35,6 +43,14 @@ public class MainActivity extends Activity {
             return insets;
         });
         setContentView(root);
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                if (url != null && url.startsWith("http://127.0.0.1:8787")) {
+                    pageLoaded = true;
+                }
+            }
+        });
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
@@ -72,7 +88,36 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        webView.loadUrl("http://127.0.0.1:8787/static/mobile.html");
+        webView.addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void openWifiSettings() {
+                startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+            }
+        }, "K7Android");
+        new Thread(() -> {
+            Log.d("K7Main", "probe thread started");
+            for (int i = 0; i < 40; i++) {
+                try (java.net.Socket s = new java.net.Socket()) {
+                    s.connect(new java.net.InetSocketAddress("127.0.0.1", 8787), 300);
+                    Log.d("K7Main", "bridge ready after " + i + " retries, loading URL");
+                    webView.post(() -> webView.loadUrl("http://127.0.0.1:8787/static/mobile.html"));
+                    return;
+                } catch (Exception e) {
+                    Log.d("K7Main", "probe attempt " + i + " failed: " + e.getMessage());
+                    try { Thread.sleep(250); } catch (InterruptedException ie) { return; }
+                }
+            }
+            Log.d("K7Main", "probe exhausted retries, loading anyway");
+            webView.post(() -> webView.loadUrl("http://127.0.0.1:8787/static/mobile.html"));
+        }).start();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (pageLoaded && webView != null) {
+            webView.evaluateJavascript("readFromDevice()", null);
+        }
     }
 
     @Override

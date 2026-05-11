@@ -3,6 +3,8 @@ package com.bitbarista.k7controller;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.AssetManager;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -131,6 +133,7 @@ final class LocalBridgeServer implements Runnable {
         if (path.equals("/api/maintenance/status")) return modeStatus("maint", 30 * 60);
         if (path.equals("/api/maintenance/start"))  return modeStart("maint",  30 * 60);
         if (path.equals("/api/maintenance/stop"))   return modeStop("maint");
+        if (path.equals("/api/wifi/signal"))        return wifiSignal();
         return error(404, "Not found");
     }
 
@@ -178,12 +181,17 @@ final class LocalBridgeServer implements Runnable {
     }
 
     private Response lampRead() throws Exception {
-        JSONObject lamp;
-        synchronized (lampLock) {
-            lamp = client().readAll();
+        try {
+            JSONObject lamp;
+            synchronized (lampLock) {
+                lamp = client().readAll();
+            }
+            saveStateFromLamp(lamp);
+            return json(lamp);
+        } catch (Exception e) {
+            Log.w(TAG, "lamp unreachable: " + e.getMessage());
+            return error(503, "lamp_unreachable");
         }
-        saveStateFromLamp(lamp);
-        return json(lamp);
     }
 
     private Response lampChannels(byte[] body, boolean hand) throws Exception {
@@ -282,6 +290,19 @@ final class LocalBridgeServer implements Runnable {
         int[][] effSchedule = scale(bakeEffects(base, getObject("siesta", defaultSiesta()), getObject("lunar", defaultLunar())), master);
         synchronized (lampLock) { client().push(scaledManual, effSchedule, true); }
         saveState(state().put("mode", "auto"));
+    }
+
+    private Response wifiSignal() throws Exception {
+        WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+        WifiInfo info = wm.getConnectionInfo();
+        int rssi = info.getRssi();
+        JSONObject obj = new JSONObject();
+        if (rssi == Integer.MIN_VALUE) {
+            obj.put("rssi", JSONObject.NULL).put("level", 0);
+        } else {
+            obj.put("rssi", rssi).put("level", WifiManager.calculateSignalLevel(rssi, 5));
+        }
+        return json(obj);
     }
 
     private static final String COMMUNITY_PRESETS_URL = "https://bitbarista.github.io/k7-led-controller/community-presets/index.json";
