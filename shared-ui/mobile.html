@@ -956,7 +956,7 @@ function applyCapabilityUI() {
     el.classList.toggle('cap-hidden', names.some(name => !cap(name)));
   });
   document.getElementById('desktopLink').style.display = isAndroid() ? 'none' : '';
-  document.getElementById('deviceTypeRow').style.display = '';
+  if (isAndroid() || isPCBridge()) document.getElementById('deviceTypeRow').style.display = '';
   if (isAndroid()) {
     document.getElementById('wifiSettingsBtn').style.display = '';
     startWifiPolling();
@@ -1436,12 +1436,14 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   let lampUnreachable = false;
-  try {
-    await api('GET', '/api/lamp/read');
-    if (isAndroid()) showNoLampBanner(false);
-  } catch(e) {
-    lampUnreachable = true;
-    if (isAndroid()) showNoLampBanner(true);
+  if (isAndroid() || isPCBridge()) {
+    try {
+      await api('GET', '/api/lamp/read');
+      if (isAndroid()) showNoLampBanner(false);
+    } catch(e) {
+      lampUnreachable = true;
+      if (isAndroid()) showNoLampBanner(true);
+    }
   }
   try {
     const [cfgData, s, rampSt, feedSt, maintenanceSt, siestaSt, acclimationSt, seasonalSt, lunarSt, warnings, outputStatus] = await Promise.all([
