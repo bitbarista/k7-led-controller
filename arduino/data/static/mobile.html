@@ -994,9 +994,6 @@ function startWifiPolling() {
 }
 
 async function readControllerState() {
-  if (isPCBridge()) {
-    try { await api('GET', '/api/lamp/read'); } catch(_) {}
-  }
   return api('GET', '/api/state');
 }
 
