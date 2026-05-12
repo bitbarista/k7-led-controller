@@ -2809,6 +2809,7 @@ function toggleTheme() {
     try { await api('POST', '/api/time', {timestamp: Date.now() - new Date().getTimezoneOffset()*60000}); } catch(_) {}
   }
   loadVersionInfo();
+  if (isAndroid()) await new Promise(r => setTimeout(r, 1500));
   await readFromDevice();
   // Force a resize+redraw after layout settles — Android WebView may have
   // initialised the chart before the canvas had its final dimensions.
