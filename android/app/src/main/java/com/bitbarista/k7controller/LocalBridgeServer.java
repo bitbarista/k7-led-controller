@@ -186,11 +186,37 @@ final class LocalBridgeServer implements Runnable {
             synchronized (lampLock) {
                 lamp = client().readAll();
             }
+            detectDeviceType();
             saveStateFromLamp(lamp);
             return json(lamp);
         } catch (Exception e) {
             Log.w(TAG, "lamp unreachable: " + e.getMessage());
             return error(503, "lamp_unreachable");
+        }
+    }
+
+    private void detectDeviceType() {
+        try {
+            String host = prefs.getString("host", K7TcpClient.DEFAULT_HOST);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
+                    new java.net.URL("http://" + host + "/api/config").openConnection();
+            conn.setConnectTimeout(1500);
+            conn.setReadTimeout(1500);
+            if (conn.getResponseCode() == 200) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[512]; int n;
+                try (java.io.InputStream is = conn.getInputStream()) {
+                    while ((n = is.read(buf)) != -1) bos.write(buf, 0, n);
+                }
+                String device = new JSONObject(bos.toString("UTF-8")).optString("device", "");
+                if ("k7mini".equals(device) || "k7pro".equals(device)) {
+                    prefs.edit().putString("device", device).apply();
+                    Log.d(TAG, "auto-detected device: " + device);
+                }
+            }
+            conn.disconnect();
+        } catch (Exception e) {
+            Log.d(TAG, "device auto-detect skipped: " + e.getMessage());
         }
     }
 

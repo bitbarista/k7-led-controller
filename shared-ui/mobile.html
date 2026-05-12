@@ -425,6 +425,14 @@ button:disabled { opacity: 0.4; }
   <button id="wifiSettingsBtn" onclick="openWifiSettings()" style="display:none">Open WiFi Settings</button>
 </div>
 
+<div id="deviceTypeRow" style="display:none;padding:6px 14px;background:var(--bg-card);border-bottom:1px solid var(--border);font-size:0.82rem;color:var(--muted)">
+  Lamp type:
+  <select id="deviceSel" onchange="onDeviceChange()" style="margin-left:6px;font-size:0.82rem;padding:1px 4px">
+    <option value="k7mini">K7 Mini</option>
+    <option value="k7pro">K7 Pro</option>
+  </select>
+</div>
+
 <div class="consent-backdrop" id="rampConsentModal" hidden>
   <div class="consent-modal" role="dialog" aria-modal="true" aria-labelledby="rampConsentTitle">
     <div class="consent-head">
@@ -904,12 +912,19 @@ function isAndroid() {
 }
 
 function showNoLampBanner(show) {
-  console.log('showNoLampBanner', show);
   document.getElementById('noLampBanner').style.display = show ? 'flex' : 'none';
 }
 
 function openWifiSettings() {
   if (window.K7Android) window.K7Android.openWifiSettings();
+}
+
+async function onDeviceChange() {
+  cfg.device = document.getElementById('deviceSel').value;
+  try { await api('POST', '/api/config', {device: cfg.device}); } catch(_) {}
+  buildSliders();
+  buildNowBars();
+  if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
 }
 
 function cloneDefaultStatus(name) {
@@ -943,6 +958,7 @@ function applyCapabilityUI() {
   document.getElementById('desktopLink').style.display = isAndroid() ? 'none' : '';
   if (isAndroid()) {
     document.getElementById('wifiSettingsBtn').style.display = '';
+    document.getElementById('deviceTypeRow').style.display = '';
     startWifiPolling();
   }
 }
@@ -1448,6 +1464,8 @@ async function readFromDevice() {
     ]);
 
     cfg             = cfgData;
+    const deviceSel = document.getElementById('deviceSel');
+    if (deviceSel) deviceSel.value = cfg.device || 'k7mini';
     schedule        = s.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
     manual          = s.manual || [0,0,0,0,0,0];
     mode            = s.mode;
