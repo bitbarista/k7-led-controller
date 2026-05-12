@@ -1439,14 +1439,12 @@ async function readFromDevice() {
   setBusy('Reading…');
   document.getElementById('readBtn').disabled = true;
   let lampUnreachable = false;
-  if (isAndroid()) {
-    try {
-      await api('GET', '/api/lamp/read');
-      showNoLampBanner(false);
-    } catch(e) {
-      lampUnreachable = e.message === 'lamp_unreachable';
-      showNoLampBanner(lampUnreachable);
-    }
+  try {
+    await api('GET', '/api/lamp/read');
+    if (isAndroid()) showNoLampBanner(false);
+  } catch(e) {
+    lampUnreachable = true;
+    if (isAndroid()) showNoLampBanner(true);
   }
   try {
     const [cfgData, s, rampSt, feedSt, maintenanceSt, siestaSt, acclimationSt, seasonalSt, lunarSt, warnings, outputStatus] = await Promise.all([
