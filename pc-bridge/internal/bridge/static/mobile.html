@@ -956,9 +956,9 @@ function applyCapabilityUI() {
     el.classList.toggle('cap-hidden', names.some(name => !cap(name)));
   });
   document.getElementById('desktopLink').style.display = isAndroid() ? 'none' : '';
+  document.getElementById('deviceTypeRow').style.display = '';
   if (isAndroid()) {
     document.getElementById('wifiSettingsBtn').style.display = '';
-    document.getElementById('deviceTypeRow').style.display = '';
     startWifiPolling();
   }
 }

@@ -326,7 +326,6 @@ func (s *Server) handleLampRead(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	s.detectDeviceType()
 	if err := s.saveStateFromLamp(state, true, false); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Save state failed: %v", err))
 		return
@@ -334,33 +333,6 @@ func (s *Server) handleLampRead(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, state)
 }
 
-func (s *Server) detectDeviceType() {
-	s.mu.RLock()
-	host := s.config.Host
-	s.mu.RUnlock()
-	client := &http.Client{Timeout: 1500 * time.Millisecond}
-	resp, err := client.Get("http://" + host + "/api/config")
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return
-	}
-	var cfg struct {
-		Device string `json:"device"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&cfg); err != nil {
-		return
-	}
-	if cfg.Device != "k7mini" && cfg.Device != "k7pro" {
-		return
-	}
-	s.mu.Lock()
-	s.config.Device = cfg.Device
-	s.mu.Unlock()
-	_ = s.saveStore()
-}
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
