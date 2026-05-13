@@ -1148,13 +1148,13 @@ function setErr(m)  { setStatus('error', m); }
 function applyVersionInfo(info) {
   const chip = document.getElementById('versionChip');
   if (!chip || !info) return;
+  const version = info.firmware || 'dev';
   if (isPCBridge()) {
-    chip.textContent = 'PC Bridge';
-    chip.title = 'PC Bridge direct lamp control';
+    chip.textContent = `PC Bridge v${version}`;
+    chip.title = `PC Bridge v${version} · Direct lamp control`;
     chip.style.display = 'inline-flex';
     return;
   }
-  const version = info.firmware || 'dev';
   const target = info.target || '';
   chip.textContent = `v${version}`;
   chip.title = `Firmware ${version}${target ? ` (${target})` : ''}${info.git && info.git !== 'unknown' ? ` · ${info.git}` : ''}`;

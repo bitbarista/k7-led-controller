@@ -12,6 +12,8 @@ import (
 	"github.com/bitbarista/k7-led-controller/pc-bridge/internal/bridge"
 )
 
+var version = "dev"
+
 func main() {
 	listen := flag.String("listen", "127.0.0.1:8787", "HTTP listen address")
 	configPath := flag.String("config", "k7-pc-bridge.json", "bridge store path")
@@ -30,7 +32,7 @@ func main() {
 		return
 	}
 
-	srv, err := bridge.NewServer(*configPath, *timeout)
+	srv, err := bridge.NewServer(*configPath, *timeout, version)
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}

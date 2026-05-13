@@ -80,9 +80,10 @@ type Server struct {
 	profiles   map[string]json.RawMessage
 	configPath string
 	timeout    time.Duration
+	version    string
 }
 
-func NewServer(configPath string, timeout time.Duration) (*Server, error) {
+func NewServer(configPath string, timeout time.Duration, version string) (*Server, error) {
 	s := &Server{
 		config: Config{
 			Host:   k7tcp.DefaultHost,
@@ -93,6 +94,7 @@ func NewServer(configPath string, timeout time.Duration) (*Server, error) {
 		profiles:   map[string]json.RawMessage{},
 		configPath: configPath,
 		timeout:    timeout,
+		version:    version,
 	}
 	if err := s.loadStore(); err != nil {
 		return nil, err
@@ -200,6 +202,7 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 		"bridge":    "pc-bridge",
 		"platform":  "pc_bridge",
 		"transport": "direct_lamp",
+		"firmware":  s.version,
 	})
 }
 

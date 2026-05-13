@@ -207,7 +207,7 @@ def build_target(target: str, version: str, out_dir: Path, go_bin: str) -> list[
     binary_path = package_dir / spec["binary"]
     env = os.environ.copy()
     env.update({"GOOS": spec["goos"], "GOARCH": spec["goarch"]})
-    run([go_bin, "build", "-trimpath", "-o", str(binary_path), "./cmd/k7-bridge"], cwd=BRIDGE, env=env)
+    run([go_bin, "build", "-trimpath", f"-ldflags=-X main.version={version}", "-o", str(binary_path), "./cmd/k7-bridge"], cwd=BRIDGE, env=env)
     if target.startswith("linux-"):
         binary_path.chmod(0o755)
     copy_runtime_files(package_dir, target, version)
