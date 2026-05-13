@@ -14,9 +14,17 @@ android {
         versionName "0.2.3"
     }
 
+    buildFeatures {
+        buildConfig true
+    }
+
     applicationVariants.configureEach { variant ->
         variant.outputs.configureEach {
             outputFileName = "K7-Controller-v${variant.versionName}.apk"
         }
     }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.13.1'
 }

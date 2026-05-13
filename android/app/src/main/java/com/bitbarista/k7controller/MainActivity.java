@@ -3,25 +3,34 @@ package com.bitbarista.k7controller;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.View;
 import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
-import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 
+import androidx.core.content.FileProvider;
+
+import java.io.File;
+import java.io.FileOutputStream;
+
 public class MainActivity extends Activity {
 
     private WebView webView;
     private boolean pageLoaded = false;
+    private ValueCallback<Uri[]> mFilePathCallback;
+    private static final int FILE_CHOOSER_REQUEST = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,11 +96,45 @@ public class MainActivity extends Activity {
                         .show();
                 return true;
             }
+
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams) {
+                if (mFilePathCallback != null) {
+                    mFilePathCallback.onReceiveValue(null);
+                }
+                mFilePathCallback = filePathCallback;
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("application/json");
+                startActivityForResult(Intent.createChooser(intent, "Choose file"), FILE_CHOOSER_REQUEST);
+                return true;
+            }
         });
         webView.addJavascriptInterface(new Object() {
             @JavascriptInterface
             public void openWifiSettings() {
                 startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+            }
+
+            @JavascriptInterface
+            public void shareJson(String filename, String content) {
+                try {
+                    File file = new File(getCacheDir(), filename);
+                    try (FileOutputStream fos = new FileOutputStream(file)) {
+                        fos.write(content.getBytes("UTF-8"));
+                    }
+                    Uri uri = FileProvider.getUriForFile(MainActivity.this,
+                            getPackageName() + ".fileprovider", file);
+                    Intent intent = new Intent(Intent.ACTION_SEND);
+                    intent.setType("application/json");
+                    intent.putExtra(Intent.EXTRA_STREAM, uri);
+                    intent.putExtra(Intent.EXTRA_SUBJECT, filename);
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivity(Intent.createChooser(intent, "Save or share " + filename));
+                } catch (Exception e) {
+                    Log.e("K7Main", "shareJson failed: " + e.getMessage());
+                }
             }
         }, "K7Android");
         new Thread(() -> {
@@ -110,6 +153,21 @@ public class MainActivity extends Activity {
             Log.d("K7Main", "probe exhausted retries, loading anyway");
             webView.post(() -> webView.loadUrl("http://127.0.0.1:8787/static/mobile.html"));
         }).start();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == FILE_CHOOSER_REQUEST) {
+            if (mFilePathCallback != null) {
+                Uri[] results = null;
+                if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                    results = new Uri[]{data.getData()};
+                }
+                mFilePathCallback.onReceiveValue(results);
+                mFilePathCallback = null;
+            }
+        }
     }
 
     @Override

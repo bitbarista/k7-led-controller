@@ -790,7 +790,7 @@ button:disabled { opacity: 0.4; }
     <button class="profile-save" style="flex:1" onclick="chooseBackupImport()" title="Restore config, schedules, lunar settings, and profiles from a backup JSON file">Import</button>
   </div>
   <div class="profile-row" style="padding-top:0">
-    <button class="profile-save" style="flex:1" onclick="exportCommunityPreset()" title="Download just the current schedule and manual values for sharing">Export Preset</button>
+    <button class="profile-save" style="flex:1" onclick="savePreset()" title="Save current schedule as a named preset; optionally export as a shareable file">Save Preset</button>
     <button class="profile-save" style="flex:1" onclick="choosePresetImport()" title="Load a shared preset JSON into the editor">Import Preset</button>
   </div>
   <div class="profile-row" style="padding-top:0">
@@ -2031,31 +2031,6 @@ function valuesEqual(a, b, count) {
   return true;
 }
 
-function activeBuiltInPresetMismatch() {
-  if (!activePresetKey.startsWith('preset:')) return null;
-  const p = presets[activePresetKey.slice(7)];
-  if (!p) return null;
-  const chCount = DEVICES[cfg.device].channels.length;
-  if (rowsEqual(schedule, p.schedule) && valuesEqual(manual, p.manual, chCount)) return null;
-  return p;
-}
-
-function confirmCommunityPresetSource() {
-  const p = activeBuiltInPresetMismatch();
-  if (!p) return true;
-  if (!confirm(
-    `The selected preset is "${p.name}", but the current editor data does not match that built-in preset.\n\n` +
-    `This can happen after firmware updates or after editing a loaded preset.\n\n` +
-    `Press OK to reload "${p.name}" from the built-in preset library before continuing. Press Cancel to stop.`
-  )) return false;
-  schedule = p.schedule.map(row => [...row]);
-  manual = [...p.manual];
-  buildSliders(); buildNowBars(); updateChart();
-  if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
-  document.getElementById('presetDesc').textContent = p.desc || '';
-  setOk(`Preset reloaded: ${p.name}`);
-  return true;
-}
 
 function communityPresetPayload(name, useCase = '', notes = '') {
   return {
@@ -2127,7 +2102,12 @@ async function saveImportedPresetAsProfile(p) {
 }
 
 function downloadJson(filename, payload) {
-  const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], {type:'application/json'});
+  const json = JSON.stringify(payload, null, 2) + '\n';
+  if (isAndroid() && window.K7Android?.shareJson) {
+    K7Android.shareJson(filename, json);
+    return;
+  }
+  const blob = new Blob([json], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;
@@ -2142,18 +2122,33 @@ function optionalPrompt(message, defaultValue = '') {
   return value === null ? null : value.trim();
 }
 
-function exportCommunityPreset() {
-  if (!confirmCommunityPresetSource()) return;
-  const suggested = presetNameFromActive() || 'Community preset';
+async function savePreset() {
+  const suggested = presetNameFromActive() || 'My preset';
   const name = prompt('Preset name:', suggested);
   if (!name?.trim()) return;
-  const useCase = optionalPrompt('Use case, e.g. LPS, SPS, mixed reef, acclimation:', '');
-  if (useCase === null) { setOk('Preset export cancelled'); return; }
-  const notes = optionalPrompt('Short notes for reviewers/users:', '');
-  if (notes === null) { setOk('Preset export cancelled'); return; }
-  const preset = communityPresetPayload(name.trim(), useCase, notes);
-  downloadJson(`${sanitizePresetFilename(preset.name)}.json`, preset);
-  setOk('Preset exported');
+  setBusy('Saving…');
+  try {
+    await api('POST', '/api/profiles', {name: name.trim(), schedule, manual, device: cfg.device});
+    await loadPresetsProfiles();
+    const sel = document.getElementById('presetSel');
+    sel.value = 'profile:' + name.trim();
+    activePresetKey = sel.value;
+    localStorage.setItem('k7-activePreset', activePresetKey);
+    document.getElementById('presetDesc').textContent = 'Saved profile';
+  } catch(e) { setErr(e.message); return; }
+  if (confirm('Also export as a shareable file?')) {
+    const useCase = optionalPrompt('Use case, e.g. LPS, SPS, mixed reef, acclimation:', '');
+    if (useCase !== null) {
+      const notes = optionalPrompt('Short notes for reviewers/users:', '');
+      if (notes !== null) {
+        const preset = communityPresetPayload(name.trim(), useCase, notes);
+        downloadJson(`${sanitizePresetFilename(preset.name)}.json`, preset);
+        setOk('Preset saved and exported');
+        return;
+      }
+    }
+  }
+  setOk('Preset saved');
 }
 
 function choosePresetImport() {
@@ -2301,7 +2296,6 @@ async function copyText(text) {
 }
 
 async function submitCommunityPreset() {
-  if (!confirmCommunityPresetSource()) return;
   const suggested = presetNameFromActive() || 'Community preset';
   const name = prompt('Preset name for submission:', suggested);
   if (!name?.trim()) return;
@@ -2350,16 +2344,10 @@ async function exportBackup() {
       } catch(_) {}
       throw new Error(msg);
     }
-    const blob = await r.blob();
+    const data = await r.json();
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `k7controller-backup-${stamp}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(a.href);
-    setOk('Backup downloaded');
+    downloadJson(`k7controller-backup-${stamp}.json`, data);
+    setOk('Backup exported');
   } catch(e) {
     setErr(e.message);
   }
