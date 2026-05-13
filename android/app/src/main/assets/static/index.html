@@ -640,7 +640,7 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
         <button class="btn-secondary-custom" onclick="chooseBackupImport()" title="Restore config, schedules, lunar settings, and profiles from a backup JSON file" style="padding:5px 10px">Import Backup</button>
       </div>
       <div class="preset-action-row compact">
-        <button class="btn-secondary-custom" onclick="exportCommunityPreset()" title="Export preset JSON: current schedule and manual values only">Export</button>
+        <button class="btn-secondary-custom" onclick="savePreset()" title="Save current schedule as a named preset; optionally export as a shareable file">Save Preset</button>
         <button class="btn-secondary-custom" onclick="choosePresetImport()" title="Import preset JSON into the editor">Import</button>
         <button class="btn-secondary-custom" onclick="submitCommunityPreset()" title="Submit preset for community review">Submit</button>
         <button class="btn-secondary-custom" data-cap="community_presets_browse" onclick="openCommunityBrowser()" title="Browse and install community presets from the online library">Browse</button>
@@ -2464,6 +2464,44 @@ function optionalPrompt(message, defaultValue = '') {
   return value === null ? null : value.trim();
 }
 
+async function savePreset() {
+  const suggested = presetNameFromActive() || 'My preset';
+  const name = prompt('Preset name:', suggested);
+  if (!name?.trim()) return;
+  const key = name.trim();
+  if (savedProfiles[key] && !confirm(`Profile "${key}" already exists. Overwrite?`)) return;
+  setBusy('Saving…');
+  try {
+    await api('POST', '/api/profiles', {
+      name: key, device: cfg.device,
+      scheduleBase: scheduleBase.map(row => [...row]), manual: [...manual],
+      channelBrightness: {...channelBrightness}, masterBrightness, dayShift,
+    });
+    savedProfiles = await api('GET', '/api/profiles');
+    rebuildPresetDropdown();
+    const sel = document.getElementById('presetSel');
+    for (const opt of sel.options) {
+      if (opt.value === `saved:${key}`) { sel.value = opt.value; break; }
+    }
+    activePresetKey = `saved:${key}`;
+    document.getElementById('presetDesc').textContent = 'Saved profile';
+    document.getElementById('deleteProfileBtn').style.display = '';
+  } catch(e) { setErr(e.message); return; }
+  if (confirm('Also export as a shareable file?')) {
+    const useCase = optionalPrompt('Use case, e.g. LPS, SPS, mixed reef, acclimation:', '');
+    if (useCase !== null) {
+      const notes = optionalPrompt('Short notes for reviewers/users:', '');
+      if (notes !== null) {
+        const preset = communityPresetPayload(key, useCase, notes);
+        downloadJson(`${sanitizePresetFilename(preset.name)}.json`, preset);
+        setOk('Preset saved and exported');
+        return;
+      }
+    }
+  }
+  setOk('Preset saved');
+}
+
 function exportCommunityPreset() {
   if (!confirmCommunityPresetSource()) return;
   const suggested = presetNameFromActive() || 'Community preset';
@@ -2621,7 +2659,6 @@ async function copyText(text) {
 }
 
 async function submitCommunityPreset() {
-  if (!confirmCommunityPresetSource()) return;
   const suggested = presetNameFromActive() || 'Community preset';
   const name = prompt('Preset name for submission:', suggested);
   if (!name?.trim()) return;

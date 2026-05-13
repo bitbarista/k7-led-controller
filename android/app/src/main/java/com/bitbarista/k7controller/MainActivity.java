@@ -75,8 +75,8 @@ public class MainActivity extends Activity {
             public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
                 new AlertDialog.Builder(MainActivity.this)
                         .setMessage(message)
-                        .setPositiveButton("OK", (d, w) -> result.confirm())
-                        .setNegativeButton("Cancel", (d, w) -> result.cancel())
+                        .setPositiveButton("Yes", (d, w) -> result.confirm())
+                        .setNegativeButton("No", (d, w) -> result.cancel())
                         .setOnCancelListener(d -> result.cancel())
                         .show();
                 return true;
