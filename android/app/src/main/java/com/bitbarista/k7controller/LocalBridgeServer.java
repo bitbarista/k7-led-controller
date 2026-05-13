@@ -106,7 +106,7 @@ final class LocalBridgeServer implements Runnable {
             return redirect(desktop ? "/static/index.html" : "/static/mobile.html");
         }
         if (path.startsWith("/static/")) return asset(path.substring(1));
-        if (path.equals("/api/version")) return json(new JSONObject().put("bridge", "android").put("platform", "android").put("transport", "direct_lamp"));
+        if (path.equals("/api/version")) return json(new JSONObject().put("bridge", "android").put("platform", "android").put("transport", "direct_lamp").put("firmware", BuildConfig.VERSION_NAME));
         if (path.equals("/api/capabilities")) return json(capabilities());
         if (path.equals("/api/config")) return config(method, body);
         if (path.equals("/api/devices")) return json(devices());

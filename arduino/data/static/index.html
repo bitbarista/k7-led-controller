@@ -283,6 +283,12 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
   .chart-top { margin-bottom:2px; }
   .color-strip { height:12px; margin-top:4px; }
 }
+dialog.yn-dialog { border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); padding:20px 24px; max-width:340px; }
+dialog.yn-dialog::backdrop { background:rgba(0,0,0,0.45); }
+dialog.yn-dialog p { margin:0 0 16px; font-size:0.9rem; line-height:1.4; }
+dialog.yn-dialog .yn-btns { display:flex; gap:8px; justify-content:flex-end; }
+dialog.yn-dialog .yn-btns button { padding:6px 18px; border-radius:6px; border:1px solid var(--border); cursor:pointer; font-family:inherit; font-size:0.88rem; background:var(--surface2); color:var(--text); }
+dialog.yn-dialog .yn-btns button.yn-yes { background:var(--accent,#3a8fd8); color:#fff; border-color:var(--accent,#3a8fd8); }
 </style>
 </head>
 <body>
@@ -631,19 +637,18 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
       </div>
       <select id="presetSel" onchange="onPresetChange()" title="Load a preset or saved profile"></select>
       <div style="display:flex;gap:6px;margin-top:7px;align-items:center">
-        <button class="btn-secondary-custom" onclick="saveProfile()" title="Save current schedule as a profile" style="padding:5px 10px">💾</button>
         <button class="btn-danger-custom" id="deleteProfileBtn" onclick="deleteProfile()" title="Delete selected profile" style="display:none;padding:5px 10px">🗑</button>
         <span id="presetDesc"></span>
       </div>
-      <div class="preset-action-row">
-        <button class="btn-secondary-custom" onclick="exportBackup()" title="Download controller backup JSON" style="padding:5px 10px">Export Backup</button>
-        <button class="btn-secondary-custom" onclick="chooseBackupImport()" title="Restore config, schedules, lunar settings, and profiles from a backup JSON file" style="padding:5px 10px">Import Backup</button>
-      </div>
       <div class="preset-action-row compact">
-        <button class="btn-secondary-custom" onclick="exportCommunityPreset()" title="Export preset JSON: current schedule and manual values only">Export</button>
+        <button class="btn-secondary-custom" onclick="savePreset()" title="Save current schedule as a named preset; optionally export as a shareable file">Save</button>
         <button class="btn-secondary-custom" onclick="choosePresetImport()" title="Import preset JSON into the editor">Import</button>
         <button class="btn-secondary-custom" onclick="submitCommunityPreset()" title="Submit preset for community review">Submit</button>
         <button class="btn-secondary-custom" data-cap="community_presets_browse" onclick="openCommunityBrowser()" title="Browse and install community presets from the online library">Browse</button>
+      </div>
+      <div class="preset-action-row">
+        <button class="btn-secondary-custom" onclick="exportBackup()" title="Save a full backup of all settings, schedules, and profiles" style="padding:5px 10px">Backup</button>
+        <button class="btn-secondary-custom" onclick="chooseBackupImport()" title="Restore settings, schedules, and profiles from a backup file" style="padding:5px 10px">Restore</button>
       </div>
     </div>
 
@@ -2464,6 +2469,44 @@ function optionalPrompt(message, defaultValue = '') {
   return value === null ? null : value.trim();
 }
 
+async function savePreset() {
+  const suggested = presetNameFromActive() || 'My preset';
+  const name = prompt('Preset name:', suggested);
+  if (!name?.trim()) return;
+  const key = name.trim();
+  if (savedProfiles[key] && !confirm(`Profile "${key}" already exists. Overwrite?`)) return;
+  setBusy('Saving…');
+  try {
+    await api('POST', '/api/profiles', {
+      name: key, device: cfg.device,
+      scheduleBase: scheduleBase.map(row => [...row]), manual: [...manual],
+      channelBrightness: {...channelBrightness}, masterBrightness, dayShift,
+    });
+    savedProfiles = await api('GET', '/api/profiles');
+    rebuildPresetDropdown();
+    const sel = document.getElementById('presetSel');
+    for (const opt of sel.options) {
+      if (opt.value === `saved:${key}`) { sel.value = opt.value; break; }
+    }
+    activePresetKey = `saved:${key}`;
+    document.getElementById('presetDesc').textContent = 'Saved profile';
+    document.getElementById('deleteProfileBtn').style.display = '';
+  } catch(e) { setErr(e.message); return; }
+  if (await yesNoDialog('Also export as a shareable file?')) {
+    const useCase = optionalPrompt('Use case, e.g. LPS, SPS, mixed reef, acclimation:', '');
+    if (useCase !== null) {
+      const notes = optionalPrompt('Short notes for reviewers/users:', '');
+      if (notes !== null) {
+        const preset = communityPresetPayload(key, useCase, notes);
+        downloadJson(`${sanitizePresetFilename(preset.name)}.json`, preset);
+        setOk('Preset saved and exported');
+        return;
+      }
+    }
+  }
+  setOk('Preset saved');
+}
+
 function exportCommunityPreset() {
   if (!confirmCommunityPresetSource()) return;
   const suggested = presetNameFromActive() || 'Community preset';
@@ -2621,7 +2664,6 @@ async function copyText(text) {
 }
 
 async function submitCommunityPreset() {
-  if (!confirmCommunityPresetSource()) return;
   const suggested = presetNameFromActive() || 'Community preset';
   const name = prompt('Preset name for submission:', suggested);
   if (!name?.trim()) return;
@@ -2770,6 +2812,26 @@ window.addEventListener('storage', e => {
 });
 
 init();
+
+function yesNoDialog(message) {
+  return new Promise(resolve => {
+    const dlg = document.getElementById('ynDialog');
+    document.getElementById('ynMsg').textContent = message;
+    const yes = document.getElementById('ynYes');
+    const no  = document.getElementById('ynNo');
+    const done = (v) => { dlg.close(); yes.onclick = null; no.onclick = null; resolve(v); };
+    yes.onclick = () => done(true);
+    no.onclick  = () => done(false);
+    dlg.showModal();
+  });
+}
 </script>
+<dialog class="yn-dialog" id="ynDialog">
+  <p id="ynMsg"></p>
+  <div class="yn-btns">
+    <button class="yn-no" id="ynNo">No</button>
+    <button class="yn-yes" id="ynYes">Yes</button>
+  </div>
+</dialog>
 </body>
 </html>

@@ -403,6 +403,12 @@ body {
 .btn-read:active { background: var(--hover); }
 button:disabled { opacity: 0.4; }
 .cap-hidden { display:none !important; }
+dialog.yn-dialog { border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); padding:20px 24px; max-width:300px; width:90%; }
+dialog.yn-dialog::backdrop { background:rgba(0,0,0,0.45); }
+dialog.yn-dialog p { margin:0 0 16px; font-size:0.9rem; line-height:1.4; }
+dialog.yn-dialog .yn-btns { display:flex; gap:8px; justify-content:flex-end; }
+dialog.yn-dialog .yn-btns button { padding:6px 18px; border-radius:6px; border:1px solid var(--border); cursor:pointer; font-family:inherit; font-size:0.88rem; background:var(--surface2); color:var(--text); }
+dialog.yn-dialog .yn-btns button.yn-yes { background:var(--accent,#3a8fd8); color:#fff; border-color:var(--accent,#3a8fd8); }
 </style>
 <script src="/static/vendor/chart.umd.min.js"></script>
 </head>
@@ -783,19 +789,19 @@ button:disabled { opacity: 0.4; }
     <select id="presetSel" class="profile-sel" onchange="onPresetChange()">
       <option value="">— Select preset or profile —</option>
     </select>
-    <button class="profile-save" onclick="saveProfile()" title="Save current schedule as profile">💾</button>
+    <button class="profile-save" id="deleteProfileBtn" onclick="deleteProfile()" title="Delete selected profile" style="display:none">🗑</button>
   </div>
   <div class="profile-row" style="padding-top:0">
-    <button class="profile-save" style="flex:1" onclick="exportBackup()" title="Download controller backup JSON">Export</button>
-    <button class="profile-save" style="flex:1" onclick="chooseBackupImport()" title="Restore config, schedules, lunar settings, and profiles from a backup JSON file">Import</button>
-  </div>
-  <div class="profile-row" style="padding-top:0">
-    <button class="profile-save" style="flex:1" onclick="exportCommunityPreset()" title="Download just the current schedule and manual values for sharing">Export Preset</button>
+    <button class="profile-save" style="flex:1" onclick="savePreset()" title="Save current schedule as a named preset; optionally export as a shareable file">Save Preset</button>
     <button class="profile-save" style="flex:1" onclick="choosePresetImport()" title="Load a shared preset JSON into the editor">Import Preset</button>
   </div>
   <div class="profile-row" style="padding-top:0">
     <button class="profile-save" style="flex:1" onclick="submitCommunityPreset()" title="Open a GitHub issue draft for community preset review">Submit Preset</button>
     <button class="profile-save" style="flex:1" data-cap="community_presets_browse" onclick="openCommunityBrowser()" title="Browse and install community presets from the online library">Browse Presets</button>
+  </div>
+  <div class="profile-row" style="padding-top:0">
+    <button class="profile-save" style="flex:1" onclick="exportBackup()" title="Save a full backup of all settings, schedules, and profiles">Backup</button>
+    <button class="profile-save" style="flex:1" onclick="chooseBackupImport()" title="Restore settings, schedules, and profiles from a backup file">Restore</button>
   </div>
   <div class="profile-desc" id="presetDesc"></div>
 </div>
@@ -817,6 +823,9 @@ button:disabled { opacity: 0.4; }
     <div class="cpb-filter">
       <button class="cpb-filter-btn active" id="cpbFilterDevice" onclick="setCpbFilter('device')">K7 Mini</button>
       <button class="cpb-filter-btn" id="cpbFilterAll" onclick="setCpbFilter('all')">All</button>
+    </div>
+    <div id="cpbNotice" style="display:none;font-size:0.78rem;color:#b08000;background:#fffbe6;border:1px solid #f0d060;border-radius:6px;padding:7px 10px;margin:6px 0 2px">
+      Requires internet. If connected to the lamp's WiFi, switch to your home WiFi first, then reopen.
     </div>
     <div class="cpb-list" id="cpbList"><div class="cpb-status">Loading…</div></div>
   </div>
@@ -1969,6 +1978,7 @@ async function loadPresetsProfiles() {
 
 function onPresetChange() {
   const v = document.getElementById('presetSel').value;
+  document.getElementById('deleteProfileBtn').style.display = v.startsWith('profile:') ? '' : 'none';
   if(!v) { document.getElementById('presetDesc').textContent=''; activePresetKey=''; localStorage.removeItem('k7-activePreset'); return; }
   let p;
   if(v.startsWith('preset:'))       p = presets[v.slice(7)];
@@ -2031,31 +2041,6 @@ function valuesEqual(a, b, count) {
   return true;
 }
 
-function activeBuiltInPresetMismatch() {
-  if (!activePresetKey.startsWith('preset:')) return null;
-  const p = presets[activePresetKey.slice(7)];
-  if (!p) return null;
-  const chCount = DEVICES[cfg.device].channels.length;
-  if (rowsEqual(schedule, p.schedule) && valuesEqual(manual, p.manual, chCount)) return null;
-  return p;
-}
-
-function confirmCommunityPresetSource() {
-  const p = activeBuiltInPresetMismatch();
-  if (!p) return true;
-  if (!confirm(
-    `The selected preset is "${p.name}", but the current editor data does not match that built-in preset.\n\n` +
-    `This can happen after firmware updates or after editing a loaded preset.\n\n` +
-    `Press OK to reload "${p.name}" from the built-in preset library before continuing. Press Cancel to stop.`
-  )) return false;
-  schedule = p.schedule.map(row => [...row]);
-  manual = [...p.manual];
-  buildSliders(); buildNowBars(); updateChart();
-  if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
-  document.getElementById('presetDesc').textContent = p.desc || '';
-  setOk(`Preset reloaded: ${p.name}`);
-  return true;
-}
 
 function communityPresetPayload(name, useCase = '', notes = '') {
   return {
@@ -2126,8 +2111,13 @@ async function saveImportedPresetAsProfile(p) {
   return true;
 }
 
-function downloadJson(filename, payload) {
-  const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], {type:'application/json'});
+function downloadJson(filename, payload, {share = false} = {}) {
+  const json = JSON.stringify(payload, null, 2) + '\n';
+  if (isAndroid()) {
+    if (share && window.K7Android?.shareJson) { K7Android.shareJson(filename, json); return; }
+    if (window.K7Android?.saveJson)            { K7Android.saveJson(filename, json);  return; }
+  }
+  const blob = new Blob([json], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;
@@ -2142,18 +2132,49 @@ function optionalPrompt(message, defaultValue = '') {
   return value === null ? null : value.trim();
 }
 
-function exportCommunityPreset() {
-  if (!confirmCommunityPresetSource()) return;
-  const suggested = presetNameFromActive() || 'Community preset';
+async function savePreset() {
+  const suggested = presetNameFromActive() || 'My preset';
   const name = prompt('Preset name:', suggested);
   if (!name?.trim()) return;
-  const useCase = optionalPrompt('Use case, e.g. LPS, SPS, mixed reef, acclimation:', '');
-  if (useCase === null) { setOk('Preset export cancelled'); return; }
-  const notes = optionalPrompt('Short notes for reviewers/users:', '');
-  if (notes === null) { setOk('Preset export cancelled'); return; }
-  const preset = communityPresetPayload(name.trim(), useCase, notes);
-  downloadJson(`${sanitizePresetFilename(preset.name)}.json`, preset);
-  setOk('Preset exported');
+  setBusy('Saving…');
+  try {
+    await api('POST', '/api/profiles', {name: name.trim(), schedule, manual, device: cfg.device});
+    await loadPresetsProfiles();
+    const sel = document.getElementById('presetSel');
+    sel.value = 'profile:' + name.trim();
+    activePresetKey = sel.value;
+    localStorage.setItem('k7-activePreset', activePresetKey);
+    document.getElementById('presetDesc').textContent = 'Saved profile';
+  } catch(e) { setErr(e.message); return; }
+  if (await yesNoDialog('Also export as a shareable file?')) {
+    const useCase = optionalPrompt('Use case, e.g. LPS, SPS, mixed reef, acclimation:', '');
+    if (useCase !== null) {
+      const notes = optionalPrompt('Short notes for reviewers/users:', '');
+      if (notes !== null) {
+        const preset = communityPresetPayload(name.trim(), useCase, notes);
+        downloadJson(`${sanitizePresetFilename(preset.name)}.json`, preset, {share: true});
+        setOk('Preset saved and exported');
+        return;
+      }
+    }
+  }
+  setOk('Preset saved');
+}
+
+async function deleteProfile() {
+  const v = document.getElementById('presetSel').value;
+  if (!v.startsWith('profile:')) return;
+  const name = v.slice(8);
+  if (!confirm(`Delete profile "${name}"?`)) return;
+  setBusy('Deleting…');
+  try {
+    await api('DELETE', `/api/profiles/${encodeURIComponent(name)}`);
+    activePresetKey = '';
+    localStorage.removeItem('k7-activePreset');
+    document.getElementById('deleteProfileBtn').style.display = 'none';
+    await loadPresetsProfiles();
+    setOk(`Profile "${name}" deleted`);
+  } catch(e) { setErr(e.message); }
 }
 
 function choosePresetImport() {
@@ -2189,6 +2210,7 @@ function openCommunityBrowser() {
   cpbFilter = 'device';
   document.getElementById('cpbFilterDevice').classList.add('active');
   document.getElementById('cpbFilterAll').classList.remove('active');
+  document.getElementById('cpbNotice').style.display = 'none';
   document.getElementById('cpbBackdrop').hidden = false;
   if (!cpbIndex) loadCommunityPresets();
   else renderCommunityPresetList();
@@ -2196,6 +2218,7 @@ function openCommunityBrowser() {
 
 function closeCommunityBrowser() {
   document.getElementById('cpbBackdrop').hidden = true;
+  cpbIndex = null;
 }
 
 function setCpbFilter(filter) {
@@ -2222,7 +2245,8 @@ async function loadCommunityPresets() {
     cpbIndex = resp;
     renderCommunityPresetList();
   } catch(e) {
-    document.getElementById('cpbList').innerHTML = `<div class="cpb-status">Could not load presets: ${e.message}</div>`;
+    if (isAndroid()) document.getElementById('cpbNotice').style.display = '';
+    document.getElementById('cpbList').innerHTML = `<div class="cpb-status">Could not load presets — internet connection required.</div>`;
   }
 }
 
@@ -2301,7 +2325,6 @@ async function copyText(text) {
 }
 
 async function submitCommunityPreset() {
-  if (!confirmCommunityPresetSource()) return;
   const suggested = presetNameFromActive() || 'Community preset';
   const name = prompt('Preset name for submission:', suggested);
   if (!name?.trim()) return;
@@ -2350,16 +2373,10 @@ async function exportBackup() {
       } catch(_) {}
       throw new Error(msg);
     }
-    const blob = await r.blob();
+    const data = await r.json();
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `k7controller-backup-${stamp}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(a.href);
-    setOk('Backup downloaded');
+    downloadJson(`k7controller-backup-${stamp}.json`, data);
+    setOk('Backup exported');
   } catch(e) {
     setErr(e.message);
   }
@@ -2817,6 +2834,26 @@ function toggleTheme() {
   // initialised the chart before the canvas had its final dimensions.
   setTimeout(() => { if (mobileChart) { mobileChart.resize(); mobileChart.update('none'); } }, 300);
 })();
+
+function yesNoDialog(message) {
+  return new Promise(resolve => {
+    const dlg = document.getElementById('ynDialog');
+    document.getElementById('ynMsg').textContent = message;
+    const yes = document.getElementById('ynYes');
+    const no  = document.getElementById('ynNo');
+    const done = (v) => { dlg.close(); yes.onclick = null; no.onclick = null; resolve(v); };
+    yes.onclick = () => done(true);
+    no.onclick  = () => done(false);
+    dlg.showModal();
+  });
+}
 </script>
+<dialog class="yn-dialog" id="ynDialog">
+  <p id="ynMsg"></p>
+  <div class="yn-btns">
+    <button class="yn-no" id="ynNo">No</button>
+    <button class="yn-yes" id="ynYes">Yes</button>
+  </div>
+</dialog>
 </body>
 </html>
