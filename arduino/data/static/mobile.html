@@ -793,8 +793,8 @@ dialog.yn-dialog .yn-btns button.yn-yes { background:var(--accent,#3a8fd8); colo
     <button class="profile-save" id="deleteProfileBtn" onclick="deleteProfile()" title="Delete selected profile" style="display:none">🗑</button>
   </div>
   <div class="profile-row" style="padding-top:0">
-    <button class="profile-save" style="flex:1" onclick="exportBackup()" title="Download controller backup JSON">Export</button>
-    <button class="profile-save" style="flex:1" onclick="chooseBackupImport()" title="Restore config, schedules, lunar settings, and profiles from a backup JSON file">Import</button>
+    <button class="profile-save" style="flex:1" onclick="exportBackup()" title="Save a full backup of all settings, schedules, and profiles">Backup</button>
+    <button class="profile-save" style="flex:1" onclick="chooseBackupImport()" title="Restore settings, schedules, and profiles from a backup file">Restore</button>
   </div>
   <div class="profile-row" style="padding-top:0">
     <button class="profile-save" style="flex:1" onclick="savePreset()" title="Save current schedule as a named preset; optionally export as a shareable file">Save Preset</button>
@@ -2112,11 +2112,11 @@ async function saveImportedPresetAsProfile(p) {
   return true;
 }
 
-function downloadJson(filename, payload) {
+function downloadJson(filename, payload, {share = false} = {}) {
   const json = JSON.stringify(payload, null, 2) + '\n';
-  if (isAndroid() && window.K7Android?.shareJson) {
-    K7Android.shareJson(filename, json);
-    return;
+  if (isAndroid()) {
+    if (share && window.K7Android?.shareJson) { K7Android.shareJson(filename, json); return; }
+    if (window.K7Android?.saveJson)            { K7Android.saveJson(filename, json);  return; }
   }
   const blob = new Blob([json], {type:'application/json'});
   const a = document.createElement('a');
@@ -2153,7 +2153,7 @@ async function savePreset() {
       const notes = optionalPrompt('Short notes for reviewers/users:', '');
       if (notes !== null) {
         const preset = communityPresetPayload(name.trim(), useCase, notes);
-        downloadJson(`${sanitizePresetFilename(preset.name)}.json`, preset);
+        downloadJson(`${sanitizePresetFilename(preset.name)}.json`, preset, {share: true});
         setOk('Preset saved and exported');
         return;
       }

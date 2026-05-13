@@ -30,7 +30,9 @@ public class MainActivity extends Activity {
     private WebView webView;
     private boolean pageLoaded = false;
     private ValueCallback<Uri[]> mFilePathCallback;
+    private String mPendingSaveContent;
     private static final int FILE_CHOOSER_REQUEST = 1001;
+    private static final int SAVE_JSON_REQUEST    = 1002;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -118,6 +120,16 @@ public class MainActivity extends Activity {
             }
 
             @JavascriptInterface
+            public void saveJson(String filename, String content) {
+                mPendingSaveContent = content;
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("application/json");
+                intent.putExtra(Intent.EXTRA_TITLE, filename);
+                startActivity(intent);
+            }
+
+            @JavascriptInterface
             public void shareJson(String filename, String content) {
                 try {
                     File file = new File(getCacheDir(), filename);
@@ -167,6 +179,15 @@ public class MainActivity extends Activity {
                 mFilePathCallback.onReceiveValue(results);
                 mFilePathCallback = null;
             }
+        } else if (requestCode == SAVE_JSON_REQUEST) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null && mPendingSaveContent != null) {
+                try (java.io.OutputStream os = getContentResolver().openOutputStream(data.getData())) {
+                    os.write(mPendingSaveContent.getBytes("UTF-8"));
+                } catch (Exception e) {
+                    Log.e("K7Main", "saveJson write failed: " + e.getMessage());
+                }
+            }
+            mPendingSaveContent = null;
         }
     }
 
