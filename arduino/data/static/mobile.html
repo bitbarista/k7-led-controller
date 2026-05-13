@@ -784,6 +784,7 @@ button:disabled { opacity: 0.4; }
       <option value="">— Select preset or profile —</option>
     </select>
     <button class="profile-save" onclick="saveProfile()" title="Save current schedule as profile">💾</button>
+    <button class="profile-save" id="deleteProfileBtn" onclick="deleteProfile()" title="Delete selected profile" style="display:none">🗑</button>
   </div>
   <div class="profile-row" style="padding-top:0">
     <button class="profile-save" style="flex:1" onclick="exportBackup()" title="Download controller backup JSON">Export</button>
@@ -1969,6 +1970,7 @@ async function loadPresetsProfiles() {
 
 function onPresetChange() {
   const v = document.getElementById('presetSel').value;
+  document.getElementById('deleteProfileBtn').style.display = v.startsWith('profile:') ? '' : 'none';
   if(!v) { document.getElementById('presetDesc').textContent=''; activePresetKey=''; localStorage.removeItem('k7-activePreset'); return; }
   let p;
   if(v.startsWith('preset:'))       p = presets[v.slice(7)];
@@ -2149,6 +2151,22 @@ async function savePreset() {
     }
   }
   setOk('Preset saved');
+}
+
+async function deleteProfile() {
+  const v = document.getElementById('presetSel').value;
+  if (!v.startsWith('profile:')) return;
+  const name = v.slice(8);
+  if (!confirm(`Delete profile "${name}"?`)) return;
+  setBusy('Deleting…');
+  try {
+    await api('DELETE', `/api/profiles/${encodeURIComponent(name)}`);
+    activePresetKey = '';
+    localStorage.removeItem('k7-activePreset');
+    document.getElementById('deleteProfileBtn').style.display = 'none';
+    await loadPresetsProfiles();
+    setOk(`Profile "${name}" deleted`);
+  } catch(e) { setErr(e.message); }
 }
 
 function choosePresetImport() {
