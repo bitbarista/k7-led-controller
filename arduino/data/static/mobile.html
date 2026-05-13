@@ -796,12 +796,12 @@ dialog.yn-dialog .yn-btns button.yn-yes { background:var(--accent,#3a8fd8); colo
     <button class="profile-save" style="flex:1" onclick="choosePresetImport()" title="Load a shared preset JSON into the editor">Import Preset</button>
   </div>
   <div class="profile-row" style="padding-top:0">
-    <button class="profile-save" style="flex:1" onclick="exportBackup()" title="Save a full backup of all settings, schedules, and profiles">Backup</button>
-    <button class="profile-save" style="flex:1" onclick="chooseBackupImport()" title="Restore settings, schedules, and profiles from a backup file">Restore</button>
-  </div>
-  <div class="profile-row" style="padding-top:0">
     <button class="profile-save" style="flex:1" onclick="submitCommunityPreset()" title="Open a GitHub issue draft for community preset review">Submit Preset</button>
     <button class="profile-save" style="flex:1" data-cap="community_presets_browse" onclick="openCommunityBrowser()" title="Browse and install community presets from the online library">Browse Presets</button>
+  </div>
+  <div class="profile-row" style="padding-top:0">
+    <button class="profile-save" style="flex:1" onclick="exportBackup()" title="Save a full backup of all settings, schedules, and profiles">Backup</button>
+    <button class="profile-save" style="flex:1" onclick="chooseBackupImport()" title="Restore settings, schedules, and profiles from a backup file">Restore</button>
   </div>
   <div class="profile-desc" id="presetDesc"></div>
 </div>
