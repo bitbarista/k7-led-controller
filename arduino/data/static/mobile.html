@@ -2211,7 +2211,7 @@ function openCommunityBrowser() {
   cpbFilter = 'device';
   document.getElementById('cpbFilterDevice').classList.add('active');
   document.getElementById('cpbFilterAll').classList.remove('active');
-  document.getElementById('cpbNotice').style.display = isAndroid() ? '' : 'none';
+  document.getElementById('cpbNotice').style.display = 'none';
   document.getElementById('cpbBackdrop').hidden = false;
   if (!cpbIndex) loadCommunityPresets();
   else renderCommunityPresetList();
@@ -2245,8 +2245,8 @@ async function loadCommunityPresets() {
     cpbIndex = resp;
     renderCommunityPresetList();
   } catch(e) {
-    const hint = isAndroid() ? ' Switch to home WiFi and try again.' : '';
-    document.getElementById('cpbList').innerHTML = `<div class="cpb-status">Could not load presets — internet connection required.${hint}</div>`;
+    if (isAndroid()) document.getElementById('cpbNotice').style.display = '';
+    document.getElementById('cpbList').innerHTML = `<div class="cpb-status">Could not load presets — internet connection required.</div>`;
   }
 }
 
