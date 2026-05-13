@@ -819,6 +819,9 @@ button:disabled { opacity: 0.4; }
       <button class="cpb-filter-btn active" id="cpbFilterDevice" onclick="setCpbFilter('device')">K7 Mini</button>
       <button class="cpb-filter-btn" id="cpbFilterAll" onclick="setCpbFilter('all')">All</button>
     </div>
+    <div id="cpbNotice" style="display:none;font-size:0.78rem;color:#b08000;background:#fffbe6;border:1px solid #f0d060;border-radius:6px;padding:7px 10px;margin:6px 0 2px">
+      Requires internet. If connected to the lamp's WiFi, switch to your home WiFi first, then reopen.
+    </div>
     <div class="cpb-list" id="cpbList"><div class="cpb-status">Loading…</div></div>
   </div>
 </div>
@@ -2202,6 +2205,7 @@ function openCommunityBrowser() {
   cpbFilter = 'device';
   document.getElementById('cpbFilterDevice').classList.add('active');
   document.getElementById('cpbFilterAll').classList.remove('active');
+  document.getElementById('cpbNotice').style.display = isAndroid() ? '' : 'none';
   document.getElementById('cpbBackdrop').hidden = false;
   if (!cpbIndex) loadCommunityPresets();
   else renderCommunityPresetList();
@@ -2235,7 +2239,8 @@ async function loadCommunityPresets() {
     cpbIndex = resp;
     renderCommunityPresetList();
   } catch(e) {
-    document.getElementById('cpbList').innerHTML = `<div class="cpb-status">Could not load presets: ${e.message}</div>`;
+    const hint = isAndroid() ? ' Switch to home WiFi and try again.' : '';
+    document.getElementById('cpbList').innerHTML = `<div class="cpb-status">Could not load presets — internet connection required.${hint}</div>`;
   }
 }
 
