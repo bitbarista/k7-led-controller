@@ -789,16 +789,15 @@ dialog.yn-dialog .yn-btns button.yn-yes { background:var(--accent,#3a8fd8); colo
     <select id="presetSel" class="profile-sel" onchange="onPresetChange()">
       <option value="">— Select preset or profile —</option>
     </select>
-    <button class="profile-save" onclick="saveProfile()" title="Save current schedule as profile">💾</button>
     <button class="profile-save" id="deleteProfileBtn" onclick="deleteProfile()" title="Delete selected profile" style="display:none">🗑</button>
-  </div>
-  <div class="profile-row" style="padding-top:0">
-    <button class="profile-save" style="flex:1" onclick="exportBackup()" title="Save a full backup of all settings, schedules, and profiles">Backup</button>
-    <button class="profile-save" style="flex:1" onclick="chooseBackupImport()" title="Restore settings, schedules, and profiles from a backup file">Restore</button>
   </div>
   <div class="profile-row" style="padding-top:0">
     <button class="profile-save" style="flex:1" onclick="savePreset()" title="Save current schedule as a named preset; optionally export as a shareable file">Save Preset</button>
     <button class="profile-save" style="flex:1" onclick="choosePresetImport()" title="Load a shared preset JSON into the editor">Import Preset</button>
+  </div>
+  <div class="profile-row" style="padding-top:0">
+    <button class="profile-save" style="flex:1" onclick="exportBackup()" title="Save a full backup of all settings, schedules, and profiles">Backup</button>
+    <button class="profile-save" style="flex:1" onclick="chooseBackupImport()" title="Restore settings, schedules, and profiles from a backup file">Restore</button>
   </div>
   <div class="profile-row" style="padding-top:0">
     <button class="profile-save" style="flex:1" onclick="submitCommunityPreset()" title="Open a GitHub issue draft for community preset review">Submit Preset</button>
