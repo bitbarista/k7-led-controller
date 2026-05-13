@@ -73,7 +73,7 @@ func TestBakePCBridgeEffectsAppliesSiestaAndFixedLunar(t *testing.T) {
 }
 
 func TestSavePushedDinoPresetDisablesLunar(t *testing.T) {
-	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100)
+	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestSavePushedDinoPresetDisablesLunar(t *testing.T) {
 }
 
 func TestReadLampStateKeepsDefaultScheduleModeWhenLampReportsManual(t *testing.T) {
-	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100)
+	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestReadLampStateKeepsDefaultScheduleModeWhenLampReportsManual(t *testing.T
 }
 
 func TestReadLampStatePreservesDeliberateManualMode(t *testing.T) {
-	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100)
+	s, err := NewServer(filepath.Join(t.TempDir(), "store.json"), 100, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
