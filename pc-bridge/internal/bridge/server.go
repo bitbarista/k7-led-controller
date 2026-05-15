@@ -698,7 +698,6 @@ func (s *Server) loadStore() error {
 }
 
 func (s *Server) saveStore() error {
-	s.firstRun = false
 	store := s.snapshotStore()
 	data, err := json.MarshalIndent(store, "", "  ")
 	if err != nil {
