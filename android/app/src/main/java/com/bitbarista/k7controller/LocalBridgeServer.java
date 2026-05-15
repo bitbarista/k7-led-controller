@@ -25,6 +25,7 @@ final class LocalBridgeServer implements Runnable {
 
     private final Context context;
     private final SharedPreferences prefs;
+    private final boolean firstRun;
     private final Object lampLock = new Object();
     private K7TcpClient lampClient;
     private String lampClientHost = "";
@@ -36,6 +37,7 @@ final class LocalBridgeServer implements Runnable {
     LocalBridgeServer(Context context) {
         this.context = context.getApplicationContext();
         this.prefs = this.context.getSharedPreferences("k7_android_bridge", Context.MODE_PRIVATE);
+        this.firstRun = !prefs.contains("state");
     }
 
     void start() {
@@ -111,7 +113,7 @@ final class LocalBridgeServer implements Runnable {
         if (path.equals("/api/config")) return config(method, body);
         if (path.equals("/api/devices")) return json(devices());
         if (path.equals("/api/master")) return master(method, body);
-        if (path.equals("/api/state")) return json(state());
+        if (path.equals("/api/state")) return json(state().put("first_run", firstRun));
         if (path.equals("/api/lamp/read")) return lampRead();
         if (path.equals("/api/presets")) return presets();
         if (path.equals("/api/profiles")) return "POST".equals(method) ? profilesPost(body) : profilesGet();
