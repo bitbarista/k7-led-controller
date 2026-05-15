@@ -195,8 +195,9 @@ void setup() {
                     break;
                 }
             }
+            strlcpy(gActivePreset, "preset:mixed", sizeof(gActivePreset));
         }
-        strlcpy(gActivePreset, "preset:mixed", sizeof(gActivePreset));
+        // When lamp had existing data: gActivePreset stays "" so UI knows to prompt user to save
     }
 
     setupApiServer(server);
