@@ -289,6 +289,15 @@ dialog.yn-dialog p { margin:0 0 16px; font-size:0.9rem; line-height:1.4; }
 dialog.yn-dialog .yn-btns { display:flex; gap:8px; justify-content:flex-end; }
 dialog.yn-dialog .yn-btns button { padding:6px 18px; border-radius:6px; border:1px solid var(--border); cursor:pointer; font-family:inherit; font-size:0.88rem; background:var(--surface2); color:var(--text); }
 dialog.yn-dialog .yn-btns button.yn-yes { background:var(--accent,#3a8fd8); color:#fff; border-color:var(--accent,#3a8fd8); }
+dialog.fr-dialog { border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); padding:22px 24px; max-width:380px; }
+dialog.fr-dialog::backdrop { background:rgba(0,0,0,0.6); }
+dialog.fr-dialog h3 { margin:0 0 6px; font-size:1rem; }
+dialog.fr-dialog p { margin:0 0 14px; font-size:0.86rem; color:var(--muted); line-height:1.45; }
+dialog.fr-dialog input[type=text] { width:100%; box-sizing:border-box; padding:7px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface2); color:var(--text); font-family:inherit; font-size:0.9rem; margin-bottom:4px; }
+dialog.fr-dialog .fr-err { color:var(--err,#e55); font-size:0.8rem; min-height:1.2em; margin-bottom:10px; }
+dialog.fr-dialog .fr-btns { display:flex; gap:8px; justify-content:flex-end; }
+dialog.fr-dialog .fr-save { padding:7px 20px; background:var(--accent,#3a8fd8); color:#fff; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-size:0.9rem; font-weight:600; }
+dialog.fr-dialog .fr-skip { padding:7px 12px; background:none; border:1px solid var(--border); border-radius:6px; color:var(--muted); cursor:pointer; font-family:inherit; font-size:0.88rem; }
 </style>
 </head>
 <body>
@@ -969,6 +978,10 @@ async function readFromDevice() {
     applyAcclimationUI(acclimationStatus);
     applySeasonalUI(seasonalStatus);
     renderWarnings(warnings);
+    if (!localStorage.getItem('k7-firstRunDone') && s.first_run &&
+        !isScheduleBlank(scheduleBase) && !activePresetKey.startsWith('preset:')) {
+      showFirstRunModal(s.name || 'My existing schedule');
+    }
   } catch(e) {
     setErr(e.message);
   } finally {
@@ -2813,6 +2826,50 @@ window.addEventListener('storage', e => {
 
 init();
 
+function isScheduleBlank(sched) {
+  return !sched || sched.every(row => row.slice(2).every(v => !v));
+}
+
+function showFirstRunModal(suggestedName) {
+  const dlg = document.getElementById('frDialog');
+  document.getElementById('frName').value = suggestedName || 'My existing schedule';
+  document.getElementById('frErr').textContent = '';
+  dlg.addEventListener('cancel', e => e.preventDefault());
+  dlg.showModal();
+}
+
+async function firstRunSave() {
+  const name = document.getElementById('frName').value.trim();
+  const errEl = document.getElementById('frErr');
+  if (!name) { errEl.textContent = 'Please enter a name'; return; }
+  errEl.textContent = '';
+  try {
+    await api('POST', '/api/profiles', {
+      name, device: cfg.device,
+      scheduleBase: scheduleBase.map(row => [...row]), manual: [...manual],
+      channelBrightness: {...channelBrightness}, masterBrightness, dayShift,
+    });
+    savedProfiles = await api('GET', '/api/profiles');
+    rebuildPresetDropdown();
+    const sel = document.getElementById('presetSel');
+    for (const opt of sel.options) {
+      if (opt.value === `saved:${name}`) { sel.value = opt.value; break; }
+    }
+    activePresetKey = `saved:${name}`;
+    localStorage.setItem('k7-activePreset', activePresetKey);
+    document.getElementById('presetDesc').textContent = 'Saved profile';
+    document.getElementById('deleteProfileBtn').style.display = '';
+    localStorage.setItem('k7-firstRunDone', '1');
+    document.getElementById('frDialog').close();
+    setOk('Profile saved — you can safely explore presets');
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+function firstRunSkip() {
+  localStorage.setItem('k7-firstRunDone', '1');
+  document.getElementById('frDialog').close();
+}
+
 function yesNoDialog(message) {
   return new Promise(resolve => {
     const dlg = document.getElementById('ynDialog');
@@ -2831,6 +2888,16 @@ function yesNoDialog(message) {
   <div class="yn-btns">
     <button class="yn-no" id="ynNo">No</button>
     <button class="yn-yes" id="ynYes">Yes</button>
+  </div>
+</dialog>
+<dialog class="fr-dialog" id="frDialog">
+  <h3>Your lamp already has a schedule</h3>
+  <p>Save it as a profile now — switching presets will replace the current schedule and you won't be able to get it back.</p>
+  <input type="text" id="frName" placeholder="Profile name" />
+  <div class="fr-err" id="frErr"></div>
+  <div class="fr-btns">
+    <button class="fr-skip" onclick="firstRunSkip()">Skip — I don't need it</button>
+    <button class="fr-save" onclick="firstRunSave()">Save Profile</button>
   </div>
 </dialog>
 </body>

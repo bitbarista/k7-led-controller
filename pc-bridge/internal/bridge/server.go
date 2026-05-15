@@ -81,9 +81,11 @@ type Server struct {
 	configPath string
 	timeout    time.Duration
 	version    string
+	firstRun   bool
 }
 
 func NewServer(configPath string, timeout time.Duration, version string) (*Server, error) {
+	_, statErr := os.Stat(configPath)
 	s := &Server{
 		config: Config{
 			Host:   k7tcp.DefaultHost,
@@ -95,6 +97,7 @@ func NewServer(configPath string, timeout time.Duration, version string) (*Serve
 		configPath: configPath,
 		timeout:    timeout,
 		version:    version,
+		firstRun:   os.IsNotExist(statErr),
 	}
 	if err := s.loadStore(); err != nil {
 		return nil, err
@@ -344,8 +347,12 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.RLock()
 	state := s.state
+	firstRun := s.firstRun
 	s.mu.RUnlock()
-	writeJSON(w, http.StatusOK, state)
+	writeJSON(w, http.StatusOK, struct {
+		State
+		FirstRun bool `json:"first_run,omitempty"`
+	}{State: state, FirstRun: firstRun})
 }
 
 func (s *Server) handlePresets(w http.ResponseWriter, r *http.Request) {
@@ -691,6 +698,7 @@ func (s *Server) loadStore() error {
 }
 
 func (s *Server) saveStore() error {
+	s.firstRun = false
 	store := s.snapshotStore()
 	data, err := json.MarshalIndent(store, "", "  ")
 	if err != nil {

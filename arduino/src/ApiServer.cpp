@@ -737,6 +737,7 @@ void setupApiServer(WebServer& server) {
         doc["name"]          = gLampName;
         doc["mode"]          = gLampAutoMode ? "auto" : "manual";
         doc["active_preset"] = gActivePreset;
+        doc["first_run"]     = !UserDataFS.exists(STATE_FILE);
         doc["schedule_shift_minutes"] = gScheduleShiftMinutes;
         auto schedArr = doc["schedule"].to<JsonArray>();
         for (int h = 0; h < K7_SLOTS; h++) {
