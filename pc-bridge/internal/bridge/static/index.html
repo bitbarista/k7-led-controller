@@ -155,9 +155,8 @@ body {
 .chart-shift-label { font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); }
 .chart-canvas-wrap { flex: 1; min-height: 0; position: relative; }
 .chart-canvas-wrap canvas { position: absolute; inset: 0; }
-.chart-hint { font-size:0.68rem; color:var(--muted); text-align:center; padding:2px 0; flex-shrink:0; }
-.chart-toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(8px); background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:9px 18px; font-size:0.82rem; z-index:9999; opacity:0; transition:opacity 0.25s,transform 0.25s; pointer-events:none; white-space:nowrap; box-shadow:0 4px 16px rgba(0,0,0,0.3); }
-.chart-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.chart-toast { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.92); background:#1e3a5f; border:1px solid #3b82f6; color:#e2e8f0; border-radius:10px; padding:12px 22px; font-size:0.88rem; font-weight:500; z-index:9999; opacity:0; transition:opacity 0.2s,transform 0.2s; pointer-events:none; white-space:nowrap; box-shadow:0 8px 32px rgba(0,0,0,0.5); }
+.chart-toast.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
 .color-strip { display: flex; height: 13px; border-radius: 4px; overflow: hidden; gap: 1px; margin-top: 5px; flex-shrink: 0; }
 .color-strip > div { flex: 1; }
 
@@ -427,7 +426,6 @@ dialog.fr-dialog .fr-skip { padding:7px 12px; background:none; border:1px solid 
         <canvas id="schedChart"></canvas>
       </div>
       <div class="channels-note" data-cap="siesta_baked_schedule|fixed_lunar">Chart curves are a visual preview. PC bridge pushes hourly points to the lamp, so real schedule, siesta, and moonlight transitions may happen as hourly steps unless the lamp firmware smooths them internally.</div>
-      <div class="chart-hint" id="chartHint" style="display:none">Showing effects applied — switch to Base to edit</div>
       <div class="color-strip" id="colorStrip"></div>
     </div>
 
@@ -1234,8 +1232,6 @@ function setChartMode(mode) {
   if (title) title.textContent = chartMode === 'effective'
     ? 'Effective Output Today · yellow = real time, blue = shifted schedule time'
     : '24-Hour Schedule · drag points to edit';
-  const hint = document.getElementById('chartHint');
-  if (hint) hint.style.display = chartMode === 'effective' ? '' : 'none';
   localStorage.setItem('k7-chartMode', chartMode);
   updateChart();
   updateColorStrip();
@@ -1303,14 +1299,14 @@ function initChart() {
   });
   chart._dragDataConfig = dragDataConfig;
 
+  let _effectiveToastTimer = null;
   document.getElementById('schedChart')?.addEventListener('pointerdown', () => {
     if (chartMode !== 'effective') return;
-    if (localStorage.getItem('k7-effectiveHintSeen')) return;
-    localStorage.setItem('k7-effectiveHintSeen', '1');
     const toast = document.getElementById('chartToast');
     if (!toast) return;
+    clearTimeout(_effectiveToastTimer);
     toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 3500);
+    _effectiveToastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
   });
 }
 
