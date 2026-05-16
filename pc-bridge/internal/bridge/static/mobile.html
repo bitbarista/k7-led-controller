@@ -2669,7 +2669,8 @@ async function startPlayDay() {
     const mins = step * stepMins;
     playHour = mins / 60;
     if (mobileChart) mobileChart.update('none');
-    try { await sendPlayPreviewMins(mins); } catch(e) {}
+    if (smooth) sendPlayPreviewMins(mins).catch(() => {});
+    else try { await sendPlayPreviewMins(mins); } catch(e) {}
     if (playHour === null) return;
     if (step < totalSteps - 1) await new Promise(r => { _playTimer = setTimeout(r, waitMs); });
   }
