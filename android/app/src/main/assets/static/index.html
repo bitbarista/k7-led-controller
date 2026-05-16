@@ -832,6 +832,15 @@ async function readControllerState() {
   return api('GET', '/api/state');
 }
 
+async function syncClockIfNeeded(s) {
+  if (!cap('persistent_controller_clock')) return;
+  try {
+    const state = s || await api('GET', '/api/state');
+    if (state.clock_set === false)
+      await api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 });
+  } catch(_) {}
+}
+
 // ── Status ────────────────────────────────────────────────────────────────────
 function setStatus(state, msg) {
   document.getElementById('dot').className = `status-dot ${state}`;
@@ -940,6 +949,7 @@ async function readFromDevice() {
       capGet('logs', '/api/warnings/status', 'warnings'),
       cap('logs') ? api('GET', '/api/output/status').catch(() => null) : Promise.resolve(null),
     ]);
+    syncClockIfNeeded(s);
     mode            = s.mode;
     const rawPreset = s.active_preset || localStorage.getItem('k7-activePreset') || '';
     activePresetKey = rawPreset.startsWith('profile:') ? 'saved:' + rawPreset.slice(8) : rawPreset;
@@ -2865,6 +2875,7 @@ async function init() {
   applyModeUI();
   if (cap('persistent_controller_clock')) {
     try { await api('POST', '/api/time', { timestamp: Date.now() - new Date().getTimezoneOffset() * 60000 }); } catch(_) {}
+    setInterval(syncClockIfNeeded, 30000);
   }
   loadVersionInfo();
   await readFromDevice();
