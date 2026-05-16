@@ -1081,7 +1081,7 @@ async function startPlayDay() {
     if (playHour === null) return;
     playHour = h;
     if (chart) chart.update('none');
-    await sendPlayPreview(h).catch(() => {});
+    try { await sendPlayPreview(h); } catch(e) {}
     if (playHour === null) return;
     if (h < 23) await new Promise(r => { _playTimer = setTimeout(r, 750); });
   }

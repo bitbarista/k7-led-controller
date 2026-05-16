@@ -2663,7 +2663,7 @@ async function startPlayDay() {
     if (playHour === null) return;
     playHour = h;
     if (mobileChart) mobileChart.update('none');
-    await sendPlayPreview(h).catch(() => {});
+    try { await sendPlayPreview(h); } catch(e) {}
     if (playHour === null) return;
     if (h < 23) await new Promise(r => { _playTimer = setTimeout(r, 750); });
   }
@@ -2708,7 +2708,7 @@ function effectiveChartValue(h, chName, chIdx) {
   if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
     const lunarFloor = lunarState.max_intensity * (lunarState.illumination ?? 100) / 100;
     const lunarWin   = lunarWindow(lunarState);
-    if (_minsInWindow(mins, lunarWin.start, lunarWin.end)) {
+    if (lunarWin && _minsInWindow(mins, lunarWin.start, lunarWin.end)) {
       if (chName === 'royal_blue') v = Math.max(v, lunarFloor);
       else if (chName === 'cyan')  v = Math.max(v, lunarFloor * 0.7);
     }
