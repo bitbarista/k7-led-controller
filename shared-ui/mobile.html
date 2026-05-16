@@ -2658,8 +2658,8 @@ function togglePlayDay() { playHour === null ? startPlayDay() : stopPlayDay(); }
 async function startPlayDay() {
   if (!cap('manual_preview')) return;
   const smooth = cap('smooth_ramp') && rampActiveState;
-  const stepMins = smooth ? 15 : 60;
-  const totalSteps = smooth ? 96 : 24;
+  const stepMins = smooth ? 20 : 60;
+  const totalSteps = smooth ? 72 : 24;
   const waitMs = smooth ? 400 : 750;
   playHour = 0;
   document.getElementById('playBtn').textContent = '⏹ Stop';
