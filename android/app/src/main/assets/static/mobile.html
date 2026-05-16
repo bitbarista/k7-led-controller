@@ -310,6 +310,12 @@ body {
 /* ── Schedule chart ── */
 .chart-wrap { height: 190px; position: relative; margin-top: 6px; cursor: pointer; }
 .chart-wrap canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+.scrub-btn { background:var(--surface2); border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:5px 10px; font-size:0.75rem; cursor:pointer; white-space:nowrap; }
+.scrub-btn.scrub-active { color:#f59e0b; border-color:rgba(245,158,11,0.45); background:rgba(245,158,11,0.14); }
+.scrub-row { display:flex; align-items:center; gap:8px; margin-top:6px; }
+.scrub-time { font-size:0.72rem; font-weight:700; color:#f59e0b; min-width:38px; flex-shrink:0; }
+.scrub-slider { flex:1; accent-color:#f59e0b; cursor:pointer; }
+.scrub-close { background:none; border:none; color:var(--muted); cursor:pointer; padding:0 4px; font-size:1rem; line-height:1; flex-shrink:0; }
 
 /* ── Hour editor bottom sheet ── */
 #hourSheet { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; justify-content: flex-end; }
@@ -575,9 +581,17 @@ dialog.fr-dialog .fr-skip { padding:4px 0; background:none; border:none; color:v
 
 <!-- Schedule chart -->
 <div class="card" style="margin-top:10px">
-  <div class="card-hd">Schedule Preview <span style="font-weight:400;font-size:0.68rem;font-style:italic;color:var(--muted)">— tap to edit</span></div>
+  <div class="card-hd" style="display:flex;align-items:center;justify-content:space-between">
+    <span>Schedule Preview <span style="font-weight:400;font-size:0.68rem;font-style:italic;color:var(--muted)">— tap to edit</span></span>
+    <button class="scrub-btn cap-hidden" id="scrubBtn" onclick="toggleScrubMode()" title="Preview lamp output at any hour" data-cap="manual_preview">⏵ Preview</button>
+  </div>
   <div class="chart-wrap">
     <canvas id="schedChart"></canvas>
+  </div>
+  <div class="scrub-row" id="scrubRow" style="display:none">
+    <span class="scrub-time" id="scrubTime">12:00</span>
+    <input type="range" class="scrub-slider" id="scrubSlider" min="0" max="23" value="12" oninput="onScrubInput(+this.value)">
+    <button class="scrub-close" onclick="exitScrubMode()" title="Exit preview">✕</button>
   </div>
 </div>
 
@@ -2549,6 +2563,8 @@ function cssVar(name) { return getComputedStyle(document.documentElement).getPro
 let hsHour     = null;
 let hsChName   = null;
 let hsWheelDeb = null;
+let scrubHour  = null;
+let _scrubPreviewTimer = null;
 const WHEEL_ITEM_H = 44;
 
 const selectedHourPlugin = {
@@ -2587,6 +2603,16 @@ const nowLinePlugin = {
     const labelW = ctx.measureText(label).width;
     const align = x + labelW / 2 > c.chartArea.right ? 'right' : (x - labelW / 2 < c.chartArea.left ? 'left' : 'center');
     ctx.textAlign = align; ctx.fillText(label, x, ys.top - 4);
+    if (scrubHour !== null) {
+      const sx = xs.getPixelForValue(scrubHour);
+      const sl = `${String(scrubHour).padStart(2,'0')}:00`;
+      ctx.beginPath(); ctx.moveTo(sx, ys.top); ctx.lineTo(sx, ys.bottom);
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+      ctx.font = '600 10px system-ui,sans-serif'; ctx.fillStyle = '#f59e0b';
+      const lw = ctx.measureText(sl).width;
+      const al = sx + lw/2 > c.chartArea.right ? 'right' : (sx - lw/2 < c.chartArea.left ? 'left' : 'center');
+      ctx.textAlign = al; ctx.fillText(sl, sx, ys.bottom + 13);
+    }
     ctx.restore();
   }
 };
@@ -2634,6 +2660,43 @@ function initChart() {
     const h = Math.round(mobileChart.scales.x.getValueForPixel(e.clientX - canvas.getBoundingClientRect().left));
     if (h >= 0 && h <= 23) openHourSheet(h);
   });
+}
+
+function toggleScrubMode() { scrubHour === null ? enterScrubMode() : exitScrubMode(); }
+function enterScrubMode() {
+  const h = new Date().getHours();
+  scrubHour = h;
+  document.getElementById('scrubSlider').value = h;
+  document.getElementById('scrubTime').textContent = `${String(h).padStart(2,'0')}:00`;
+  document.getElementById('scrubRow').style.display = '';
+  document.getElementById('scrubBtn').classList.add('scrub-active');
+  if (mobileChart) mobileChart.update('none');
+  sendScrubPreview(h);
+}
+function exitScrubMode() {
+  scrubHour = null;
+  clearTimeout(_scrubPreviewTimer);
+  document.getElementById('scrubRow').style.display = 'none';
+  document.getElementById('scrubBtn').classList.remove('scrub-active');
+  if (mobileChart) mobileChart.update('none');
+}
+function onScrubInput(h) {
+  scrubHour = h;
+  document.getElementById('scrubTime').textContent = `${String(h).padStart(2,'0')}:00`;
+  if (mobileChart) mobileChart.update('none');
+  clearTimeout(_scrubPreviewTimer);
+  _scrubPreviewTimer = setTimeout(() => sendScrubPreview(h), 400);
+}
+function sendScrubPreview(h) {
+  if (!cap('manual_preview')) return;
+  const chs = DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels;
+  const row = schedule[h];
+  if (!row) return;
+  const channels = Array.from({length: 6}, (_, i) => {
+    if (i >= chs.length) return 0;
+    return Math.max(0, Math.min(100, row[2 + i] ?? 0));
+  });
+  api('POST', '/api/preview', { channels }).catch(() => {});
 }
 
 function shiftedCompositeAt(wallClockH) {
@@ -2707,6 +2770,7 @@ function updateChart() {
 
 // ── Hour editor ──────────────────────────────────────────────────────────
 function openHourSheet(h) {
+  if (scrubHour !== null) exitScrubMode();
   hsHour = Math.max(0, Math.min(23, h));
   const channels = chs();
   if (!hsChName || !channels.includes(hsChName)) hsChName = channels[0];
