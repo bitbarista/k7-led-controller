@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE = ROOT / "arduino" / "src" / "Presets.h"
 DEFAULT_OUTPUT = ROOT / "pc-bridge" / "internal" / "bridge" / "presets.json"
+ANDROID_OUTPUT = ROOT / "android" / "app" / "src" / "main" / "assets" / "presets.json"
 
 SLOTS = 24
 CHANNELS = 6
@@ -119,20 +120,25 @@ def main() -> int:
     text = json.dumps(presets, indent=2) + "\n"
 
     if args.check:
-        try:
-            existing = args.output.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            print(f"{args.output} is missing")
-            return 1
-        if existing != text:
-            print(f"{args.output} is out of date")
-            return 1
-        print(f"{args.output} is up to date")
-        return 0
+        stale = False
+        for out in (args.output, ANDROID_OUTPUT):
+            try:
+                existing = out.read_text(encoding="utf-8")
+            except FileNotFoundError:
+                print(f"{out} is missing")
+                stale = True
+                continue
+            if existing != text:
+                print(f"{out} is out of date")
+                stale = True
+            else:
+                print(f"{out} is up to date")
+        return 1 if stale else 0
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(text, encoding="utf-8")
-    print(f"generated {args.output.relative_to(ROOT)}")
+    for out in (args.output, ANDROID_OUTPUT):
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        print(f"generated {out.relative_to(ROOT)}")
     return 0
 
 

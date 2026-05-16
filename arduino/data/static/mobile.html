@@ -2654,22 +2654,23 @@ function initChart() {
 }
 
 function togglePlayDay() { playHour === null ? startPlayDay() : stopPlayDay(); }
-function startPlayDay() {
+async function startPlayDay() {
   if (!cap('manual_preview')) return;
   playHour = 0;
   document.getElementById('playBtn').textContent = '⏹ Stop';
   document.getElementById('playBtn').classList.add('play-active');
-  sendPlayPreview(0);
-  if (mobileChart) mobileChart.update('none');
-  _playTimer = setInterval(() => {
-    playHour++;
-    if (playHour > 23) { stopPlayDay(); return; }
+  for (let h = 0; h <= 23; h++) {
+    if (playHour === null) return;
+    playHour = h;
     if (mobileChart) mobileChart.update('none');
-    sendPlayPreview(playHour);
-  }, 750);
+    await sendPlayPreview(h).catch(() => {});
+    if (playHour === null) return;
+    if (h < 23) await new Promise(r => { _playTimer = setTimeout(r, 750); });
+  }
+  stopPlayDay();
 }
 function stopPlayDay() {
-  clearInterval(_playTimer);
+  clearTimeout(_playTimer);
   _playTimer = null;
   playHour = null;
   document.getElementById('playBtn').textContent = '▶ Play day';
@@ -2683,7 +2684,7 @@ function sendPlayPreview(h) {
     if (i >= chs.length) return 0;
     return effectiveChartValue(h, chs[i], i);
   });
-  api('POST', '/api/preview', { channels }).catch(() => {});
+  return api('POST', '/api/preview', { channels });
 }
 
 function shiftedCompositeAt(wallClockH) {
