@@ -1285,7 +1285,7 @@ function setChartMode(mode) {
   document.getElementById('chartEffectiveBtn')?.classList.toggle('active', chartMode === 'effective');
   const title = document.getElementById('chartTitle');
   if (title) title.textContent = chartMode === 'effective'
-    ? 'Effective Output Today · yellow = real time, blue = shifted schedule time'
+    ? 'Effective Today · curves show actual lamp output after shift, siesta and lunar are applied'
     : '24-Hour Schedule · drag points to edit';
   localStorage.setItem('k7-chartMode', chartMode);
   updateChart();
