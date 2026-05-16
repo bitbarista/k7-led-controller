@@ -749,6 +749,7 @@ void setupApiServer(WebServer& server) {
         }
         auto manArr = doc["manual"].to<JsonArray>();
         for (int i = 0; i < K7_CHANNELS; i++) manArr.add(gLastManual[i]);
+        doc["clock_set"] = (time(nullptr) > 1700000000);
         sendJson(server, doc);
     });
 
