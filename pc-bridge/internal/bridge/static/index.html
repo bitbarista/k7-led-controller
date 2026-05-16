@@ -1074,16 +1074,21 @@ function togglePlayDay() { playHour === null ? startPlayDay() : stopPlayDay(); }
 
 async function startPlayDay() {
   if (!cap('manual_preview')) return;
+  const smooth = cap('smooth_ramp') && rampActiveState;
+  const stepMins = smooth ? 15 : 60;
+  const totalSteps = smooth ? 96 : 24;
+  const waitMs = smooth ? 400 : 750;
   playHour = 0;
   document.getElementById('playBtn').textContent = '⏹ Stop';
   document.getElementById('playBtn').classList.add('play-active');
-  for (let h = 0; h <= 23; h++) {
+  for (let step = 0; step < totalSteps; step++) {
     if (playHour === null) return;
-    playHour = h;
+    const mins = step * stepMins;
+    playHour = mins / 60;
     if (chart) chart.update('none');
-    try { await sendPlayPreview(h); } catch(e) {}
+    try { await sendPlayPreviewMins(mins); } catch(e) {}
     if (playHour === null) return;
-    if (h < 23) await new Promise(r => { _playTimer = setTimeout(r, 750); });
+    if (step < totalSteps - 1) await new Promise(r => { _playTimer = setTimeout(r, waitMs); });
   }
   stopPlayDay();
 }
@@ -1098,11 +1103,11 @@ function stopPlayDay() {
   pushSchedule().catch(() => {});
 }
 
-function sendPlayPreview(h) {
+function sendPlayPreviewMins(mins) {
   const chs = DEVICES[cfg.device].channels;
   const channels = Array.from({length: 6}, (_, i) => {
     if (i >= chs.length) return 0;
-    return effectiveValueForHour(h, i);
+    return chartEffectiveValueAtMins(mins, i);
   });
   return api('POST', '/api/preview', { channels });
 }
@@ -1240,7 +1245,8 @@ const nowLinePlugin = {
 
     if (playHour !== null) {
       const sx = xs.getPixelForValue(playHour);
-      const sl = `${String(playHour).padStart(2,'0')}:00`;
+      const _ph = Math.floor(playHour), _pm = Math.round((playHour - _ph) * 60);
+      const sl = `${String(_ph).padStart(2,'0')}:${String(_pm).padStart(2,'0')}`;
       ctx.save();
       ctx.beginPath(); ctx.moveTo(sx, ys.top); ctx.lineTo(sx, ys.bottom);
       ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.stroke();

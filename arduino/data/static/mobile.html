@@ -2596,7 +2596,8 @@ const nowLinePlugin = {
     ctx.textAlign = align; ctx.fillText(label, x, ys.top - 4);
     if (playHour !== null) {
       const sx = xs.getPixelForValue(playHour);
-      const sl = `${String(playHour).padStart(2,'0')}:00`;
+      const _ph = Math.floor(playHour), _pm = Math.round((playHour - _ph) * 60);
+      const sl = `${String(_ph).padStart(2,'0')}:${String(_pm).padStart(2,'0')}`;
       ctx.beginPath(); ctx.moveTo(sx, ys.top); ctx.lineTo(sx, ys.bottom);
       ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
       ctx.font = '600 10px system-ui,sans-serif'; ctx.fillStyle = '#f59e0b';
@@ -2656,16 +2657,21 @@ function initChart() {
 function togglePlayDay() { playHour === null ? startPlayDay() : stopPlayDay(); }
 async function startPlayDay() {
   if (!cap('manual_preview')) return;
+  const smooth = cap('smooth_ramp') && rampActiveState;
+  const stepMins = smooth ? 15 : 60;
+  const totalSteps = smooth ? 96 : 24;
+  const waitMs = smooth ? 400 : 750;
   playHour = 0;
   document.getElementById('playBtn').textContent = '⏹ Stop';
   document.getElementById('playBtn').classList.add('play-active');
-  for (let h = 0; h <= 23; h++) {
+  for (let step = 0; step < totalSteps; step++) {
     if (playHour === null) return;
-    playHour = h;
+    const mins = step * stepMins;
+    playHour = mins / 60;
     if (mobileChart) mobileChart.update('none');
-    try { await sendPlayPreview(h); } catch(e) {}
+    try { await sendPlayPreviewMins(mins); } catch(e) {}
     if (playHour === null) return;
-    if (h < 23) await new Promise(r => { _playTimer = setTimeout(r, 750); });
+    if (step < totalSteps - 1) await new Promise(r => { _playTimer = setTimeout(r, waitMs); });
   }
   stopPlayDay();
 }
@@ -2678,11 +2684,11 @@ function stopPlayDay() {
   if (mobileChart) mobileChart.update('none');
   pushSchedule().catch(() => {});
 }
-function sendPlayPreview(h) {
+function sendPlayPreviewMins(mins) {
   const chs = DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels;
   const channels = Array.from({length: 6}, (_, i) => {
     if (i >= chs.length) return 0;
-    return effectiveChartValue(h, chs[i], i);
+    return effectiveChartValueAtMins(mins, chs[i], i);
   });
   return api('POST', '/api/preview', { channels });
 }
@@ -2705,6 +2711,23 @@ function shiftedCompositeAt(wallClockH) {
 function effectiveChartValue(h, chName, chIdx) {
   const mins = h * 60;
   let v = (schedule[h][2 + chIdx] || 0) * siestaFactorAt(mins);
+  if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
+    const lunarFloor = lunarState.max_intensity * (lunarState.illumination ?? 100) / 100;
+    const lunarWin   = lunarWindow(lunarState);
+    if (lunarWin && _minsInWindow(mins, lunarWin.start, lunarWin.end)) {
+      if (chName === 'royal_blue') v = Math.max(v, lunarFloor);
+      else if (chName === 'cyan')  v = Math.max(v, lunarFloor * 0.7);
+    }
+  }
+  return Math.min(100, Math.round(v));
+}
+
+function effectiveChartValueAtMins(mins, chName, chIdx) {
+  const h = Math.floor(mins / 60) % 24;
+  const frac = (mins % 60) / 60;
+  const lo = schedule[h][2 + chIdx] || 0;
+  const hi = schedule[(h + 1) % 24][2 + chIdx] || 0;
+  let v = (lo + frac * (hi - lo)) * siestaFactorAt(mins);
   if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
     const lunarFloor = lunarState.max_intensity * (lunarState.illumination ?? 100) / 100;
     const lunarWin   = lunarWindow(lunarState);
