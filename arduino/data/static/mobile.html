@@ -310,6 +310,8 @@ body {
 /* ── Schedule chart ── */
 .chart-wrap { height: 190px; position: relative; margin-top: 6px; cursor: pointer; }
 .chart-wrap canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+.play-btn { background:var(--surface2); border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:5px 10px; font-size:0.75rem; cursor:pointer; white-space:nowrap; }
+.play-btn.play-active { color:#f59e0b; border-color:rgba(245,158,11,0.45); background:rgba(245,158,11,0.14); }
 
 /* ── Hour editor bottom sheet ── */
 #hourSheet { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; justify-content: flex-end; }
@@ -575,7 +577,10 @@ dialog.fr-dialog .fr-skip { padding:4px 0; background:none; border:none; color:v
 
 <!-- Schedule chart -->
 <div class="card" style="margin-top:10px">
-  <div class="card-hd">Schedule Preview <span style="font-weight:400;font-size:0.68rem;font-style:italic;color:var(--muted)">— tap to edit</span></div>
+  <div class="card-hd" style="display:flex;align-items:center;justify-content:space-between">
+    <span>Schedule Preview <span style="font-weight:400;font-size:0.68rem;font-style:italic;color:var(--muted)">— tap to edit</span></span>
+    <button class="play-btn cap-hidden" id="playBtn" onclick="togglePlayDay()" title="Play the full day schedule on the lamp" data-cap="manual_preview">▶ Play day</button>
+  </div>
   <div class="chart-wrap">
     <canvas id="schedChart"></canvas>
   </div>
@@ -2549,6 +2554,8 @@ function cssVar(name) { return getComputedStyle(document.documentElement).getPro
 let hsHour     = null;
 let hsChName   = null;
 let hsWheelDeb = null;
+let playHour  = null;
+let _playTimer = null;
 const WHEEL_ITEM_H = 44;
 
 const selectedHourPlugin = {
@@ -2587,6 +2594,16 @@ const nowLinePlugin = {
     const labelW = ctx.measureText(label).width;
     const align = x + labelW / 2 > c.chartArea.right ? 'right' : (x - labelW / 2 < c.chartArea.left ? 'left' : 'center');
     ctx.textAlign = align; ctx.fillText(label, x, ys.top - 4);
+    if (playHour !== null) {
+      const sx = xs.getPixelForValue(playHour);
+      const sl = `${String(playHour).padStart(2,'0')}:00`;
+      ctx.beginPath(); ctx.moveTo(sx, ys.top); ctx.lineTo(sx, ys.bottom);
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+      ctx.font = '600 10px system-ui,sans-serif'; ctx.fillStyle = '#f59e0b';
+      const lw = ctx.measureText(sl).width;
+      const al = sx + lw/2 > c.chartArea.right ? 'right' : (sx - lw/2 < c.chartArea.left ? 'left' : 'center');
+      ctx.textAlign = al; ctx.fillText(sl, sx, ys.bottom + 13);
+    }
     ctx.restore();
   }
 };
@@ -2634,6 +2651,39 @@ function initChart() {
     const h = Math.round(mobileChart.scales.x.getValueForPixel(e.clientX - canvas.getBoundingClientRect().left));
     if (h >= 0 && h <= 23) openHourSheet(h);
   });
+}
+
+function togglePlayDay() { playHour === null ? startPlayDay() : stopPlayDay(); }
+function startPlayDay() {
+  if (!cap('manual_preview')) return;
+  playHour = 0;
+  document.getElementById('playBtn').textContent = '⏹ Stop';
+  document.getElementById('playBtn').classList.add('play-active');
+  sendPlayPreview(0);
+  if (mobileChart) mobileChart.update('none');
+  _playTimer = setInterval(() => {
+    playHour++;
+    if (playHour > 23) { stopPlayDay(); return; }
+    if (mobileChart) mobileChart.update('none');
+    sendPlayPreview(playHour);
+  }, 750);
+}
+function stopPlayDay() {
+  clearInterval(_playTimer);
+  _playTimer = null;
+  playHour = null;
+  document.getElementById('playBtn').textContent = '▶ Play day';
+  document.getElementById('playBtn').classList.remove('play-active');
+  if (mobileChart) mobileChart.update('none');
+  pushSchedule().catch(() => {});
+}
+function sendPlayPreview(h) {
+  const chs = DEVICES[cfg.device]?.channels || DEVICES.k7mini.channels;
+  const channels = Array.from({length: 6}, (_, i) => {
+    if (i >= chs.length) return 0;
+    return effectiveChartValue(h, chs[i], i);
+  });
+  api('POST', '/api/preview', { channels }).catch(() => {});
 }
 
 function shiftedCompositeAt(wallClockH) {
@@ -2707,6 +2757,7 @@ function updateChart() {
 
 // ── Hour editor ──────────────────────────────────────────────────────────
 function openHourSheet(h) {
+  if (playHour !== null) stopPlayDay();
   hsHour = Math.max(0, Math.min(23, h));
   const channels = chs();
   if (!hsChName || !channels.includes(hsChName)) hsChName = channels[0];

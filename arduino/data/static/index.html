@@ -155,6 +155,9 @@ body {
 .chart-shift-label { font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); }
 .chart-canvas-wrap { flex: 1; min-height: 0; position: relative; }
 .chart-canvas-wrap canvas { position: absolute; inset: 0; }
+.chart-mode-btn.play-active { color:#f59e0b; border-color:rgba(245,158,11,0.45); background:rgba(245,158,11,0.14); }
+.chart-toast { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.92); background:#1e3a5f; border:1px solid #3b82f6; color:#e2e8f0; border-radius:10px; padding:12px 22px; font-size:0.88rem; font-weight:500; z-index:9999; opacity:0; transition:opacity 0.2s,transform 0.2s; pointer-events:none; white-space:nowrap; box-shadow:0 8px 32px rgba(0,0,0,0.5); }
+.chart-toast.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
 .color-strip { display: flex; height: 13px; border-radius: 4px; overflow: hidden; gap: 1px; margin-top: 5px; flex-shrink: 0; }
 .color-strip > div { flex: 1; }
 
@@ -417,6 +420,7 @@ dialog.fr-dialog .fr-skip { padding:7px 12px; background:none; border:1px solid 
           <div class="chart-modes">
             <button class="chart-mode-btn active" id="chartBaseBtn" onclick="setChartMode('base')">Base</button>
             <button class="chart-mode-btn" id="chartEffectiveBtn" onclick="setChartMode('effective')">Effective Today</button>
+            <button class="chart-mode-btn" id="playBtn" onclick="togglePlayDay()" title="Play the full day schedule on the lamp">▶ Play day</button>
           </div>
         </div>
       </div>
@@ -740,6 +744,8 @@ let chartMode = 'base';
 let warningsState = null;
 let outputStatusState = null;
 let previewTimer = null;
+let playHour = null;
+let _playTimer = null;
 let presets       = {};
 let savedProfiles = {};
 let activePresetKey = '';
@@ -1063,6 +1069,43 @@ async function saveManual() {
   }
 }
 
+// ── Play-day preview ──────────────────────────────────────────────────────────
+function togglePlayDay() { playHour === null ? startPlayDay() : stopPlayDay(); }
+
+function startPlayDay() {
+  if (!cap('manual_preview')) return;
+  playHour = 0;
+  document.getElementById('playBtn').textContent = '⏹ Stop';
+  document.getElementById('playBtn').classList.add('play-active');
+  sendPlayPreview(0);
+  if (chart) chart.update('none');
+  _playTimer = setInterval(() => {
+    playHour++;
+    if (playHour > 23) { stopPlayDay(); return; }
+    if (chart) chart.update('none');
+    sendPlayPreview(playHour);
+  }, 750);
+}
+
+function stopPlayDay() {
+  clearInterval(_playTimer);
+  _playTimer = null;
+  playHour = null;
+  document.getElementById('playBtn').textContent = '▶ Play day';
+  document.getElementById('playBtn').classList.remove('play-active');
+  if (chart) chart.update('none');
+  pushSchedule().catch(() => {});
+}
+
+function sendPlayPreview(h) {
+  const chs = DEVICES[cfg.device].channels;
+  const channels = Array.from({length: 6}, (_, i) => {
+    if (i >= chs.length) return 0;
+    return effectiveValueForHour(h, i);
+  });
+  api('POST', '/api/preview', { channels }).catch(() => {});
+}
+
 // ── Manual: live preview ──────────────────────────────────────────────────────
 function triggerPreview() {
   clearTimeout(previewTimer);
@@ -1193,6 +1236,19 @@ const nowLinePlugin = {
       ctx.fillText(shiftedLabel, sx, ys.top - 18);
     }
     ctx.restore();
+
+    if (playHour !== null) {
+      const sx = xs.getPixelForValue(playHour);
+      const sl = `${String(playHour).padStart(2,'0')}:00`;
+      ctx.save();
+      ctx.beginPath(); ctx.moveTo(sx, ys.top); ctx.lineTo(sx, ys.bottom);
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.font = '600 11px system-ui,sans-serif'; ctx.fillStyle = '#f59e0b';
+      const lw = ctx.measureText(sl).width;
+      const al = sx + lw/2 > chart.chartArea.right ? 'right' : (sx - lw/2 < chart.chartArea.left ? 'left' : 'center');
+      ctx.textAlign = al; ctx.fillText(sl, sx, ys.bottom + 14);
+      ctx.restore();
+    }
   }
 };
 
@@ -1296,6 +1352,16 @@ function initChart() {
     }
   });
   chart._dragDataConfig = dragDataConfig;
+
+  let _effectiveToastTimer = null;
+  document.getElementById('schedChart')?.addEventListener('pointerdown', () => {
+    if (chartMode !== 'effective') return;
+    const toast = document.getElementById('chartToast');
+    if (!toast) return;
+    clearTimeout(_effectiveToastTimer);
+    toast.classList.add('show');
+    _effectiveToastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
+  });
 }
 
 function _minsInWindow(mins, start, end) {
@@ -2900,5 +2966,6 @@ function yesNoDialog(message) {
     <button class="fr-save" onclick="firstRunSave()">Save Profile</button>
   </div>
 </dialog>
+<div class="chart-toast" id="chartToast">Switch to Base to edit the schedule</div>
 </body>
 </html>
