@@ -155,12 +155,7 @@ body {
 .chart-shift-label { font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); }
 .chart-canvas-wrap { flex: 1; min-height: 0; position: relative; }
 .chart-canvas-wrap canvas { position: absolute; inset: 0; }
-.scrub-row { display:flex; align-items:center; gap:8px; margin-top:5px; flex-shrink:0; }
-.scrub-time { font-size:0.72rem; font-weight:700; color:#f59e0b; min-width:38px; flex-shrink:0; }
-.scrub-slider { flex:1; accent-color:#f59e0b; cursor:pointer; }
-.scrub-close { background:none; border:none; color:var(--muted); cursor:pointer; padding:0 4px; font-size:1rem; line-height:1; flex-shrink:0; }
-.scrub-close:hover { color:var(--text); }
-.chart-mode-btn.scrub-active { color:#f59e0b; border-color:rgba(245,158,11,0.45); background:rgba(245,158,11,0.14); }
+.chart-mode-btn.play-active { color:#f59e0b; border-color:rgba(245,158,11,0.45); background:rgba(245,158,11,0.14); }
 .chart-toast { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.92); background:#1e3a5f; border:1px solid #3b82f6; color:#e2e8f0; border-radius:10px; padding:12px 22px; font-size:0.88rem; font-weight:500; z-index:9999; opacity:0; transition:opacity 0.2s,transform 0.2s; pointer-events:none; white-space:nowrap; box-shadow:0 8px 32px rgba(0,0,0,0.5); }
 .chart-toast.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
 .color-strip { display: flex; height: 13px; border-radius: 4px; overflow: hidden; gap: 1px; margin-top: 5px; flex-shrink: 0; }
@@ -425,7 +420,7 @@ dialog.fr-dialog .fr-skip { padding:7px 12px; background:none; border:1px solid 
           <div class="chart-modes">
             <button class="chart-mode-btn active" id="chartBaseBtn" onclick="setChartMode('base')">Base</button>
             <button class="chart-mode-btn" id="chartEffectiveBtn" onclick="setChartMode('effective')">Effective Today</button>
-            <button class="chart-mode-btn" id="scrubBtn" onclick="toggleScrubMode()" title="Preview lamp output at any hour">⏵ Preview</button>
+            <button class="chart-mode-btn" id="playBtn" onclick="togglePlayDay()" title="Play the full day schedule on the lamp">▶ Play day</button>
           </div>
         </div>
       </div>
@@ -433,11 +428,6 @@ dialog.fr-dialog .fr-skip { padding:7px 12px; background:none; border:1px solid 
         <canvas id="schedChart"></canvas>
       </div>
       <div class="channels-note" data-cap="siesta_baked_schedule|fixed_lunar">Chart curves are a visual preview. PC bridge pushes hourly points to the lamp, so real schedule, siesta, and moonlight transitions may happen as hourly steps unless the lamp firmware smooths them internally.</div>
-      <div class="scrub-row" id="scrubRow" style="display:none">
-        <span class="scrub-time" id="scrubTime">12:00</span>
-        <input type="range" class="scrub-slider" id="scrubSlider" min="0" max="23" value="12" oninput="onScrubInput(+this.value)">
-        <button class="scrub-close" onclick="exitScrubMode()" title="Exit preview">✕</button>
-      </div>
       <div class="color-strip" id="colorStrip"></div>
     </div>
 
@@ -754,8 +744,8 @@ let chartMode = 'base';
 let warningsState = null;
 let outputStatusState = null;
 let previewTimer = null;
-let scrubHour = null;
-let _scrubPreviewTimer = null;
+let playHour = null;
+let _playTimer = null;
 let presets       = {};
 let savedProfiles = {};
 let activePresetKey = '';
@@ -1079,45 +1069,39 @@ async function saveManual() {
   }
 }
 
-// ── Schedule scrub preview ────────────────────────────────────────────────────
-function toggleScrubMode() { scrubHour === null ? enterScrubMode() : exitScrubMode(); }
+// ── Play-day preview ──────────────────────────────────────────────────────────
+function togglePlayDay() { playHour === null ? startPlayDay() : stopPlayDay(); }
 
-function enterScrubMode() {
-  const h = new Date().getHours();
-  scrubHour = h;
-  const slider = document.getElementById('scrubSlider');
-  if (slider) slider.value = h;
-  document.getElementById('scrubTime').textContent = `${String(h).padStart(2,'0')}:00`;
-  document.getElementById('scrubRow').style.display = '';
-  document.getElementById('scrubBtn').classList.add('scrub-active');
+function startPlayDay() {
+  if (!cap('manual_preview')) return;
+  playHour = 0;
+  document.getElementById('playBtn').textContent = '⏹ Stop';
+  document.getElementById('playBtn').classList.add('play-active');
+  sendPlayPreview(0);
   if (chart) chart.update('none');
-  sendScrubPreview(h);
+  _playTimer = setInterval(() => {
+    playHour++;
+    if (playHour > 23) { stopPlayDay(); return; }
+    if (chart) chart.update('none');
+    sendPlayPreview(playHour);
+  }, 750);
 }
 
-function exitScrubMode() {
-  scrubHour = null;
-  clearTimeout(_scrubPreviewTimer);
-  document.getElementById('scrubRow').style.display = 'none';
-  document.getElementById('scrubBtn').classList.remove('scrub-active');
+function stopPlayDay() {
+  clearInterval(_playTimer);
+  _playTimer = null;
+  playHour = null;
+  document.getElementById('playBtn').textContent = '▶ Play day';
+  document.getElementById('playBtn').classList.remove('play-active');
   if (chart) chart.update('none');
+  pushSchedule().catch(() => {});
 }
 
-function onScrubInput(h) {
-  scrubHour = h;
-  document.getElementById('scrubTime').textContent = `${String(h).padStart(2,'0')}:00`;
-  if (chart) chart.update('none');
-  clearTimeout(_scrubPreviewTimer);
-  _scrubPreviewTimer = setTimeout(() => sendScrubPreview(h), 400);
-}
-
-function sendScrubPreview(h) {
-  if (!caps.manual_preview) return;
+function sendPlayPreview(h) {
   const chs = DEVICES[cfg.device].channels;
-  const row = schedule[h];
-  if (!row) return;
   const channels = Array.from({length: 6}, (_, i) => {
     if (i >= chs.length) return 0;
-    return Math.max(0, Math.min(100, row[2 + i] ?? 0));
+    return effectiveValueForHour(h, i);
   });
   api('POST', '/api/preview', { channels }).catch(() => {});
 }
@@ -1253,9 +1237,9 @@ const nowLinePlugin = {
     }
     ctx.restore();
 
-    if (scrubHour !== null) {
-      const sx = xs.getPixelForValue(scrubHour);
-      const sl = `${String(scrubHour).padStart(2,'0')}:00`;
+    if (playHour !== null) {
+      const sx = xs.getPixelForValue(playHour);
+      const sl = `${String(playHour).padStart(2,'0')}:00`;
       ctx.save();
       ctx.beginPath(); ctx.moveTo(sx, ys.top); ctx.lineTo(sx, ys.bottom);
       ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.stroke();
