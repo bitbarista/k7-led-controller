@@ -163,8 +163,6 @@ static const Preset MINI_PRESETS[] = {
      {8, 30, 32, 0, 0, 0}, KF_MINI_LOWENERGY, 12},
     {"shallowsps", "Shallow SPS", "Higher-output SPS profile for shallow tanks or elevated mounting, with strong midday intensity and a controlled evening falloff.",
      {78,100,100, 0, 0, 0}, KF_MINI_SHALLOWSPS, 13},
-    {"dino", "Dino Suppression", "Temporary low-output 6-hour schedule intended to reduce pressure from Ostreopsis/Prorocentrum dinoflagellates while you address nutrients, UV/export, and competition. Disables Lunar/moonlight on push for full darkness overnight; re-enable Lunar manually after treatment.",
-     {2, 16, 14, 0, 0, 0}, KF_MINI_DINO, 7, true},
 };
 
 // ── K7 Pro presets ────────────────────────────────────────────────────────────
@@ -283,14 +281,15 @@ static const Keyframe KF_PRO_SHALLOWSPS[] = {
     {21, {  0,   8,   0,   0,  10,   0}},
     {22, {  0,   0,   0,   0,   0,   0}},
 };
-static const Keyframe KF_PRO_DINO[] = {
-    { 0, {  0,   0,   0,   0,   0,   0}},
-    {10, {  0,   0,   0,   0,   0,   0}},
-    {11, {  1,   8,   0,   0,   8,   0}},
-    {12, {  2,  16,   0,   1,  14,   0}},
-    {15, {  2,  16,   0,   1,  14,   0}},
-    {16, {  1,   8,   0,   0,   8,   0}},
-    {17, {  0,   0,   0,   0,   0,   0}},
+static const Keyframe KF_PRO_REFUGIUM[] = {
+    { 0, { 18,   0,  45,   0,   0,  40}},
+    { 7, { 18,   0,  45,   0,   0,  40}},
+    { 8, {  6,   0,  16,   0,   0,  14}},
+    { 9, {  0,   0,   0,   0,   0,   0}},
+    {19, {  0,   0,   0,   0,   0,   0}},
+    {20, {  6,   0,  16,   0,   0,  14}},
+    {21, { 18,   0,  45,   0,   0,  40}},
+    {23, { 18,   0,  45,   0,   0,  40}},
 };
 
 static const Preset PRO_PRESETS[] = {
@@ -310,11 +309,11 @@ static const Preset PRO_PRESETS[] = {
      { 12,  30,   5,   8,  32,   0}, KF_PRO_LOWENERGY, 12},
     {"shallowsps", "Shallow SPS", "Higher-output SPS profile for shallow tanks or elevated mounting, with strong midday intensity and a controlled evening falloff.",
      { 52, 100,  14,  48, 100,   0}, KF_PRO_SHALLOWSPS, 13},
-    {"dino", "Dino Suppression", "Temporary low-output 6-hour schedule intended to reduce pressure from Ostreopsis/Prorocentrum dinoflagellates while you address nutrients, UV/export, and competition. Disables Lunar/moonlight on push for full darkness overnight; re-enable Lunar manually after treatment.",
-     {  2,  16,   0,   1,  14,   0}, KF_PRO_DINO, 7, true},
+    {"refugium", "Refugium", "Reverse-photoperiod schedule for macroalgae sumps. High green and red for Chaeto/Gracilaria growth; no blue or UV. Runs overnight (9 pm – 8 am) opposite to the display tank photoperiod. Disables Lunar effect.",
+     { 18,   0,  45,   0,   0,  40}, KF_PRO_REFUGIUM, 8, true},
 };
 
-static constexpr uint8_t NUM_MINI_PRESETS = 9;
+static constexpr uint8_t NUM_MINI_PRESETS = 8;
 static constexpr uint8_t NUM_PRO_PRESETS  = 9;
 
 // ── buildSchedule implementation ──────────────────────────────────────────────
