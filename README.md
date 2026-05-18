@@ -53,7 +53,7 @@ The ESP32 controller is the full-featured option: a small board runs 24/7 beside
 - **Feed mode** — timed white brightness boost for feeding; adjustable intensity (1–100 %) and duration (1–60 min); also triggered by a quick press of the BOOT button on the board
 - **Maintenance mode** — timed balanced inspection light for tank work, with adjustable profile intensity (1–100 %) and duration (1–180 min)
 - **Lunar** — varies the royal blue channel over the 29.5-day synodic cycle, with either a fixed nightly window or a moonrise/moonset-shifted window anchored to full-moon times, plus optional night clamping and schedule-aware cutoff
-- **Siesta** — optional midday dimming window for a coral rest/algae-control break; requires Smooth Ramp
+- **Siesta** — optional midday dimming window for a coral rest/algae-control break; works with or without Smooth Ramp
 - **Acclimation** — start the whole schedule dimmer, then recover gradually over a chosen number of days
 - **Seasonal Shift** — move the whole photoperiod earlier and later across the year without changing day length
 - **Effective Today** chart view, firmware-backed Right Now output bars, and schedule-aware checks so you can see the real computed output and catch odd combinations before they surprise you
