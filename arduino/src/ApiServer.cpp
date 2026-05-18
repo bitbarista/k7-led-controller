@@ -352,12 +352,7 @@ static SiestaConfig siestaConfigFromDoc(JsonVariantConst src) {
     return cfg;
 }
 
-static bool validateSiestaConfig(const SiestaConfig& cfg, bool rampActive, String* errMsg = nullptr) {
-    if (cfg.enabled && !rampActive) {
-        if (errMsg) *errMsg = "Siesta requires Smooth Ramp";
-        return false;
-    }
-
+static bool validateSiestaConfig(const SiestaConfig& cfg, String* errMsg = nullptr) {
     int startMins = parseHHMM(cfg.start);
     int allowedStart = 0, allowedEnd = 0;
     if (cfg.enabled && !siestaTimeAllowed(startMins, cfg.durationMins, &allowedStart, &allowedEnd)) {
@@ -382,7 +377,7 @@ static bool validateSiestaConfig(const SiestaConfig& cfg, bool rampActive, Strin
 
 static bool applySiestaDoc(JsonVariantConst src, String* errMsg = nullptr) {
     SiestaConfig cfg = siestaConfigFromDoc(src);
-    if (!validateSiestaConfig(cfg, gRampActive.load(), errMsg)) return false;
+    if (!validateSiestaConfig(cfg, errMsg)) return false;
     gSiestaConfig = cfg;
     return true;
 }
@@ -600,7 +595,7 @@ void setupApiServer(WebServer& server) {
             rebuildEffectiveSchedule();
 
             SiestaConfig restoredSiesta = siestaConfigFromDoc(backup["siesta"].as<JsonVariantConst>());
-            bool siestaOk = validateSiestaConfig(restoredSiesta, restoredRamp, &err);
+            bool siestaOk = validateSiestaConfig(restoredSiesta, &err);
 
             memcpy(gBaseSchedule, oldBaseSchedule, sizeof(gBaseSchedule));
             memcpy(gLastSchedule, oldLastSchedule, sizeof(gLastSchedule));

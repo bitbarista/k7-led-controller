@@ -308,7 +308,6 @@ bool siestaTimeAllowed(int startMins, int durationMins, int* outAllowedStart, in
 }
 
 bool siestaActiveNow() {
-    if (!gRampActive.load()) return false;
     if (!gSiestaConfig.enabled) return false;
     char start[8], end[8];
     siestaWindowNow(start, end);
@@ -741,18 +740,21 @@ void startLampWorker() {
 }
 
 // ── Hourly schedule follower (ramp off) ──────────────────────────────────────
-// Sends the schedule value when the wall-clock hour changes while ramp is not
-// active, but only if the value has changed since the last successful send.
+// Sends the schedule value when the wall-clock hour changes, or when siesta
+// activates/deactivates, while ramp is not active. Memcmp-guarded so only
+// sends if the value actually changed.
 static void scheduleFollowerTask(void*) {
     static const uint32_t FOLLOW_CHECK_MS = 5000;
     uint8_t lastSent[K7_CHANNELS] = {};
     bool haveLast = false;
     int lastHourKey = -1;
+    bool lastSiestaActive = false;
 
     for (;;) {
         if (gRampActive || gFeedActive || gMaintenanceActive || !gLampAutoMode) {
             haveLast = false;
             lastHourKey = -1;
+            lastSiestaActive = false;
             vTaskDelay(pdMS_TO_TICKS(FOLLOW_CHECK_MS));
             continue;
         }
@@ -761,13 +763,17 @@ static void scheduleFollowerTask(void*) {
         if (!timeIsSane(now)) {
             haveLast = false;
             lastHourKey = -1;
+            lastSiestaActive = false;
             vTaskDelay(pdMS_TO_TICKS(FOLLOW_CHECK_MS));
             continue;
         }
         struct tm t;
         localtime_r(&now, &t);
-        int hourKey = ((t.tm_year * 366) + t.tm_yday) * 24 + t.tm_hour;
-        if (hourKey == lastHourKey) {
+        int  hourKey     = ((t.tm_year * 366) + t.tm_yday) * 24 + t.tm_hour;
+        bool siestaNow   = siestaActiveNow();
+        bool hourChanged  = (hourKey != lastHourKey);
+        bool siestaChanged = (siestaNow != lastSiestaActive);
+        if (!hourChanged && !siestaChanged) {
             vTaskDelay(pdMS_TO_TICKS(FOLLOW_CHECK_MS));
             continue;
         }
@@ -789,9 +795,11 @@ static void scheduleFollowerTask(void*) {
                 memcpy(lastSent, ch, K7_CHANNELS);
                 haveLast = true;
                 lastHourKey = hourKey;
+                lastSiestaActive = siestaNow;
             }
         } else {
             lastHourKey = hourKey;
+            lastSiestaActive = siestaNow;
         }
         vTaskDelay(pdMS_TO_TICKS(FOLLOW_CHECK_MS));
     }
@@ -856,9 +864,13 @@ void stopRamp() {
 
 // ── Lunar ─────────────────────────────────────────────────────────────────────
 static void lunarTask(void*) {
+    uint8_t lastSent[K7_CHANNELS] = {};
+    bool haveLast = false;
+
     while (gLunarActive) {
         time_t     now = time(nullptr);
         if (!timeIsSane(now)) {
+            haveLast = false;
             for (int i = 0; i < 120 && gLunarActive; i++)
                 vTaskDelay(pdMS_TO_TICKS(500));
             continue;
@@ -872,7 +884,14 @@ static void lunarTask(void*) {
             applySiestaDimming(ch);
             applyMasterBrightness(ch);
             applyLunarOverlay(ch);
-            sendHandLuminance("lunar", ch);
+            if (!haveLast || memcmp(lastSent, ch, K7_CHANNELS) != 0) {
+                if (sendHandLuminance("lunar", ch)) {
+                    memcpy(lastSent, ch, K7_CHANNELS);
+                    haveLast = true;
+                }
+            }
+        } else {
+            haveLast = false;
         }
         struct tm* t   = localtime(&now);
         int sleepSecs  = max(1, 60 - t->tm_sec);
