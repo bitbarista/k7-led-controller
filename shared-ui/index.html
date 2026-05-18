@@ -1925,8 +1925,8 @@ function onMaintenanceIntensityChange() { /* applied on next start */ }
 function updateSiestaHint(d) {
   const hint = document.getElementById('siHint');
   if (!hint) return;
-  if (!rampActiveState && !cap('siesta_baked_schedule')) {
-    hint.textContent = 'Requires Smooth Ramp. The lamp native schedule is too coarse for midday dimming on its own.';
+  if (!cap('smooth_ramp') && !cap('siesta_baked_schedule')) {
+    hint.textContent = 'Siesta requires Smooth Ramp or a baked schedule device.';
     return;
   }
   const allowedStart = d?.allowed_start || '12:00';
@@ -1948,7 +1948,7 @@ function setSiestaAvailability(enabled) {
 }
 
 function siestaAvailable(rampActive = rampActiveState) {
-  return !!rampActive || cap('siesta_baked_schedule');
+  return cap('smooth_ramp') || cap('siesta_baked_schedule');
 }
 
 function setSiestaBtn(active) {
