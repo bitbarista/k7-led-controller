@@ -1990,7 +1990,7 @@ async function loadSiestaStatus() {
 }
 
 async function toggleSiesta() {
-  if (!rampActiveState && !cap('siesta_baked_schedule')) return;
+  if (!cap('smooth_ramp') && !cap('siesta_baked_schedule')) return;
   const enabled = !!document.getElementById('siEnabled').checked;
   document.getElementById('siEnabled').checked = !enabled;
   try {
@@ -2002,7 +2002,7 @@ async function toggleSiesta() {
 }
 
 async function onSiestaChange() {
-  if (!rampActiveState && !cap('siesta_baked_schedule')) return;
+  if (!cap('smooth_ramp') && !cap('siesta_baked_schedule')) return;
   const si = {
     enabled: document.getElementById('siEnabled').checked,
     start: document.getElementById('siStart').value,
