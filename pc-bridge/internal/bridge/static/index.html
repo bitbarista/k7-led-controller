@@ -102,18 +102,18 @@ body {
 .mode-extra { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
 
 /* ── master / shift ── */
-.master-row { display: grid; grid-template-columns: 54px 1fr 42px; align-items: center; gap: 8px; }
+.master-row { display: grid; grid-template-columns: 54px 1fr 50px; align-items: center; gap: 8px; }
 .shift-row  { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
 .master-lbl { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
 .master-slider { flex:1; width:100%; height:6px; -webkit-appearance:none; appearance:none; border-radius:3px; outline:none; cursor:pointer; background:var(--surface2); accent-color:#c9d1d9; }
 .master-slider::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:#c9d1d9; cursor:pointer; border:2px solid rgba(255,255,255,0.3); }
-.master-value { width:40px; text-align:right; font-size:0.83rem; font-variant-numeric:tabular-nums; }
+.master-value { width:50px; text-align:right; font-size:0.83rem; font-variant-numeric:tabular-nums; }
 .shift-btn { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:4px; padding:1px 7px; font-size:0.78rem; cursor:pointer; }
 .shift-btn:hover { background:var(--hover); }
 .shift-val { min-width:34px; text-align:center; font-size:0.82rem; font-variant-numeric:tabular-nums; }
 
 /* ── channel rows (combined current + cap) ── */
-.ch-row { display:grid; grid-template-columns: 14px 78px 22px 1fr 40px; align-items:center; gap:7px; padding:7px 0; border-bottom: 1px solid var(--border); }
+.ch-row { display:grid; grid-template-columns: 14px 78px 22px 1fr 48px; align-items:center; gap:7px; padding:7px 0; border-bottom: 1px solid var(--border); }
 .ch-row:last-child { border-bottom: none; }
 .ch-dot  { width: 12px; height: 12px; border-radius: 50%; }
 .ch-name { font-size: 0.83rem; font-weight: 500; }
@@ -123,6 +123,14 @@ body {
 .ch-slider { width:100%; height:6px; -webkit-appearance:none; appearance:none; border-radius:3px; outline:none; cursor:pointer; background:var(--surface2); }
 .ch-slider::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; cursor:pointer; border:2px solid rgba(255,255,255,0.3); }
 .ch-scale-val { text-align:right; font-size:0.8rem; font-variant-numeric:tabular-nums; color:var(--muted); }
+
+/* Editable value chips — tap a number to type it instead of dragging the slider */
+.editable-val { box-sizing:border-box; border:1px solid var(--border); background:var(--surface2); border-radius:5px; padding:2px 5px; cursor:text; color:var(--text); }
+.editable-val:hover { border-color:var(--accent,#3a8fd8); }
+.editable-val.editing { padding:0; border-color:var(--accent,#3a8fd8); }
+.editable-val .val-edit { box-sizing:border-box; width:100%; border:none; background:transparent; color:var(--text); font:inherit; text-align:right; outline:none; padding:2px 5px; margin:0; -moz-appearance:textfield; }
+.editable-val .val-edit::-webkit-outer-spin-button,
+.editable-val .val-edit::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 [data-theme="light"] .ch-slider::-webkit-slider-thumb { border-color:rgba(0,0,0,0.2); }
 .channels-card { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
 #chScaleBar { flex:1; min-height:0; overflow-y:auto; padding-right:4px; scrollbar-gutter:stable; }
@@ -166,7 +174,7 @@ body {
 .ch-slider-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .ch-slider-row:last-child { border-bottom: none; }
 .ch-label { width: 106px; font-size: 0.88rem; font-weight: 500; flex-shrink: 0; }
-.ch-value { width: 40px; text-align: right; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+.ch-value { width: 48px; text-align: right; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
 
 /* ── effects (right column) ── */
 .fx-row-wrap { border-bottom: 1px solid var(--border); }
@@ -1577,6 +1585,54 @@ function updateChart() {
 }
 
 // ── Manual sliders ────────────────────────────────────────────────────────────
+// Make a value display (e.g. "100%") tap-to-edit. The matching range slider in
+// the same row stays the source of truth: committing sets slider.value and fires
+// its 'input' event, so all existing slider logic (and the "%" text update) runs.
+function makeValEditable(span, { min = 0, max = 100, suffix = '%' } = {}) {
+  if (!span || span._editable) return;
+  span._editable = true;
+  span.classList.add('editable-val');
+  span.title = 'Tap to type a value';
+  const findSlider = () =>
+    span.closest('.ch-row, .ch-slider-row, .master-row')?.querySelector('input[type=range]');
+  span.addEventListener('click', () => {
+    if (span.querySelector('input')) return;
+    const slider = findSlider();
+    if (!slider) return;
+    const cur = parseInt(slider.value, 10) || 0;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.className = 'val-edit';
+    input.value = cur;
+    span.classList.add('editing');
+    span.textContent = '';
+    span.appendChild(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = apply => {
+      if (done) return;
+      done = true;
+      span.classList.remove('editing');
+      let v = parseInt(input.value.replace(/[^\d-]/g, ''), 10);
+      if (apply && !isNaN(v)) {
+        v = Math.max(min, Math.min(max, v));
+        slider.value = v;
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        slider.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        span.textContent = cur + suffix;
+      }
+    };
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+  });
+}
+
 function renderSliders() {
   const chs = DEVICES[cfg.device].channels;
   const container = document.getElementById('sliderRows');
@@ -1592,6 +1648,7 @@ function renderSliders() {
       <span class="ch-value" id="val_${ch}">${val}%</span>`;
     container.appendChild(row);
     row.querySelector('input').addEventListener('input', onSliderChange);
+    makeValEditable(document.getElementById(`val_${ch}`), { max: 100 });
   });
 }
 
@@ -1639,6 +1696,7 @@ function renderChannelScales() {
       applyMaster(); updateChart(); updateColorStrip();
     });
     bar.appendChild(row);
+    makeValEditable(document.getElementById(`chscale_${ch}`), { max: 100 });
   });
 }
 
@@ -1696,16 +1754,21 @@ function changeShift(delta) {
 }
 
 let _masterTimer = null;
+// Set true while the user is changing master locally and the new value hasn't
+// been pushed/confirmed yet, so the background poll won't snap it back to the
+// stale server value. Protects both slider-drag and typed-box edits.
+let _masterDirty = false;
 function onMasterChange() {
   masterBrightness = parseInt(document.getElementById('masterSlider').value);
   document.getElementById('masterVal').textContent = masterBrightness + '%';
+  _masterDirty = true;
   applyMaster(); syncChannelSliders(); updateChart(); updateColorStrip();
   clearTimeout(_masterTimer);
   _masterTimer = setTimeout(_autoPushMaster, 400);
 }
 
 async function _autoPushMaster() {
-  if (isPCBridge() && !lastLampReadAt) return;
+  if (isPCBridge() && !lastLampReadAt) { _masterDirty = false; return; }
   try {
     const pushBase = buildPushBase();
     await api('POST','/api/master', {value: masterBrightness});
@@ -1715,7 +1778,10 @@ async function _autoPushMaster() {
       mode,
       schedule_shift_minutes: signedShiftMinutes(),
     });
-  } catch(_) {}
+  } catch(_) {
+  } finally {
+    _masterDirty = false;
+  }
 }
 
 // ── Smooth ramp ───────────────────────────────────────────────────────────────
@@ -2226,7 +2292,7 @@ async function pollEffectStates() {
     ]);
     outputStatusState = outputStatus;
     const masterSlider = document.getElementById('masterSlider');
-    if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
+    if (document.activeElement !== masterSlider && !_masterDirty && master.value !== masterBrightness) {
       masterBrightness = master.value;
       masterSlider.value = master.value;
       document.getElementById('masterVal').textContent = master.value + '%';
@@ -2869,6 +2935,7 @@ async function init() {
   } catch(_) {}
   renderSliders();
   renderChannelScales();
+  makeValEditable(document.getElementById('masterVal'), { max: 200 });
   updateChart();
   updateColorStrip();
   updateNowBars();

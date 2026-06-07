@@ -44,7 +44,8 @@ The ESP32 controller is the full-featured option: a small board runs 24/7 beside
 - Edit the 24-hour lighting schedule on an interactive drag-and-drop chart (desktop) or the mobile chart editor with scroll-wheel hour editing
 - Additive colour preview strip showing the blended light output for each hour
 - Built-in preset library for Fish Only, LPS Reef, SPS Reef, Mixed Reef, Soft Mixed Reef, Acclimation Mixed, LPS Low Energy, Shallow SPS, and temporary Dino Suppression with dark overnight periods, practical coral photoperiods, and short dusk tails
-- Master brightness slider and per-channel intensity sliders (absolute output ceiling per channel)
+- Master brightness slider and per-channel brightness-cap sliders (each sets that channel's output ceiling), on both the desktop and mobile layouts
+- Tap any brightness percentage to type an exact value instead of dragging, plus a lock to keep the master and colour sliders from being nudged by accident while scrolling on a phone
 - Per-channel visibility toggles — hidden channels are zeroed when pushing to the device
 - Day-shift control to slide the entire schedule forward or back (e.g. peak at 18:00 instead of midday)
 - Save and reload your own named profiles (stored on the controller, persists across sessions)

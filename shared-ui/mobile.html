@@ -183,7 +183,20 @@ body {
   cursor: pointer; border: 2px solid var(--slider-thumb-border);
   background: var(--ch-color, #888);
 }
-.ch-val { width: 40px; text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.ch-val { width: 48px; text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.cap-note { padding: 8px 14px 10px; font-size: 0.74rem; color: var(--muted); }
+.lock-btn { background: none; border: none; cursor: pointer; font-size: 1rem; line-height: 1; padding: 2px 4px; -webkit-tap-highlight-color: transparent; }
+/* When locked, freeze the sliders and value boxes so scrolling can't nudge them. */
+#channelsCard.locked .master-slider,
+#channelsCard.locked .ch-slider,
+#channelsCard.locked .editable-val { pointer-events: none; opacity: 0.55; }
+
+/* Editable value chips — tap a number to type it instead of dragging the slider */
+.editable-val { box-sizing:border-box; border:1px solid var(--border); background:var(--surface2); border-radius:6px; padding:3px 5px; cursor:text; color:var(--text); }
+.editable-val.editing { padding:0; border-color:var(--accent,#3a8fd8); }
+.editable-val .val-edit { box-sizing:border-box; width:100%; border:none; background:transparent; color:var(--text); font:inherit; text-align:right; outline:none; padding:3px 5px; margin:0; -moz-appearance:textfield; }
+.editable-val .val-edit::-webkit-outer-spin-button,
+.editable-val .val-edit::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 .apply-row { padding: 12px 14px; }
 .btn-apply {
   width: 100%; padding: 12px;
@@ -243,7 +256,7 @@ body {
   -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
   background: var(--master-thumb-bg); cursor: pointer; border: 2px solid var(--slider-thumb-border);
 }
-.master-val { width: 44px; text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.master-val { width: 52px; text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 
 /* ── Now bars ── */
 .now-row { display: flex; align-items: center; gap: 10px; padding: 6px 14px; }
@@ -510,14 +523,26 @@ dialog.fr-dialog .fr-skip { padding:4px 0; background:none; border:none; color:v
 
 <!-- Auto panel -->
 <div id="autoPanel">
-  <div class="card">
-    <div class="card-hd">Brightness</div>
+  <div class="card" id="channelsCard">
+    <div class="card-hd" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Channels</span>
+      <button class="lock-btn" id="lockBtn" onclick="toggleSliderLock()" title="Sliders locked — tap to unlock">🔒</button>
+    </div>
     <div class="master-row">
       <span class="master-lbl">Master</span>
       <input type="range" id="masterSlider" class="master-slider" min="0" max="200" value="100" oninput="onMasterChange()">
       <span class="master-val" id="masterVal">100%</span>
     </div>
+    <div id="chanCaps"></div>
+    <div class="cap-note">Master applies live. Colour caps apply when you tap Push to Lamp. Tap 🔒 to adjust.</div>
+  </div>
+
+  <div class="card" style="margin-top:10px">
+    <div class="card-hd">Right now</div>
     <div id="nowBars"></div>
+  </div>
+
+  <div class="card" style="margin-top:10px">
     <div class="expander" onclick="toggleWizard()">
       <span>Quick Setup</span>
       <span class="exp-icon" id="wizardIcon">▸</span>
@@ -873,6 +898,13 @@ let mode     = 'auto';
 let schedule = Array.from({length:24}, (_,h) => [h,0,0,0,0,0,0,0]);
 let manual   = [0,0,0,0,0,0];
 let masterBrightness = 100;
+// Per-channel brightness caps. channelBrightness[ch] is that channel's peak
+// target (0-100), defaulting to its natural schedule peak — so an untouched cap
+// reproduces the raw schedule when pushed (parity with the desktop UI).
+let channelBrightness = {};
+// Master + colour sliders start locked so scrolling can't nudge them; the
+// choice is remembered between sessions (defaults to locked when unset).
+let slidersLocked = localStorage.getItem('k7-slidersLocked') !== '0';
 let presets  = {};
 let savedProfiles = {};
 let activePresetKey = '';  // e.g. "preset:mixed" or "profile:My Tank"
@@ -945,7 +977,9 @@ function openWifiSettings() {
 async function onDeviceChange() {
   cfg.device = document.getElementById('deviceSel').value;
   try { await api('POST', '/api/config', {device: cfg.device}); } catch(_) {}
+  resetCaps();
   buildSliders();
+  buildChannelCaps();
   buildNowBars();
   if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
 }
@@ -1206,6 +1240,54 @@ function onModeToggle() {
   applyModeUI();
 }
 
+// Make a value display (e.g. "100%") tap-to-edit. The matching range slider in
+// the same row stays the source of truth: committing sets slider.value and fires
+// its 'input'/'change' events, so all existing slider logic (and the "%" text
+// update) runs.
+function makeValEditable(span, { min = 0, max = 100, suffix = '%' } = {}) {
+  if (!span || span._editable) return;
+  span._editable = true;
+  span.classList.add('editable-val');
+  const findSlider = () =>
+    span.closest('.ch-row, .master-row')?.querySelector('input[type=range]');
+  span.addEventListener('click', () => {
+    if (span.querySelector('input')) return;
+    const slider = findSlider();
+    if (!slider) return;
+    const cur = parseInt(slider.value, 10) || 0;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.className = 'val-edit';
+    input.value = cur;
+    span.classList.add('editing');
+    span.textContent = '';
+    span.appendChild(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = apply => {
+      if (done) return;
+      done = true;
+      span.classList.remove('editing');
+      let v = parseInt(input.value.replace(/[^\d-]/g, ''), 10);
+      if (apply && !isNaN(v)) {
+        v = Math.max(min, Math.min(max, v));
+        slider.value = v;
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        slider.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        span.textContent = cur + suffix;
+      }
+    };
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+  });
+}
+
 // ── Manual sliders ───────────────────────────────────────────────────────
 function buildSliders() {
   document.getElementById('sliderRows').innerHTML = chs().map((ch, i) => {
@@ -1219,6 +1301,7 @@ function buildSliders() {
       <span class="ch-val" id="sv${i}">${manual[i]||0}%</span>
     </div>`;
   }).join('');
+  chs().forEach((_, i) => makeValEditable(document.getElementById('sv' + i), { max: 100 }));
 }
 
 function onSlider(i, v) {
@@ -1257,28 +1340,134 @@ async function saveManual() {
 
 // ── Master & Now bars ────────────────────────────────────────────────────
 let _masterTimer = null;
+// Set true while the user is changing master locally and the new value hasn't
+// been pushed/confirmed yet, so the background poll won't snap it back to the
+// stale server value. Protects both slider-drag and typed-box edits.
+let _masterDirty = false;
 function onMasterChange() {
   masterBrightness = parseInt(document.getElementById('masterSlider').value);
   document.getElementById('masterVal').textContent = masterBrightness + '%';
+  _masterDirty = true;
+  syncCapSliders();
   updateNowBars();
+  updateChart();
   clearTimeout(_masterTimer);
   _masterTimer = setTimeout(_autoPushMaster, 400);
 }
 
 async function _autoPushMaster() {
-  if (isPCBridge() && !lastLampReadAt) return;
+  if (isPCBridge() && !lastLampReadAt) { _masterDirty = false; return; }
   try {
     const man = Array(6).fill(0);
     chs().forEach((_,i) => { man[i] = manual[i]||0; });
-    // Send unscaled schedule; server applies MB when pushing to lamp
+    // Schedule carries per-channel caps; master is sent separately and the
+    // server applies it on the way to the lamp.
     await api('POST', '/api/master', {value: masterBrightness});
     await api('POST', '/api/push', {
       manual: man,
-      schedule: schedule.map(r => [...r]),
+      schedule: buildPushBase(),
       mode,
       schedule_shift_minutes: scheduleShiftMinutes,
     });
-  } catch(_) {}
+  } catch(_) {
+  } finally {
+    _masterDirty = false;
+  }
+}
+
+// ── Per-channel caps ───────────────────────────────────────────────────────
+// Natural peak of each channel across the current schedule (min 1 for safe div).
+function capPeaks() {
+  return chs().map((_, ci) => Math.max(1, ...schedule.map(row => row[2 + ci] || 0)));
+}
+
+// Reset every cap to its channel's natural peak (a no-op transform on push).
+// Call whenever the schedule is replaced wholesale (read / preset / wizard).
+function resetCaps() {
+  chs().forEach((ch, ci) => {
+    const peak = Math.max(0, ...schedule.map(row => row[2 + ci] || 0));
+    channelBrightness[ch] = peak > 0 ? peak : 100;
+  });
+}
+
+// Schedule with caps baked in, ready to push. Master is NOT applied here — it is
+// sent separately via /api/master and the server scales on the way to the lamp.
+function buildPushBase() {
+  const chList = chs();
+  const peaks  = capPeaks();
+  return schedule.map(row => {
+    const r = [row[0], row[1]];
+    chList.forEach((ch, ci) => {
+      const cap = channelBrightness[ch] ?? 100;
+      r.push(Math.min(100, Math.round((row[2 + ci] || 0) * cap / peaks[ci])));
+    });
+    while (r.length < 8) r.push(0);
+    return r;
+  });
+}
+
+// Effective on-screen value for a cap slider = cap scaled by master, clamped.
+function capEffective(ch) {
+  const cap = channelBrightness[ch] ?? 100;
+  return Math.min(100, Math.round(cap * masterBrightness / 100));
+}
+
+function buildChannelCaps() {
+  const el = document.getElementById('chanCaps');
+  if (!el) return;
+  el.innerHTML = chs().map((ch, i) => {
+    const c   = CH[ch];
+    const eff = capEffective(ch);
+    return `<div class="ch-row">
+      <div class="ch-swatch" style="background:${c.css}"></div>
+      <span class="ch-name">${c.label}</span>
+      <input type="range" class="ch-slider" min="0" max="100" value="${eff}"
+             style="accent-color:${c.css};--ch-color:${c.css}"
+             oninput="onCapSlider(${i}, this.value)">
+      <span class="ch-val editable-val" id="cap${i}">${eff}%</span>
+    </div>`;
+  }).join('');
+  chs().forEach((_, i) => makeValEditable(document.getElementById('cap' + i), { max: 100 }));
+}
+
+// Keep cap slider positions in sync when master changes (display only).
+function syncCapSliders() {
+  chs().forEach((ch, i) => {
+    const eff = capEffective(ch);
+    const sl  = document.querySelectorAll('#chanCaps .ch-slider')[i];
+    if (sl && document.activeElement !== sl) sl.value = eff;
+    const lbl = document.getElementById('cap' + i);
+    if (lbl && !lbl.querySelector('input')) lbl.textContent = eff + '%';
+  });
+}
+
+function applySliderLock() {
+  const card = document.getElementById('channelsCard');
+  if (card) card.classList.toggle('locked', slidersLocked);
+  const btn = document.getElementById('lockBtn');
+  if (btn) {
+    btn.textContent = slidersLocked ? '🔒' : '🔓';
+    btn.title = slidersLocked ? 'Sliders locked — tap to unlock' : 'Sliders unlocked — tap to lock';
+  }
+}
+
+function toggleSliderLock() {
+  slidersLocked = !slidersLocked;
+  localStorage.setItem('k7-slidersLocked', slidersLocked ? '1' : '0');
+  applySliderLock();
+}
+
+function onCapSlider(i, v) {
+  v = parseInt(v);
+  const ch = chs()[i];
+  channelBrightness[ch] = masterBrightness > 0
+    ? Math.min(100, Math.round(v * 100 / masterBrightness)) : v;
+  const lbl = document.getElementById('cap' + i);
+  if (lbl && !lbl.querySelector('input')) lbl.textContent = v + '%';
+  // Caps update locally only and reach the lamp on the next "Push to Lamp" —
+  // avoids extra lamp writes, and matches how the desktop UI handles caps.
+  updateNowBars();
+  updateChart();
 }
 
 function interpNow() {
@@ -1294,8 +1483,10 @@ function interpNow() {
     lunarWin   = lunarWindow(lunarState);
   }
   const inLunarWin = lunarWin && lunarFloor > 0 && _minsInWindow(minsNow, lunarWin.start, lunarWin.end);
+  const peaks = capPeaks();
   return chs().map((ch, i) => {
-    const raw = (lo[2+i]||0) + frac*((hi[2+i]||0)-(lo[2+i]||0));
+    const cap = channelBrightness[ch] ?? 100;
+    const raw = ((lo[2+i]||0) + frac*((hi[2+i]||0)-(lo[2+i]||0))) * cap / peaks[i];
     const acclimated = raw * acclimationPercentNow() / 100;
     let v = Math.min(100, Math.round(acclimated * siestaFactorAt(minsNow) * masterBrightness / 100));
     if (inLunarWin) {
@@ -1417,6 +1608,7 @@ function buildWizardChannels() {
       <span class="ch-val" id="wzv${i}">${def}%</span>
     </div>`;
   }).join('');
+  chs().forEach((_, i) => makeValEditable(document.getElementById('wzv' + i), { max: 100 }));
 }
 
 function wizardGenerate() {
@@ -1447,8 +1639,10 @@ function wizardGenerate() {
     });
   }
 
+  resetCaps();
   _suppressPoll('schedule');
   if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
+  buildChannelCaps();
   buildNowBars();
   updateChart();
   setOk('Schedule generated — review then Push');
@@ -1487,6 +1681,7 @@ async function readFromDevice() {
     const deviceSel = document.getElementById('deviceSel');
     if (deviceSel) deviceSel.value = cfg.device || 'k7mini';
     schedule        = s.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
+    resetCaps();
     manual          = s.manual || [0,0,0,0,0,0];
     mode            = s.mode;
     const rawPreset = s.active_preset || localStorage.getItem('k7-activePreset') || '';
@@ -1505,6 +1700,8 @@ async function readFromDevice() {
 
     applyModeUI();
     buildSliders();
+    buildChannelCaps();
+    makeValEditable(document.getElementById('masterVal'), { max: 200 });
     buildNowBars();
     if (document.getElementById('schedCollapse').classList.contains('open'))
       buildSchedTable();
@@ -1621,10 +1818,10 @@ async function pushSchedule() {
   try {
     const man = Array(6).fill(0);
     chs().forEach((_,i) => { man[i] = manual[i]||0; });
-    // Send unscaled schedule; server applies MB when pushing to lamp
+    // Schedule carries per-channel caps; master is already persisted server-side.
     await api('POST', '/api/push', {
       manual: man,
-      schedule: schedule.map(r => [...r]),
+      schedule: buildPushBase(),
       mode,
       active_preset: activePresetKey,
       schedule_shift_minutes: scheduleShiftMinutes,
@@ -2004,11 +2201,12 @@ function onPresetChange() {
   if(!p) return;
   if(p.schedule) schedule = p.schedule.map(r => Array.isArray(r)?r:Object.values(r));
   if(p.manual)   manual   = p.manual;
+  resetCaps();
   _suppressPoll('schedule');
   document.getElementById('presetDesc').textContent = p.desc || (v.startsWith('profile:') ? 'Saved profile' : '');
   activePresetKey = v;
   localStorage.setItem('k7-activePreset', v);
-  buildSliders(); buildNowBars(); updateChart();
+  buildSliders(); buildChannelCaps(); buildNowBars(); updateChart();
   if(document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
 }
 
@@ -2108,8 +2306,9 @@ function applyCommunityPreset(p) {
     return false;
   schedule = p.schedule.map(row => [...row]);
   manual = [...p.manual];
+  resetCaps();
   activePresetKey = '';
-  buildSliders(); buildNowBars(); updateChart();
+  buildSliders(); buildChannelCaps(); buildNowBars(); updateChart();
   if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
   document.getElementById('presetDesc').textContent = p.notes || 'Imported community preset';
   return true;
@@ -2448,21 +2647,26 @@ async function pollEffectStates() {
     ]);
     outputStatusState = outputStatus;
     const masterSlider = document.getElementById('masterSlider');
-    if (document.activeElement !== masterSlider && master.value !== masterBrightness) {
+    let chartDirty = false;
+    if (document.activeElement !== masterSlider && !_masterDirty && master.value !== masterBrightness) {
       masterBrightness = master.value;
       masterSlider.value = master.value;
       document.getElementById('masterVal').textContent = master.value + '%';
+      syncCapSliders();
+      chartDirty = true;
     }
     if (stateData?.schedule?.length === 24 && _pollOk('schedule')) {
       schedule = stateData.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
       if (document.getElementById('schedCollapse').classList.contains('open'))
         updateSchedTable();
+      chartDirty = true;
     }
     siestaState = siesta;
     acclimationState = acclimation;
     seasonalState = seasonal;
     lunarState = lunar;
     updateNowBars();
+    if (chartDirty) updateChart();
     // feedDuration/feedIntensity are "start" settings — only loaded on readFromDevice
     if (feed.active) {
       setFeedBtn(true);
@@ -2694,6 +2898,14 @@ function sendPlayPreviewMins(mins) {
   return api('POST', '/api/preview', { channels });
 }
 
+// Per-channel cap expressed as a multiplier on the base schedule. 1.0 when the
+// cap is untouched (cap == the channel's natural peak), so the chart is
+// unchanged until a cap is dialled down/up. Mirrors buildPushBase's scaling.
+function capScale(chName, chIdx) {
+  const peak = Math.max(1, ...schedule.map(r => r[2 + chIdx] || 0));
+  return (channelBrightness[chName] ?? 100) / peak;
+}
+
 function shiftedCompositeAt(wallClockH) {
   const totalShift = scheduleShiftMinutes + seasonalShiftNow();
   const baseMins = ((wallClockH * 60 - totalShift) % 1440 + 1440) % 1440;
@@ -2704,14 +2916,14 @@ function shiftedCompositeAt(wallClockH) {
   for (let ci = 0; ci < chs.length; ci++) {
     const lo = schedule[baseH][2 + ci] || 0;
     const hi = schedule[(baseH + 1) % 24][2 + ci] || 0;
-    total += lo + baseFrac * (hi - lo);
+    total += (lo + baseFrac * (hi - lo)) * capScale(chs[ci], ci);
   }
-  return Math.min(100, Math.round(total / chs.length));
+  return Math.min(100, Math.round(total / chs.length * masterBrightness / 100));
 }
 
 function effectiveChartValue(h, chName, chIdx) {
   const mins = h * 60;
-  let v = (schedule[h][2 + chIdx] || 0) * siestaFactorAt(mins);
+  let v = (schedule[h][2 + chIdx] || 0) * capScale(chName, chIdx) * masterBrightness / 100 * siestaFactorAt(mins);
   if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
     const lunarFloor = lunarState.max_intensity * (lunarState.illumination ?? 100) / 100;
     const lunarWin   = lunarWindow(lunarState);
@@ -2728,7 +2940,7 @@ function effectiveChartValueAtMins(mins, chName, chIdx) {
   const frac = (mins % 60) / 60;
   const lo = schedule[h][2 + chIdx] || 0;
   const hi = schedule[(h + 1) % 24][2 + chIdx] || 0;
-  let v = (lo + frac * (hi - lo)) * siestaFactorAt(mins);
+  let v = (lo + frac * (hi - lo)) * capScale(chName, chIdx) * masterBrightness / 100 * siestaFactorAt(mins);
   if (lunarState && (lunarState.enabled || lunarState.active) && lunarState.max_intensity > 0) {
     const lunarFloor = lunarState.max_intensity * (lunarState.illumination ?? 100) / 100;
     const lunarWin   = lunarWindow(lunarState);
@@ -2917,6 +3129,9 @@ function toggleTheme() {
     try { await api('POST', '/api/time', {timestamp: Date.now() - new Date().getTimezoneOffset()*60000}); } catch(_) {}
   }
   loadVersionInfo();
+  resetCaps();
+  buildChannelCaps();
+  applySliderLock();
   if (isAndroid()) await new Promise(r => setTimeout(r, 1500));
   await readFromDevice();
   // Force a resize+redraw after layout settles — Android WebView may have
