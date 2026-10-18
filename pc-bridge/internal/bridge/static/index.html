@@ -969,6 +969,7 @@ async function readFromDevice() {
     if (s.schedule && s.schedule.length === 24) {
       schedule     = s.schedule;
       scheduleBase = s.schedule.map(row => [...row]);
+      _scheduleDirty = false;
       resetMaster();
       const mv = masterData?.value ?? 100;
       if (mv !== 100) {
@@ -1046,6 +1047,7 @@ async function pushSchedule() {
       active_preset: activePresetKey,
       schedule_shift_minutes: signedShiftMinutes(),
     });
+    _scheduleDirty = false;
     if (activePresetDisablesLunar() && cap('tracked_lunar|fixed_lunar')) {
       await loadLunarStatus();
       setOk('Pushed successfully · Lunar disabled');
@@ -1317,12 +1319,11 @@ function setChartMode(mode) {
   updateColorStrip();
 }
 
-function showEffectiveChartForPCBridgeEffects() {
-  const siestaOn = siestaState && (siestaState.enabled || siestaState.active);
-  const lunarOn = lunarState && (lunarState.enabled || lunarState.active);
-  if (isPCBridge() && chartMode !== 'effective' && (siestaOn || lunarOn)) {
-    setChartMode('effective');
-  }
+// Explicit one-shot nudge when the user turns lunar or siesta ON.
+function nudgeEffectiveChartOnEffectEnable() {
+  if (!isPCBridge()) return;
+  if (_scheduleDirty) return;
+  setChartMode('effective');
 }
 
 function initChart() {
@@ -1342,6 +1343,7 @@ function initChart() {
       schedule[index][2 + ci] = v;
       const peak = Math.max(1, ...scheduleBase.filter((_,i)=>i!==index).map(row=>row[2+ci]));
       scheduleBase[index][2 + ci] = (cap * m > 0) ? Math.min(100, Math.round(v * peak / (cap * m))) : 0;
+      markScheduleDirty();
       updateColorStrip();
       updateNowBars();
       return v;
@@ -1758,6 +1760,10 @@ let _masterTimer = null;
 // been pushed/confirmed yet, so the background poll won't snap it back to the
 // stale server value. Protects both slider-drag and typed-box edits.
 let _masterDirty = false;
+// Local schedule edits that have not been pushed / re-read yet. Used to avoid
+// kicking the chart out of Base while the user is mid-edit.
+let _scheduleDirty = false;
+function markScheduleDirty() { _scheduleDirty = true; }
 function onMasterChange() {
   masterBrightness = parseInt(document.getElementById('masterSlider').value);
   document.getElementById('masterVal').textContent = masterBrightness + '%';
@@ -2027,7 +2033,6 @@ function setSiestaBtn(active) {
 
 function applySiestaUI(d) {
   siestaState = d;
-  showEffectiveChartForPCBridgeEffects();
   const available = siestaAvailable();
   setSiestaAvailability(available);
   setSiestaBtn(available && !!(d.enabled || d.active));
@@ -2080,6 +2085,7 @@ async function onSiestaChange() {
   document.getElementById('siIntensityWrap').style.display = si.enabled ? '' : 'none';
   await api('POST', '/api/siesta/schedule', si);
   await loadSiestaStatus();
+  if (si.enabled) nudgeEffectiveChartOnEffectEnable();
 }
 
 // ── Acclimation ───────────────────────────────────────────────────────────────
@@ -2208,7 +2214,6 @@ function setLunarBtn(active) {
 
 function applyLunarUI(d) {
   lunarState = d;
-  showEffectiveChartForPCBridgeEffects();
   setLunarBtn(!!(d.enabled || d.active));
   document.getElementById('lmEnabled').checked = !!d.enabled;
   document.getElementById('lmTrackMoonrise').checked = !!d.track_moonrise;
@@ -2240,6 +2245,7 @@ async function toggleLunar() {
   setLunarBtn(!active);
   try {
     await api('POST', active ? '/api/lunar/stop' : '/api/lunar/start');
+    if (!active) nudgeEffectiveChartOnEffectEnable();
   } catch(e) { setLunarBtn(active); setErr(e.message); }
 }
 
@@ -2258,6 +2264,7 @@ async function onLmChange() {
   document.getElementById('lmClampWrap').style.display = lm.enabled && lm.track_moonrise ? '' : 'none';
   try { await api('POST', '/api/lunar/schedule', lm); } catch(_) {}
   await loadLunarStatus();
+  if (lm.enabled) nudgeEffectiveChartOnEffectEnable();
 }
 
 // ── Effect settings panels ────────────────────────────────────────────────────
@@ -2420,6 +2427,7 @@ function onPresetChange() {
     const key = val.slice(7); const p = presets[key]; if (!p) return;
     document.getElementById('presetDesc').textContent = p.desc;
     scheduleBase = p.schedule.map(row => [...row]); manual = [...p.manual];
+    markScheduleDirty();
     resetMaster(); updateChart(); updateColorStrip(); updateNowBars(); renderSliders();
     activePresetKey = val; localStorage.setItem('k7-activePreset', val); setOk(`Preset loaded: ${p.name} — click Push to apply`);
   } else if (val.startsWith('saved:')) {
@@ -2427,6 +2435,7 @@ function onPresetChange() {
     document.getElementById('presetDesc').textContent = p.device !== cfg.device ? `⚠ Saved for ${p.device}` : `Saved profile`;
     document.getElementById('deleteProfileBtn').style.display = '';
     scheduleBase = p.scheduleBase.map(row => [...row]); manual = [...(p.manual || manual)];
+    markScheduleDirty();
     masterBrightness = p.masterBrightness ?? 100; dayShift = p.dayShift ?? 0;
     DEVICES[cfg.device].channels.forEach(ch => { channelBrightness[ch] = p.channelBrightness?.[ch] ?? 100; });
     const sl = document.getElementById('masterSlider'); if (sl) sl.value = masterBrightness;
@@ -2526,6 +2535,7 @@ function confirmCommunityPresetSource() {
   )) return false;
   scheduleBase = p.schedule.map(row => [...row]);
   manual = [...p.manual];
+  markScheduleDirty();
   resetMaster();
   renderSliders();
   updateChart();
@@ -2582,6 +2592,7 @@ function applyCommunityPreset(p) {
     return false;
   scheduleBase = p.schedule.map(row => [...row]);
   manual = [...p.manual];
+  markScheduleDirty();
   resetMaster();
   renderSliders();
   updateChart();
