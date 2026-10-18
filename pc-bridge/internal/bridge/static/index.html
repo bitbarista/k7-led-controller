@@ -1319,12 +1319,6 @@ function setChartMode(mode) {
   updateColorStrip();
 }
 
-// Formerly forced Effective Today on every lunar/siesta status apply (including
-// the 60s loadLunarStatus poll), which kicked users out of Base while editing.
-// Kept as a no-op guard for any leftover callers; enable paths use nudge below.
-function showEffectiveChartForPCBridgeEffects() {
-  // Intentionally empty: do not re-force Effective from poll/status apply.
-}
 // Explicit one-shot nudge when the user turns lunar or siesta ON.
 function nudgeEffectiveChartOnEffectEnable() {
   if (!isPCBridge()) return;
