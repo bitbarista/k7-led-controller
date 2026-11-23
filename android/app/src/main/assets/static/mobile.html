@@ -1344,6 +1344,21 @@ let _masterTimer = null;
 // been pushed/confirmed yet, so the background poll won't snap it back to the
 // stale server value. Protects both slider-drag and typed-box edits.
 let _masterDirty = false;
+// Set true while the user has local schedule edits that have not been pushed
+// (or explicitly re-read) yet, so the 5s pollEffectStates won't clobber them
+// with /api/state. Cleared only on successful pushSchedule() and readFromDevice().
+let _scheduleDirty = false;
+function markScheduleDirty() { _scheduleDirty = true; }
+function isScheduleEditBusy() {
+  if (_scheduleDirty) return true;
+  // Hour-sheet open (editing one hour's channels)
+  const hs = document.getElementById('hourSheet');
+  if (hs && !hs.hasAttribute('hidden')) return true;
+  // Focused schedule table input
+  const ae = document.activeElement;
+  if (ae && ae.closest && ae.closest('#schedTbody')) return true;
+  return false;
+}
 function onMasterChange() {
   masterBrightness = parseInt(document.getElementById('masterSlider').value);
   document.getElementById('masterVal').textContent = masterBrightness + '%';
@@ -1575,6 +1590,7 @@ function updateSchedTable() {
 
 function onCell(h, i, v) {
   schedule[h][2+i] = Math.max(0, Math.min(100, parseInt(v)||0));
+  markScheduleDirty();
   updateNowBars();
 }
 
@@ -1640,6 +1656,7 @@ function wizardGenerate() {
   }
 
   resetCaps();
+  markScheduleDirty();
   _suppressPoll('schedule');
   if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
   buildChannelCaps();
@@ -1681,6 +1698,7 @@ async function readFromDevice() {
     const deviceSel = document.getElementById('deviceSel');
     if (deviceSel) deviceSel.value = cfg.device || 'k7mini';
     schedule        = s.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
+    _scheduleDirty  = false;
     resetCaps();
     manual          = s.manual || [0,0,0,0,0,0];
     mode            = s.mode;
@@ -1826,6 +1844,7 @@ async function pushSchedule() {
       active_preset: activePresetKey,
       schedule_shift_minutes: scheduleShiftMinutes,
     });
+    _scheduleDirty = false;
     if (activePresetDisablesLunar() && cap('tracked_lunar|fixed_lunar')) {
       const lunar = await api('GET', '/api/lunar/status');
       lunarState = lunar;
@@ -2202,6 +2221,7 @@ function onPresetChange() {
   if(p.schedule) schedule = p.schedule.map(r => Array.isArray(r)?r:Object.values(r));
   if(p.manual)   manual   = p.manual;
   resetCaps();
+  if (p.schedule) markScheduleDirty();
   _suppressPoll('schedule');
   document.getElementById('presetDesc').textContent = p.desc || (v.startsWith('profile:') ? 'Saved profile' : '');
   activePresetKey = v;
@@ -2307,6 +2327,7 @@ function applyCommunityPreset(p) {
   schedule = p.schedule.map(row => [...row]);
   manual = [...p.manual];
   resetCaps();
+  markScheduleDirty();
   activePresetKey = '';
   buildSliders(); buildChannelCaps(); buildNowBars(); updateChart();
   if (document.getElementById('schedCollapse').classList.contains('open')) buildSchedTable();
@@ -2655,7 +2676,7 @@ async function pollEffectStates() {
       syncCapSliders();
       chartDirty = true;
     }
-    if (stateData?.schedule?.length === 24 && _pollOk('schedule')) {
+    if (stateData?.schedule?.length === 24 && _pollOk('schedule') && !isScheduleEditBusy()) {
       schedule = stateData.schedule.map(r => Array.isArray(r) ? r : Object.values(r));
       if (document.getElementById('schedCollapse').classList.contains('open'))
         updateSchedTable();
@@ -3094,6 +3115,7 @@ function applyHsValue(val) {
   let end = hsHour;
   while (end < 23 && (schedule[end + 1][2 + chIdx] ?? 0) === oldVal) end++;
   for (let i = hsHour; i <= end; i++) schedule[i][2 + chIdx] = val;
+  markScheduleDirty();
 
   const noteEl = document.getElementById('hsNote');
   noteEl.textContent = end > hsHour
