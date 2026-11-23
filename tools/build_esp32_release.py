@@ -34,7 +34,10 @@ LATEST    = WEBSITE / "releases" / "latest"
 FLASH_HTML = WEBSITE / "flash.html"
 DIST      = ROOT / "dist" / "esp32"
 
-MKLITTLEFS_DIR = Path.home() / ".platformio" / "packages" / "tool-mklittlefs"
+# Must match packages_dir in arduino/platformio.ini (kept apart from the shared
+# ~/.platformio/packages so other PlatformIO projects can't replace these packages)
+PIO_PACKAGES   = Path.home() / ".platformio" / "packages-pioarduino"
+MKLITTLEFS_DIR = PIO_PACKAGES / "tool-mklittlefs"
 PIO_PENV_PYTHON = Path.home() / ".platformio" / "penv" / "bin" / "python"
 
 VARIANTS = {
@@ -84,18 +87,18 @@ def default_version() -> str:
 
 def find_boot_app0() -> Path:
     result = subprocess.run(
-        ["find", str(Path.home() / ".platformio"), "-name", "boot_app0.bin"],
+        ["find", str(PIO_PACKAGES), "-name", "boot_app0.bin"],
         capture_output=True, text=True,
     )
     candidates = [p for p in result.stdout.splitlines() if p.strip()]
     if not candidates:
-        sys.exit("ERROR: boot_app0.bin not found under ~/.platformio — run a PlatformIO build first")
+        sys.exit("ERROR: boot_app0.bin not found under ~/.platformio/packages-pioarduino — run a PlatformIO build first")
     return Path(candidates[0])
 
 
 def find_esptool() -> str:
     # Prefer the PlatformIO-bundled esptool (guaranteed compatible version)
-    pio_esptool = Path.home() / ".platformio" / "packages" / "tool-esptoolpy" / "esptool.py"
+    pio_esptool = PIO_PACKAGES / "tool-esptoolpy" / "esptool.py"
     if pio_esptool.exists() and PIO_PENV_PYTHON.exists():
         return f"{PIO_PENV_PYTHON} {pio_esptool}"
     system_esptool = shutil.which("esptool") or shutil.which("esptool.py")
